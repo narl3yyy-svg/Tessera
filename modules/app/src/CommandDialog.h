@@ -26,6 +26,15 @@ public:
   // A body was clicked in the 3D view: fill the first body input, if any.
   bool pickBody(const QString& name);
 
+  // Profiles picked in the 3D view (Extrude).
+  bool hasProfilesInput() const;
+  QString currentSketch() const;
+  QString currentProfiles() const;
+  void setProfiles(const QString& sketch, const QString& profiles);
+
+signals:
+  void inputsChanged();
+
 public slots:
   void accept() override;
   void reject() override;
@@ -40,6 +49,10 @@ private:
   QLabel* error_ = nullptr;
   QDialogButtonBox* buttons_ = nullptr;
   QComboBox* bodyInput_ = nullptr;
+  QComboBox* sketchInput_ = nullptr;
+  QLabel* profilesLabel_ = nullptr;
+  std::string profilesId_;
+  void updateProfilesLabel();
 };
 
 } // namespace tsr::app

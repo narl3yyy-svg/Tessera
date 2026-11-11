@@ -19,6 +19,8 @@ const char* typeName(InputType t) {
     case InputType::String: return "string";
     case InputType::Choice: return "choice";
     case InputType::Body: return "body";
+    case InputType::Sketch: return "sketch";
+    case InputType::Profiles: return "profiles";
   }
   return "?";
 }

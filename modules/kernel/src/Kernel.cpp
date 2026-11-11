@@ -11,6 +11,9 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
+#include <gp_Trsf.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
 #include <TopExp_Explorer.hxx>
 #include <gp_Ax2.hxx>
@@ -81,6 +84,29 @@ TopoDS_Shape makeCone(double r1, double r2, double height, Vec3 base, Axis axis)
   if (r1 < 0 || r2 < 0 || (r1 == 0 && r2 == 0)) throw KernelError("cone radii must be >= 0 and not both 0");
   if (r1 == r2) throw KernelError("cone radii must differ (use a cylinder)");
   return guarded("Cone", [&] { return BRepPrimAPI_MakeCone(frame(base, axis), r1, r2, height).Shape(); });
+}
+
+TopoDS_Shape extrude(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double distance, bool symmetric) {
+  if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");
+  if (!(std::abs(distance) > 1e-9)) throw KernelError("extrude distance must not be zero");
+  const gp_Vec d = gp_Vec(dir.x, dir.y, dir.z).Normalized() * distance;
+  TopoDS_Shape result;
+  for (const TopoDS_Shape& f : faces) {
+    TopoDS_Shape prism = guarded("Extrude", [&]() -> TopoDS_Shape {
+      TopoDS_Shape base = f;
+      gp_Vec v = d;
+      if (symmetric) {
+        gp_Trsf t;
+        t.SetTranslation(-d);
+        base = BRepBuilderAPI_Transform(f, t, true).Shape();
+        v = d * 2;
+      }
+      BRepPrimAPI_MakePrism mk(base, v);
+      return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
+    });
+    result = result.IsNull() ? prism : boolean(BooleanOp::Join, result, prism);
+  }
+  return result;
 }
 
 TopoDS_Shape boolean(BooleanOp op, const TopoDS_Shape& target, const TopoDS_Shape& tool) {

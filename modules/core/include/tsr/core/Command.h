@@ -18,7 +18,10 @@ namespace tsr {
 // Choice: a string that must be one of InputDef::choices (a dropdown).
 // Body:   the name of a body in the document, picked in the viewport; empty
 //         means "the most recent body" when the input is optional.
-enum class InputType { Real, Integer, Bool, String, Choice, Body };
+// Sketch: the name of a sketch; empty means "the most recent sketch".
+// Profiles: regions of a sketch, as "x,y;x,y" points inside them (sketch
+//         coordinates, cm), picked in the viewport; empty means all of them.
+enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles };
 
 struct InputDef {
   std::string id;
@@ -46,6 +49,9 @@ struct CommandDef {
   // A feature is recorded in the design history (timeline) together with its
   // inputs, can be edited later and is replayed on recompute.
   bool feature = false;
+  // For features: the String input whose value names the feature in the
+  // timeline (e.g. a sketch's name). Empty: "<Name><n>".
+  std::string nameInput;
   std::vector<InputDef> inputs;
 
   const InputDef* input(const std::string& inputId) const;
@@ -96,6 +102,9 @@ public:
   // CommandError to fail; the transaction is then aborted.
   virtual void apply(const Inputs&, CommandContext&) const = 0;
   virtual bool supportsPreview() const { return true; }
+  // Fills in derived inputs before apply() (e.g. a generated name) so they
+  // are recorded with the feature. Runs inside the transaction.
+  virtual void prepare(Inputs&, CommandContext&) const {}
 };
 
 // ---------------------------------------------------------------------------

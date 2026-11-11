@@ -21,6 +21,7 @@ namespace {
 constexpr int kParamsTag = 1;
 constexpr int kBodiesTag = 2;
 constexpr int kFeaturesTag = 3;
+constexpr int kSketchesTag = 4;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in SPEC/DIVERGENCES.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -117,6 +118,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kParamsTag, true);
   doc_->Main().FindChild(kBodiesTag, true);
   doc_->Main().FindChild(kFeaturesTag, true);
+  doc_->Main().FindChild(kSketchesTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -239,6 +241,51 @@ std::string Document::nextBodyName() const {
   return "Body" + std::to_string(n + 1);
 }
 
+std::vector<SketchRecord> Document::sketches() const {
+  std::vector<SketchRecord> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kSketchesTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;
+    SketchRecord s;
+    s.name = nameOf(it.Value());
+    s.plane = stringOf(nd, "plane");
+    s.offset = nd->HasReal("offset") ? nd->GetReal("offset") : 0.0;
+    s.data = stringOf(nd, "data");
+    out.push_back(std::move(s));
+  }
+  return out;
+}
+
+std::optional<SketchRecord> Document::sketch(const std::string& name) const {
+  for (auto& s : sketches())
+    if (s.name == name) return s;
+  return std::nullopt;
+}
+
+void Document::setSketch(const SketchRecord& s) {
+  requireTransaction("setSketch");
+  TDF_Label l;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kSketchesTag, false)); it.More(); it.Next())
+    if (it.Value().IsAttribute(TDataStd_NamedData::GetID()) && nameOf(it.Value()) == s.name) l = it.Value();
+  if (l.IsNull()) l = doc_->Main().FindChild(kSketchesTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(s.name));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  nd->SetString("plane", ext(s.plane));
+  nd->SetReal("offset", s.offset);
+  nd->SetString("data", ext(s.data));
+}
+
+std::string Document::nextSketchName() const {
+  // Never reuse a name a feature still carries (an extrude may refer to it).
+  const auto fs = features();
+  for (int n = 1;; ++n) {
+    const std::string name = "Sketch" + std::to_string(n);
+    if (sketch(name)) continue;
+    if (std::any_of(fs.begin(), fs.end(), [&](const Feature& f) { return f.name == name; })) continue;
+    return name;
+  }
+}
+
 std::vector<Feature> Document::features() const {
   std::vector<Feature> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kFeaturesTag, false)); it.More(); it.Next()) {
@@ -270,8 +317,12 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
     if (f.commandId == d.id) ++n;
   std::string base = d.name;
   base.erase(std::remove(base.begin(), base.end(), ' '), base.end());
+  std::string name = base + std::to_string(n);
+  if (!d.nameInput.empty())
+    if (auto it = inputs.find(d.nameInput); it != inputs.end())
+      if (auto s = std::get_if<std::string>(&it->second); s && !s->empty()) name = *s;
   const TDF_Label l = doc_->Main().FindChild(kFeaturesTag, false).NewChild();
-  TDataStd_Name::Set(l, ext(base + std::to_string(n)));
+  TDataStd_Name::Set(l, ext(name));
   Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
   nd->SetString("command", ext(d.id));
   nd->SetString("inputs", ext(toJson(inputs).dump()));
@@ -297,8 +348,9 @@ void Document::removeFeature(int id) {
 
 void Document::recompute(const CommandRegistry& registry) {
   requireTransaction("recompute");
-  for (TDF_ChildIterator it(doc_->Main().FindChild(kBodiesTag, false)); it.More(); it.Next())
-    if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
+  for (int tag : {kBodiesTag, kSketchesTag})
+    for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
+      if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
 
   for (const Feature& f : features()) {
     std::string error;

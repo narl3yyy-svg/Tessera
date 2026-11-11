@@ -14,6 +14,11 @@ if(TSR_WITH_OCCT)
   target_include_directories(tsr_integration_tests PRIVATE .)
   target_link_libraries(tsr_integration_tests PRIVATE tsr::doc)
   add_test(NAME integration COMMAND tsr_integration_tests)
+
+  add_executable(tsr_sketch_tests unit/main.cpp sketch/test_sketch.cpp)
+  target_include_directories(tsr_sketch_tests PRIVATE .)
+  target_link_libraries(tsr_sketch_tests PRIVATE tsr::sketch)
+  add_test(NAME sketch COMMAND tsr_sketch_tests)
   set_tests_properties(integration PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
@@ -26,6 +31,8 @@ if(TSR_WITH_PYTHON)
                                --script ${CMAKE_CURRENT_SOURCE_DIR}/api/check_reopened.py)
   add_test(NAME api_commands
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_commands.py)
+  add_test(NAME api_sketch_extrude
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sketch_extrude.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()

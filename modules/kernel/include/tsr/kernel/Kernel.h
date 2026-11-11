@@ -4,6 +4,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <stdexcept>
+#include <vector>
 
 namespace tsr::kernel {
 
@@ -38,6 +39,11 @@ TopoDS_Shape makeSphere(double radius, Vec3 center = {});
 TopoDS_Shape makeTorus(double major, double minor, Vec3 center = {}, Axis axis = Axis::Z);
 // Cone (or frustum): base radius r1 at `base`, top radius r2 (may be 0) at `height` along `axis`.
 TopoDS_Shape makeCone(double r1, double r2, double height, Vec3 base = {}, Axis axis = Axis::Z);
+
+// Sweeps planar faces along `dir` (unit vector) by `distance` (may be
+// negative). Symmetric: `distance` on each side. Faces are fused into one
+// solid where they touch. Throws KernelError.
+TopoDS_Shape extrude(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double distance, bool symmetric);
 
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError

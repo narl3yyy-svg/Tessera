@@ -1,0 +1,128 @@
+#pragma once
+// tsr-sketch: 2D sketch geometry, constraints and the constraint solver.
+//
+// Coordinates are sketch-plane coordinates in internal units (cm). Point 0 is
+// the sketch origin; it always exists and never moves, so geometry can be
+// tied to it.
+//
+// Entities reference points by index:
+//   Line    a -> b
+//   Circle  center, radius
+//   Arc     center, a = start, b = end, radius; runs counter-clockwise a -> b
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+namespace tsr::sketch {
+
+class SketchError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+struct Point {
+  double x = 0, y = 0;
+};
+
+enum class EntityType { Line, Circle, Arc };
+
+struct Entity {
+  EntityType type = EntityType::Line;
+  int a = -1, b = -1;     // line ends / arc start, end
+  int center = -1;        // circle, arc
+  double radius = 0;      // circle, arc
+  bool construction = false;
+};
+
+enum class ConstraintType {
+  Coincident,         // points[0], points[1]
+  Horizontal,         // entities[0] (line)  or points[0], points[1]
+  Vertical,           // same
+  Parallel,           // entities[0], entities[1] (lines)
+  Perpendicular,      // entities[0], entities[1] (lines)
+  Equal,              // two lines (length) or two circles/arcs (radius)
+  Tangent,            // line + circle/arc, or two circles/arcs; value 1 = internal
+  PointOnEntity,      // points[0] on entities[0]
+  Midpoint,           // points[0] at the middle of entities[0] (line)
+  Concentric,         // entities[0], entities[1] (circles/arcs)
+  Fix,                // points[0] stays at (value, value2)
+  // Dimensions (value in cm or radians):
+  Distance,           // points[0]-points[1]; or a line's length; or points[0] to line entities[0]
+  HorizontalDistance, // signed x distance points[0] -> points[1] (or along a line)
+  VerticalDistance,   // signed y distance
+  Radius,             // entities[0]
+  Diameter,           // entities[0]
+  Angle,              // entities[0] -> entities[1], counter-clockwise, radians
+};
+
+struct Constraint {
+  ConstraintType type = ConstraintType::Coincident;
+  std::vector<int> points;
+  std::vector<int> entities;
+  double value = 0;
+  double value2 = 0;
+};
+
+bool isDimension(ConstraintType t);
+const char* typeName(ConstraintType t);
+
+class Sketch {
+public:
+  Sketch();
+
+  std::vector<Point> points;     // points[0] is the origin
+  std::vector<Entity> entities;
+  std::vector<Constraint> constraints;
+
+  int addPoint(double x, double y);
+  int addLine(int a, int b, bool construction = false);
+  int addLine(double x1, double y1, double x2, double y2, bool construction = false);
+  int addCircleAt(int center, double radius, bool construction = false);
+  int addCircle(double cx, double cy, double radius, bool construction = false);
+  int addArc(int center, int start, int end, bool construction = false);
+  int addConstraint(Constraint c);   // no solving; see SolveResult / addConstraintChecked
+
+  // Removes entities (and constraints that reference them), then the points
+  // they owned that nothing else uses. Indices of the remaining items are
+  // compacted.
+  void removeEntities(std::vector<int> ids);
+  // Removes points (never the origin), the entities built on them and the
+  // constraints that reference any of those.
+  void removePoints(std::vector<int> ids);
+  // Both at once (indices refer to the sketch before the call).
+  void removeItems(const std::vector<int>& entities, const std::vector<int>& points);
+  void removeConstraint(int index);
+
+  // Points an entity owns, in order (line: a, b; circle: center; arc: center, a, b).
+  std::vector<int> entityPoints(int entity) const;
+
+  std::string toJson() const;
+  static Sketch fromJson(const std::string& text);   // empty text -> empty sketch; throws SketchError
+
+  void checkIndices() const;   // throws SketchError on a dangling reference
+
+private:
+  void removeImpl(const std::set<int>& entities, const std::set<int>& points);
+};
+
+struct SolveResult {
+  bool ok = false;
+  int dof = 0;                        // remaining degrees of freedom
+  int iterations = 0;
+  double residual = 0;
+  std::vector<bool> pointFixed;       // fully determined by constraints
+  std::vector<bool> entityFixed;
+  std::string message;
+};
+
+// Moves geometry to satisfy every constraint, changing it as little as
+// possible. `locked` points keep their current position (used while dragging).
+// On failure the sketch is left unchanged and ok is false.
+SolveResult solve(Sketch& s, const std::vector<int>& locked = {});
+
+// Adds a constraint only if the sketch stays solvable and the constraint
+// actually removes a degree of freedom. Returns empty on success, else why not.
+std::string addConstraintChecked(Sketch& s, const Constraint& c);
+
+} // namespace tsr::sketch

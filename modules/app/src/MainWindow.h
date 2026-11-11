@@ -5,6 +5,9 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <map>
+#include <vector>
+
 class QTabWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
@@ -12,10 +15,13 @@ class QListWidget;
 class QAction;
 class QLineEdit;
 class QWidget;
+class QShortcut;
+class QAbstractButton;
 
 namespace tsr::app {
 
 class CommandDialog;
+class SketchEditor;
 class Viewport;
 
 // Layout (familiar to users of mainstream parametric CAD):
@@ -35,6 +41,16 @@ public:
   CommandDialog* startCommand(const QString& commandId);
   // Opens the dialog to edit an existing feature from the timeline.
   CommandDialog* editFeature(int featureId);
+
+  // Sketch mode. beginSketch() asks for a plane in the canvas; startSketch()
+  // starts on a given plane spec ("XY", "custom:..."); editSketch() reopens a
+  // sketch feature. Finish commits one undo step.
+  void beginSketch();
+  SketchEditor* startSketch(const QString& planeSpec);
+  SketchEditor* editSketch(int featureId);
+  bool finishSketch();
+  void cancelSketch();
+  SketchEditor* sketchEditor() const { return editor_; }
 
   QTabWidget* ribbon() const { return ribbon_; }
   QTreeWidget* browser() const { return browser_; }
@@ -58,6 +74,13 @@ private:
   void showContextMenu(const QPoint& globalPos);
   void showTimelineMenu(const QPoint& pos);
   void focusSearch();
+  void enterSketchMode();
+  void exitSketchMode();
+  QWidget* buildSketchTab();
+  void syncSketchTools();
+  void updateProfilePicking();
+  void onProfileClicked(const QString& sketch, int index);
+  bool sketchVisible(const std::string& name) const;
   bool maybeSave();
   bool saveAs();
   bool saveTo(const QString& path);
@@ -76,6 +99,12 @@ private:
   QAction* undo_ = nullptr;
   QAction* redo_ = nullptr;
   QPointer<CommandDialog> active_;
+  QPointer<SketchEditor> editor_;
+  QWidget* sketchTab_ = nullptr;
+  std::vector<std::pair<int, QAbstractButton*>> toolButtons_;
+  QAbstractButton* constructionButton_ = nullptr;
+  std::vector<QShortcut*> sketchShortcuts_;
+  std::map<std::string, bool> sketchVisibility_;   // user overrides from the browser
   QString lastCommand_;
 };
 

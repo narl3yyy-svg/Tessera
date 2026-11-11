@@ -9,6 +9,9 @@
 //   0:1:2      Bodies; one child per body:
 //                TDataStd_Name       body name
 //                TNaming_NamedShape  the B-rep
+//   0:1:4      Sketches (results of sketch features); one child per sketch:
+//                TDataStd_Name       sketch name ("Sketch1")
+//                TDataStd_NamedData  "plane" (spec), "offset" (real), "data" (solved sketch JSON)
 //   0:1:3      Features (the timeline), in order; one child per feature:
 //                TDataStd_Name       feature name ("Box1")
 //                TDataStd_NamedData  "command" (id), "inputs" (JSON), "error" (last recompute), "suppressed" (int)
@@ -49,6 +52,13 @@ struct UserParameter {
 struct Body {
   std::string name;
   TopoDS_Shape shape;
+};
+
+struct SketchRecord {
+  std::string name;
+  std::string plane;   // tsr::sketch::planeFrame spec
+  double offset = 0;
+  std::string data;    // solved sketch JSON
 };
 
 struct Feature {
@@ -95,6 +105,11 @@ public:
   void replaceBody(const std::string& name, const TopoDS_Shape& shape);
   void removeBody(const std::string& name);
   std::string nextBodyName() const;   // "Body<n>", n above every existing number
+
+  std::vector<SketchRecord> sketches() const;
+  std::optional<SketchRecord> sketch(const std::string& name) const;
+  void setSketch(const SketchRecord& s);   // adds, or replaces the one with that name
+  std::string nextSketchName() const;
 
   // Design history.
   std::vector<Feature> features() const;

@@ -2,10 +2,17 @@
 
 *Precision, joined.* A native parametric CAD application for KDE/Kubuntu, built on OpenCASCADE.
 
-Status: **P1, early alpha** (`0.1.0-alpha`). What works today:
+Status: **P2, early alpha** (`0.1.0-alpha`). What works today:
 
 - 3D viewport with ViewCube, layout grid, shaded/edges/wireframe styles, standard views and fit/home
 - Navigation: middle-drag pans, Shift+middle-drag orbits, wheel zooms at the cursor, left click/drag selects
+- **Sketching**: Create Sketch on an origin plane or a flat face; Line (L), Rectangle (R), Circle (C), Arc (A),
+  Point (P), construction geometry (X); auto horizontal/vertical; snapping to points
+- **Constraints and dimensions**: coincident, horizontal/vertical, parallel, perpendicular, equal, tangent,
+  concentric, midpoint, fix; Sketch Dimension (D) for lengths, distances, diameters, radii and angles, edited by
+  double-clicking. Blue = free, black = fully constrained. Drag geometry with Select (Q).
+- **Extrude (E)**: click the profiles to extrude, one side or symmetric, New Body / Join / Cut / Intersect
+- Change a sketch dimension later and every extrude built on it updates
 - Box, Cylinder, Sphere, Torus and Cone with New Body / Join / Cut / Intersect, target body picked by clicking it
 - Parametric timeline: double-click a feature to change it and everything after it replays; suppress, delete, undo
 - Browser (bodies with visibility, origin, parameters), command search (`S`), right-click menu with Repeat
@@ -48,6 +55,7 @@ Only the dependency-free core: `cmake -B build-core -DTSR_WITH_OCCT=OFF -DTSR_WI
 |---|---|
 | `modules/core` | units, command framework (metadata, session, registry), ZIP container, logging. No OCCT/Qt. |
 | `modules/kernel` | OCCT wrapper. Only value types and `TopoDS_Shape` cross this boundary. |
+| `modules/sketch` | Sketch model and JSON format, the constraint solver (Eigen), profiles and plane frames (OCCT). |
 | `modules/doc` | OCAF document, transactions/undo, `.tsr` save/load, P0 commands, `Session`. |
 | `modules/api` | Embedded CPython: `adsk.core` / `adsk.fusion` shim, `tsr` helpers, `tessera-cli`. |
 | `modules/app` | Qt shell: ribbon, browser and dialogs generated from command metadata. |

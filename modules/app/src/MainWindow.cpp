@@ -1,7 +1,10 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
 #include "Icons.h"
+#include "SketchEditor.h"
 #include "Viewport.h"
+
+#include "tsr/doc/DocCommands.h"
 
 #include "tsr/kernel/Kernel.h"
 
@@ -23,6 +26,7 @@
 #include <QShortcut>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QTreeWidget>
@@ -38,6 +42,7 @@ namespace {
 const QString kFilter = QStringLiteral("Tessera designs (*.tsr)");
 constexpr int kFeatureIdRole = Qt::UserRole + 1;
 constexpr int kBodyRole = Qt::UserRole + 2;
+constexpr int kSketchRole = Qt::UserRole + 3;
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -74,6 +79,20 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   connect(browser_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int) {
     const QString body = item->data(0, kBodyRole).toString();
     if (!body.isEmpty()) viewport_->setBodyVisible(body, item->checkState(0) == Qt::Checked);
+    const QString sketch = item->data(0, kSketchRole).toString();
+    if (!sketch.isEmpty()) {
+      sketchVisibility_[sketch.toStdString()] = item->checkState(0) == Qt::Checked;
+      QTimer::singleShot(0, this, [this] { refresh(); });
+    }
+  });
+  connect(browser_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
+    const QString sketch = item->data(0, kSketchRole).toString();
+    if (sketch.isEmpty()) return;
+    for (const auto& f : session_.document().features())
+      if (f.commandId == doc::kCmdSketch && f.name == sketch.toStdString()) {
+        editSketch(f.id);
+        return;
+      }
   });
   auto* browserDock = new QDockWidget(tr("BROWSER"));
   browserDock->setObjectName(QStringLiteral("browserDock"));
@@ -108,6 +127,12 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   viewport_ = new Viewport;
   setCentralWidget(viewport_);
   connect(viewport_, &Viewport::contextMenuRequested, this, &MainWindow::showContextMenu);
+  connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
+  connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
+    viewport_->setPlanePicking(false);
+    if (startSketch(spec)) statusBar()->showMessage(tr("Sketching on %1.").arg(label), 4000);
+  });
+  connect(viewport_, &Viewport::statusMessage, this, [this](const QString& m) { statusBar()->showMessage(m, 5000); });
   connect(viewport_, &Viewport::bodyClicked, this, [this](const QString& name) {
     if (active_ && active_->pickBody(name)) viewport_->clearSelection();
   });
@@ -172,10 +197,16 @@ void MainWindow::buildAppBar() {
 
   undo_ = new QAction(themed(QStringLiteral("edit-undo"), QStringLiteral("undo")), tr("Undo"), this);
   undo_->setShortcut(QKeySequence::Undo);
-  connect(undo_, &QAction::triggered, this, [this] { session_.undo(); });
+  connect(undo_, &QAction::triggered, this, [this] {
+    if (editor_) editor_->undo();
+    else session_.undo();
+  });
   redo_ = new QAction(themed(QStringLiteral("edit-redo"), QStringLiteral("redo")), tr("Redo"), this);
   redo_->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
-  connect(redo_, &QAction::triggered, this, [this] { session_.redo(); });
+  connect(redo_, &QAction::triggered, this, [this] {
+    if (editor_) editor_->redo();
+    else session_.redo();
+  });
   bar->addAction(undo_);
   bar->addAction(redo_);
 
@@ -377,9 +408,39 @@ void MainWindow::buildShortcuts() {
   add(QKeySequence(Qt::Key_F6), [this] { viewport_->fitAll(); });
   add(QKeySequence(Qt::Key_Home), [this] { viewport_->home(); });
   add(QKeySequence(Qt::Key_Escape), [this] {
-    if (active_) active_->reject();
+    if (editor_) editor_->escape();
+    else if (viewport_->planePicking()) {
+      viewport_->setPlanePicking(false);
+      statusBar()->showMessage(tr("Create Sketch cancelled."), 3000);
+    } else if (active_) active_->reject();
     else viewport_->clearSelection();
   });
+  add(QKeySequence(Qt::Key_Delete), [this] {
+    if (editor_) editor_->deleteSelection();
+  });
+  // Sketch tool keys, active only in sketch mode.
+  const std::pair<Qt::Key, SketchEditor::Tool> keys[] = {
+      {Qt::Key_L, SketchEditor::Tool::Line},      {Qt::Key_R, SketchEditor::Tool::Rectangle},
+      {Qt::Key_C, SketchEditor::Tool::Circle},    {Qt::Key_A, SketchEditor::Tool::Arc},
+      {Qt::Key_P, SketchEditor::Tool::Point},     {Qt::Key_D, SketchEditor::Tool::Dimension},
+      {Qt::Key_Q, SketchEditor::Tool::Select}};
+  for (const auto& [key, tool] : keys) {
+    auto* s = new QShortcut(QKeySequence(key), this);
+    s->setEnabled(false);
+    const auto t = tool;
+    connect(s, &QShortcut::activated, this, [this, t] {
+      if (!editor_) return;
+      editor_->setTool(t);
+      syncSketchTools();
+    });
+    sketchShortcuts_.push_back(s);
+  }
+  auto* x = new QShortcut(QKeySequence(Qt::Key_X), this);
+  x->setEnabled(false);
+  connect(x, &QShortcut::activated, this, [this] {
+    if (editor_ && constructionButton_) constructionButton_->click();
+  });
+  sketchShortcuts_.push_back(x);
   for (const Command* c : session_.commands().all())
     if (!c->def().shortcut.empty()) {
       const QString id = qs(c->def().id);
@@ -403,6 +464,14 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
 
 // ---------------------------------------------------------------------------
 CommandDialog* MainWindow::startCommand(const QString& commandId) {
+  if (editor_) {
+    statusBar()->showMessage(tr("Finish the sketch first (FINISH SKETCH)."), 3000);
+    return nullptr;
+  }
+  if (commandId == QLatin1String(doc::kCmdSketch)) {
+    beginSketch();
+    return nullptr;
+  }
   if (active_ || session_.document().hasOpenTransaction()) {
     statusBar()->showMessage(tr("Finish the current command first (OK or Esc)."), 3000);
     return nullptr;
@@ -414,7 +483,11 @@ CommandDialog* MainWindow::startCommand(const QString& commandId) {
 }
 
 CommandDialog* MainWindow::editFeature(int featureId) {
-  if (active_ || session_.document().hasOpenTransaction()) {
+  if (const auto f = session_.document().feature(featureId); f && f->commandId == doc::kCmdSketch) {
+    editSketch(featureId);
+    return nullptr;
+  }
+  if (editor_ || active_ || session_.document().hasOpenTransaction()) {
     statusBar()->showMessage(tr("Finish the current command first (OK or Esc)."), 3000);
     return nullptr;
   }
@@ -428,10 +501,15 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   dlg->setAttribute(Qt::WA_DeleteOnClose);
   dlg->setWindowFlag(Qt::Tool);
   active_ = dlg;
-  connect(dlg, &QObject::destroyed, this, [this] { refresh(); });
+  connect(dlg, &QObject::destroyed, this, [this] {
+    viewport_->setProfilePicking(false);
+    refresh();
+  });
+  connect(dlg, &CommandDialog::inputsChanged, this, [this] { updateProfilePicking(); });
   dlg->show();
   placeDialog(dlg);
   refresh();
+  updateProfilePicking();
   return dlg;
 }
 
@@ -494,9 +572,29 @@ void MainWindow::refresh() {
   const QString name = session_.path() ? QFileInfo(qs(session_.path()->string())).completeBaseName() : tr("Untitled");
   setWindowTitle(name + (d.isModified() ? QStringLiteral("*") : QString()) + QStringLiteral(" — Tessera"));
   const bool idle = !active_ && !d.hasOpenTransaction();
-  undo_->setEnabled(idle && d.canUndo());
-  redo_->setEnabled(idle && d.canRedo());
+  undo_->setEnabled(editor_ ? editor_->canUndo() : idle && d.canUndo());
+  redo_->setEnabled(editor_ ? editor_->canRedo() : idle && d.canRedo());
   viewport_->setBodies(d.bodies());
+
+  std::vector<SketchDisplay> sketches;
+  for (const auto& rec : d.sketches()) {
+    SketchDisplay sd;
+    sd.name = rec.name;
+    sd.visible = sketchVisible(rec.name) && !(editor_ && editor_->name().toStdString() == rec.name);
+    if (sd.visible) {
+      try {
+        sd.frame = sketch::planeFrame(rec.plane, rec.offset);
+        const auto s = sketch::Sketch::fromJson(rec.data);
+        sd.curves = sketch::curves(s, sd.frame, false);
+        sd.construction = sketch::curves(s, sd.frame, true);
+        sd.profiles = sketch::profiles(s, sd.frame);
+      } catch (const sketch::SketchError&) {
+        sd.visible = false;
+      }
+    }
+    sketches.push_back(std::move(sd));
+  }
+  viewport_->setSketches(std::move(sketches));
   refreshBrowser(name);
   refreshTimeline();
 }
@@ -527,6 +625,21 @@ void MainWindow::refreshBrowser(const QString& docName) {
     it->setData(0, kBodyRole, n);
     it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
     it->setCheckState(0, viewport_->isBodyVisible(n) ? Qt::Checked : Qt::Unchecked);
+  }
+
+  const auto sketches = d.sketches();
+  if (!sketches.empty()) {
+    auto* sk = new QTreeWidgetItem(root, {tr("Sketches (%1)").arg(sketches.size())});
+    sk->setIcon(0, icon(QStringLiteral("sketch")));
+    for (const auto& s : sketches) {
+      const QString n = qs(s.name);
+      auto* it = new QTreeWidgetItem(sk, {n});
+      it->setToolTip(0, tr("Double-click to edit"));
+      it->setData(0, kSketchRole, n);
+      it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+      it->setCheckState(0, sketchVisible(s.name) ? Qt::Checked : Qt::Unchecked);
+    }
+    sk->setExpanded(true);
   }
 
   auto* params = new QTreeWidgetItem(root, {tr("User Parameters")});
@@ -612,6 +725,7 @@ void MainWindow::runScript() {
 }
 
 void MainWindow::closeEvent(QCloseEvent* e) {
+  if (editor_) cancelSketch();
   if (active_) active_->reject();
   if (maybeSave()) e->accept();
   else e->ignore();

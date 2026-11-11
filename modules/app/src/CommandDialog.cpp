@@ -2,6 +2,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QHBoxLayout>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -81,6 +82,38 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::Sketch: {
+        auto* combo = new QComboBox;
+        if (in.optional) combo->addItem(tr("(most recent sketch)"), QString());
+        for (const auto& s : session_.document().sketches())
+          combo->addItem(QString::fromStdString(s.name), QString::fromStdString(s.name));
+        if (auto p = std::get_if<std::string>(&cur); p && !p->empty()) {
+          const QString name = QString::fromStdString(*p);
+          if (combo->findData(name) < 0) combo->addItem(name, name);
+          combo->setCurrentIndex(combo->findData(name));
+        }
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
+          onInputChanged(id, combo->currentData().toString().toStdString());
+        });
+        sketchInput_ = combo;
+        w = combo;
+        break;
+      }
+      case InputType::Profiles: {
+        // Filled by clicking profiles in the 3D view.
+        auto* box = new QWidget;
+        auto* row = new QHBoxLayout(box);
+        row->setContentsMargins(0, 0, 0, 0);
+        profilesLabel_ = new QLabel;
+        auto* clear = new QPushButton(tr("Clear"));
+        clear->setObjectName(QStringLiteral("clearProfiles"));
+        row->addWidget(profilesLabel_, 1);
+        row->addWidget(clear);
+        profilesId_ = id;
+        connect(clear, &QPushButton::clicked, this, [this] { setProfiles(currentSketch(), QString()); });
+        w = box;
+        break;
+      }
       case InputType::Body: {
         // Picked from a list or by clicking the body in the 3D view.
         auto* combo = new QComboBox;
@@ -138,6 +171,8 @@ void CommandDialog::onInputChanged(const std::string& id, const Value& v) {
 }
 
 void CommandDialog::refreshPreview() {
+  updateProfilesLabel();
+  emit inputsChanged();
   showError(cmd_->preview());
   session_.notifyChanged();
 }
@@ -162,6 +197,44 @@ void CommandDialog::reject() {
   cmd_->cancel();
   session_.notifyChanged();
   QDialog::reject();
+}
+
+bool CommandDialog::hasProfilesInput() const { return !profilesId_.empty(); }
+
+QString CommandDialog::currentSketch() const {
+  for (const auto& in : cmd_->def().inputs)
+    if (in.type == InputType::Sketch)
+      if (auto s = std::get_if<std::string>(&cmd_->inputs().at(in.id))) return QString::fromStdString(*s);
+  return {};
+}
+
+QString CommandDialog::currentProfiles() const {
+  if (profilesId_.empty()) return {};
+  if (auto s = std::get_if<std::string>(&cmd_->inputs().at(profilesId_))) return QString::fromStdString(*s);
+  return {};
+}
+
+void CommandDialog::setProfiles(const QString& sketch, const QString& profiles) {
+  if (sketchInput_ && !sketch.isEmpty() && sketchInput_->currentData().toString() != sketch) {
+    int i = sketchInput_->findData(sketch);
+    if (i < 0) {
+      sketchInput_->addItem(sketch, sketch);
+      i = sketchInput_->count() - 1;
+    }
+    const QSignalBlocker block(sketchInput_);
+    sketchInput_->setCurrentIndex(i);
+    for (const auto& in : cmd_->def().inputs)
+      if (in.type == InputType::Sketch) (void)cmd_->setInput(in.id, sketch.toStdString());
+  }
+  if (!profilesId_.empty()) onInputChanged(profilesId_, profiles.toStdString());
+  updateProfilesLabel();
+}
+
+void CommandDialog::updateProfilesLabel() {
+  if (!profilesLabel_) return;
+  const QString p = currentProfiles();
+  const int n = p.isEmpty() ? 0 : p.count(QLatin1Char(';')) + 1;
+  profilesLabel_->setText(n == 0 ? tr("All (click profiles to choose)") : tr("%n selected", nullptr, n));
 }
 
 bool CommandDialog::pickBody(const QString& name) {

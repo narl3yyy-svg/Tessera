@@ -75,7 +75,9 @@ std::string CommandSession::checkInput(const InputDef& d, const Value& v) const 
     case InputType::Bool:
       return std::holds_alternative<bool>(v) ? std::string{} : d.label + ": expected true/false";
     case InputType::String:
-    case InputType::Body: {
+    case InputType::Body:
+    case InputType::Sketch:
+    case InputType::Profiles: {
       auto p = std::get_if<std::string>(&v);
       if (!p) return d.label + ": expected text";
       if (p->empty() && !d.optional) return d.label + (d.type == InputType::Body ? ": select a body" : ": required");
@@ -135,6 +137,7 @@ std::string CommandSession::preview() {
 std::string CommandSession::applyInTransaction(const std::string& name) {
   ctx_.openTransaction(name);
   try {
+    cmd_.prepare(inputs_, ctx_);
     cmd_.apply(inputs_, ctx_);
     if (cmd_.def().feature) ctx_.recordFeature(cmd_, inputs_);
   } catch (const std::exception& e) {

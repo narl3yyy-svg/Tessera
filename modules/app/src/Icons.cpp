@@ -164,6 +164,152 @@ void document(QPainter& p) {
   for (int y : {26, 36, 46}) p.drawLine(22, y, 44, y);
 }
 
+// Sketch-style icons: dark strokes, blue accents, on a transparent tile.
+void stroke(QPainter& p, double w = 4, const QColor& c = kLine) {
+  p.setBrush(Qt::NoBrush);
+  p.setPen(QPen(c, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+}
+void dot(QPainter& p, double x, double y, const QColor& c = kRight) {
+  p.setPen(Qt::NoPen);
+  p.setBrush(c);
+  p.drawEllipse(QPointF(x, y), 5, 5);
+}
+
+void sketchIcon(QPainter& p) {
+  face(p, {QPointF(4, 40), QPointF(32, 26), QPointF(60, 40), QPointF(32, 54)}, QColor(225, 235, 248));
+  stroke(p, 3, kRight);
+  p.drawRect(QRectF(22, 33, 18, 10));
+  stroke(p, 4, kLine);
+  p.drawLine(QPointF(40, 8), QPointF(26, 36));
+  p.setBrush(kAccent);
+  p.drawPolygon(QPolygonF({QPointF(26, 36), QPointF(24, 42), QPointF(30, 38)}));
+}
+
+void extrudeIcon(QPainter& p) {
+  face(p, {QPointF(8, 44), QPointF(32, 32), QPointF(56, 44), QPointF(32, 56)}, kTop);
+  face(p, {QPointF(8, 44), QPointF(8, 22), QPointF(32, 10), QPointF(32, 32)}, kLeft);
+  face(p, {QPointF(32, 32), QPointF(32, 10), QPointF(56, 22), QPointF(56, 44)}, kRight);
+  stroke(p, 4, kAccent);
+  p.drawLine(QPointF(32, 30), QPointF(32, 4));
+  p.setBrush(kAccent);
+  p.drawPolygon(QPolygonF({QPointF(26, 10), QPointF(32, 2), QPointF(38, 10)}));
+}
+
+void lineIcon(QPainter& p) {
+  stroke(p);
+  p.drawLine(QPointF(12, 50), QPointF(52, 14));
+  dot(p, 12, 50);
+  dot(p, 52, 14);
+}
+
+void rectIcon(QPainter& p) {
+  stroke(p);
+  p.drawRect(QRectF(10, 16, 44, 32));
+  dot(p, 10, 48);
+  dot(p, 54, 16);
+}
+
+void circleIcon(QPainter& p) {
+  stroke(p);
+  p.drawEllipse(QPointF(32, 32), 22, 22);
+  dot(p, 32, 32);
+}
+
+void arcIcon(QPainter& p) {
+  stroke(p);
+  p.drawArc(QRectF(10, 10, 44, 44), 0, 180 * 16);
+  dot(p, 32, 32);
+  dot(p, 54, 32);
+  dot(p, 10, 32);
+}
+
+void pointIcon(QPainter& p) {
+  stroke(p, 2, kLine);
+  p.drawLine(QPointF(32, 14), QPointF(32, 50));
+  p.drawLine(QPointF(14, 32), QPointF(50, 32));
+  dot(p, 32, 32, kAccent);
+}
+
+void dimensionIcon(QPainter& p) {
+  stroke(p, 3);
+  p.drawLine(QPointF(8, 22), QPointF(8, 46));
+  p.drawLine(QPointF(56, 22), QPointF(56, 46));
+  p.drawLine(QPointF(10, 34), QPointF(54, 34));
+  p.setBrush(kLine);
+  p.drawPolygon(QPolygonF({QPointF(10, 34), QPointF(18, 30), QPointF(18, 38)}));
+  p.drawPolygon(QPolygonF({QPointF(54, 34), QPointF(46, 30), QPointF(46, 38)}));
+  QFont f = p.font();
+  f.setPixelSize(16);
+  f.setBold(true);
+  p.setFont(f);
+  p.setPen(kRight);
+  p.drawText(QRectF(8, 6, 48, 24), Qt::AlignCenter, QStringLiteral("10"));
+}
+
+void constraintIcon(QPainter& p, const QString& kind) {
+  stroke(p, 4);
+  if (kind == QLatin1String("coincident")) {
+    p.drawLine(QPointF(8, 50), QPointF(32, 32));
+    p.drawLine(QPointF(32, 32), QPointF(56, 44));
+    dot(p, 32, 32, kAccent);
+  } else if (kind == QLatin1String("horizontal-vertical")) {
+    p.drawLine(QPointF(8, 46), QPointF(40, 46));
+    p.drawLine(QPointF(50, 10), QPointF(50, 46));
+    dot(p, 8, 46);
+    dot(p, 50, 10);
+  } else if (kind == QLatin1String("parallel")) {
+    p.drawLine(QPointF(10, 40), QPointF(40, 10));
+    p.drawLine(QPointF(24, 54), QPointF(54, 24));
+  } else if (kind == QLatin1String("perpendicular")) {
+    p.drawLine(QPointF(10, 52), QPointF(54, 52));
+    p.drawLine(QPointF(32, 52), QPointF(32, 10));
+    stroke(p, 2, kAccent);
+    p.drawRect(QRectF(32, 42, 10, 10));
+  } else if (kind == QLatin1String("equal")) {
+    p.drawLine(QPointF(14, 24), QPointF(50, 24));
+    p.drawLine(QPointF(14, 40), QPointF(50, 40));
+  } else if (kind == QLatin1String("tangent")) {
+    p.drawEllipse(QPointF(30, 36), 16, 16);
+    p.drawLine(QPointF(6, 20), QPointF(58, 20));
+  } else if (kind == QLatin1String("fix")) {
+    p.setBrush(kTop);
+    p.drawRoundedRect(QRectF(14, 28, 36, 26), 4, 4);
+    p.setBrush(Qt::NoBrush);
+    p.drawArc(QRectF(20, 10, 24, 30), 0, 180 * 16);
+    p.drawLine(QPointF(20, 25), QPointF(20, 28));
+    p.drawLine(QPointF(44, 25), QPointF(44, 28));
+  } else if (kind == QLatin1String("midpoint")) {
+    p.drawLine(QPointF(8, 44), QPointF(56, 20));
+    dot(p, 32, 32, kAccent);
+  } else if (kind == QLatin1String("concentric")) {
+    p.drawEllipse(QPointF(32, 32), 24, 24);
+    p.drawEllipse(QPointF(32, 32), 12, 12);
+    dot(p, 32, 32, kAccent);
+  }
+}
+
+void selectIcon(QPainter& p) {
+  p.setPen(QPen(kLine, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.setBrush(QColor(250, 250, 252));
+  p.drawPolygon(QPolygonF({QPointF(18, 8), QPointF(18, 50), QPointF(28, 40), QPointF(36, 56), QPointF(42, 53),
+                           QPointF(34, 37), QPointF(48, 37)}));
+}
+
+void finishIcon(QPainter& p) {
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(40, 160, 90));
+  p.drawEllipse(QRectF(6, 6, 52, 52));
+  p.setPen(QPen(Qt::white, 7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.setBrush(Qt::NoBrush);
+  p.drawPolyline(QPolygonF({QPointF(18, 33), QPointF(28, 43), QPointF(46, 22)}));
+}
+
+void constructionIcon(QPainter& p) {
+  p.setBrush(Qt::NoBrush);
+  p.setPen(QPen(kAccent, 4, Qt::DashLine, Qt::RoundCap));
+  p.drawLine(QPointF(10, 50), QPointF(54, 14));
+}
+
 void fallback(QPainter& p, const QString& name) {
   p.setBrush(kTop);
   p.drawRoundedRect(QRectF(6, 6, 52, 52), 8, 8);
@@ -191,6 +337,18 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("pan")) pan(p);
   else if (name == QLatin1String("home")) home(p);
   else if (name == QLatin1String("fit")) fit(p);
+  else if (name == QLatin1String("sketch")) sketchIcon(p);
+  else if (name == QLatin1String("extrude")) extrudeIcon(p);
+  else if (name == QLatin1String("line")) lineIcon(p);
+  else if (name == QLatin1String("rectangle")) rectIcon(p);
+  else if (name == QLatin1String("circle")) circleIcon(p);
+  else if (name == QLatin1String("arc")) arcIcon(p);
+  else if (name == QLatin1String("point")) pointIcon(p);
+  else if (name == QLatin1String("dimension")) dimensionIcon(p);
+  else if (name == QLatin1String("finish")) finishIcon(p);
+  else if (name == QLatin1String("select")) selectIcon(p);
+  else if (name == QLatin1String("construction")) constructionIcon(p);
+  else if (name.startsWith(QLatin1String("c-"))) constraintIcon(p, name.mid(2));
   else if (name == QLatin1String("undo")) arrow(p, false);
   else if (name == QLatin1String("redo")) arrow(p, true);
   else if (name == QLatin1String("save")) save(p);

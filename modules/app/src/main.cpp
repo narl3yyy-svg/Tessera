@@ -1,8 +1,10 @@
 #include "CommandDialog.h"
 #include "MainWindow.h"
+#include "SketchEditor.h"
 #include "Viewport.h"
 
 #include "tsr/doc/DocCommands.h"
+#include "tsr/kernel/Kernel.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -12,6 +14,7 @@
 #include <QToolButton>
 #include <QTreeWidget>
 
+#include <cmath>
 #include <cstdio>
 
 namespace {
@@ -64,6 +67,54 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
 
   if (!s.undo() || !s.undo() || s.document().bodies().size() != 1) return fail("undo");
   if (!s.redo() || s.document().features().size() != 2) return fail("redo");
+
+  // Sketch mode: rectangle from the origin with a hole, one dimension, finish.
+  s.newDocument();
+  using Tool = tsr::app::SketchEditor::Tool;
+  auto* ed = w.startSketch(QStringLiteral("XY"));
+  if (!ed) return fail("sketch mode did not start");
+  if (w.startCommand(QStringLiteral("tsr.primitive.box"))) return fail("command started during sketch");
+  ed->setTool(Tool::Rectangle);
+  ed->clickAt(0, 0);   // snaps to the sketch origin
+  ed->clickAt(4, 3);
+  ed->setTool(Tool::Circle);
+  ed->clickAt(2, 1.5);
+  ed->clickAt(2.5, 1.5);
+  if (ed->sketch().entities.size() != 5) return fail("rectangle + circle not drawn");
+  ed->setTool(Tool::Dimension);
+  ed->clickAt(2, 0);     // bottom edge
+  ed->clickAt(9, 9);     // empty space: its length
+  if (!ed->submitValue(QStringLiteral("50 mm"))) return fail("dimension box did not open");
+  if (std::abs(ed->sketch().points[2].x - 5.0) > 1e-6) return fail("dimension did not drive the geometry");
+  ed->undo();
+  ed->redo();
+  if (!w.finishSketch()) return fail("finish sketch");
+  if (w.sketchEditor() || s.document().sketches().size() != 1) return fail("sketch not stored");
+
+  // Extrude only the plate (not the disc) by 10 mm.
+  auto* ex = w.startCommand(QStringLiteral("tsr.feature.extrude"));
+  if (!ex || !ex->hasProfilesInput()) return fail("extrude dialog");
+  ex->setProfiles(QStringLiteral("Sketch1"), QStringLiteral("0.3,0.3"));
+  if (!ex->setInputForTest(QStringLiteral("distance"), 10.0)) return fail("extrude distance");
+  ex->accept();
+  QApplication::processEvents();
+  const double pi = 3.14159265358979323846;
+  auto volume = [&] {
+    const auto b = s.document().bodies();
+    return b.size() == 1 ? tsr::kernel::massProperties(b[0].shape).volume : -1.0;
+  };
+  if (std::abs(volume() - (15 - pi * 0.25)) > 1e-6) return fail("extrude volume");
+
+  // Edit the sketch: make the hole 20 mm; the extrude follows.
+  const int sketchId = s.document().features().front().id;
+  ed = w.editSketch(sketchId);
+  if (!ed) return fail("edit sketch");
+  ed->setTool(Tool::Dimension);
+  ed->clickAt(2.5, 1.5);   // the circle
+  if (!ed->submitValue(QStringLiteral("20"))) return fail("diameter box");
+  if (!w.finishSketch()) return fail("finish edited sketch");
+  if (std::abs(volume() - (15 - pi)) > 1e-6) return fail("extrude did not follow the sketch edit");
+  if (!s.undo() || std::abs(volume() - (15 - pi * 0.25)) > 1e-6) return fail("undo sketch edit");
   std::puts("smoke: OK");
   return 0;
 }
@@ -95,6 +146,10 @@ int main(int argc, char** argv) {
   QCommandLineOption shotOpt(QStringLiteral("screenshot"),
                              QStringLiteral("Save a PNG of the window once it has rendered, then exit."),
                              QStringLiteral("file.png"));
+  QCommandLineOption editSketchOpt(QStringLiteral("edit-sketch"),
+                                   QStringLiteral("Open this sketch in sketch mode after startup (screenshots)."),
+                                   QStringLiteral("name"));
+  parser.addOption(editSketchOpt);
   parser.addOption(smokeOpt);
   parser.addOption(scriptOpt);
   parser.addOption(shotOpt);
@@ -127,6 +182,14 @@ int main(int argc, char** argv) {
       return 1;
     }
     window.viewport()->fitAll();
+  }
+  if (parser.isSet(editSketchOpt)) {
+    // After the window is up, as when a user double-clicks the sketch.
+    const std::string name = parser.value(editSketchOpt).toStdString();
+    QTimer::singleShot(400, &window, [&window, &session, name] {
+      for (const auto& f : session.document().features())
+        if (f.name == name) window.editSketch(f.id);
+    });
   }
   if (parser.isSet(shotOpt)) {
     const QString out = parser.value(shotOpt);

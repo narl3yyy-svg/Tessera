@@ -2,6 +2,12 @@
 #include "tsr/doc/Document.h"
 
 #include "tsr/kernel/Kernel.h"
+#include "tsr/sketch/Sketch.h"
+#include "tsr/sketch/SketchGeometry.h"
+
+#include <algorithm>
+#include <cmath>
+#include <optional>
 
 #include <cctype>
 #include <functional>
@@ -104,6 +110,50 @@ kernel::Axis axisOf(const Inputs& in) {
   return a == "X" ? kernel::Axis::X : a == "Y" ? kernel::Axis::Y : kernel::Axis::Z;
 }
 
+// Operation / target inputs shared by everything that makes solid geometry.
+void addOperationInputs(CommandDef& d) {
+  d.inputs.push_back(choice("operation", "Operation", {"New Body", "Join", "Cut", "Intersect"},
+                            "New Body, or combine with the target body."));
+  d.inputs.push_back(InputDef{.id = "target", .label = "Target body",
+                              .tooltip = "Body to join/cut/intersect. Empty: the most recent body.",
+                              .type = InputType::Body, .defaultValue = std::string{}, .optional = true});
+}
+
+std::string validateOperation(const Inputs& in, const Document& doc) {
+  if (getString(in, "operation") == "New Body") return {};
+  const std::string target = getString(in, "target");
+  if (target.empty() ? doc.bodies().empty() : !doc.body(target))
+    return target.empty() ? "Operation: there is no body to combine with; choose New Body"
+                          : "Target body: '" + target + "' does not exist";
+  return {};
+}
+
+// Adds `tool` as a new body or combines it with the target body.
+void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, const std::string& what) {
+  if (!kernel::isValid(tool)) throw CommandError(what + ": kernel produced an invalid body");
+  const std::string op = getString(in, "operation");
+  if (op == "New Body") {
+    doc.addBody(doc.nextBodyName(), tool);
+    return;
+  }
+  std::string target = getString(in, "target");
+  if (target.empty()) {
+    const auto bodies = doc.bodies();
+    if (bodies.empty()) throw CommandError("Operation: there is no body to combine with; choose New Body");
+    target = bodies.back().name;
+  }
+  const auto body = doc.body(target);
+  if (!body) throw CommandError("Target body: '" + target + "' does not exist");
+  const auto kind = op == "Join" ? kernel::BooleanOp::Join
+                  : op == "Cut"  ? kernel::BooleanOp::Cut
+                                 : kernel::BooleanOp::Intersect;
+  try {
+    doc.replaceBody(target, kernel::boolean(kind, body->shape, tool));
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(e.what());
+  }
+}
+
 class Primitive : public Command {
 public:
   using Builder = std::function<TopoDS_Shape(const Inputs&)>;
@@ -125,60 +175,218 @@ public:
     def_.inputs.push_back(offset("z", "Z"));
     if (hasAxis)
       def_.inputs.push_back(choice("axis", "Direction", {"Z", "Y", "X"}, "Axis the primitive is built along."));
-    def_.inputs.push_back(choice("operation", "Operation", {"New Body", "Join", "Cut", "Intersect"},
-                                 "New Body, or combine with the target body."));
-    def_.inputs.push_back(InputDef{.id = "target", .label = "Target body",
-                                   .tooltip = "Body to join/cut/intersect. Empty: the most recent body.",
-                                   .type = InputType::Body, .defaultValue = std::string{}, .optional = true});
+    addOperationInputs(def_);
   }
   const CommandDef& def() const override { return def_; }
 
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
-    if (getString(in, "operation") == "New Body") return {};
-    const Document& doc = docOf(ctx);
-    const std::string target = getString(in, "target");
-    if (target.empty() ? doc.bodies().empty() : !doc.body(target))
-      return target.empty() ? "Operation: there is no body to combine with; choose New Body"
-                            : "Target body: '" + target + "' does not exist";
-    return {};
+    return validateOperation(in, docOf(ctx));
   }
 
   void apply(const Inputs& in, CommandContext& ctx) const override {
-    Document& doc = docOf(ctx);
     TopoDS_Shape tool;
     try {
       tool = build_(in);
     } catch (const kernel::KernelError& e) {
       throw CommandError(def_.name + ": " + e.what());
     }
-    if (!kernel::isValid(tool)) throw CommandError(def_.name + ": kernel produced an invalid body");
-
-    const std::string op = getString(in, "operation");
-    if (op == "New Body") {
-      doc.addBody(doc.nextBodyName(), tool);
-      return;
-    }
-    std::string target = getString(in, "target");
-    if (target.empty()) {
-      const auto bodies = doc.bodies();
-      if (bodies.empty()) throw CommandError("Operation: there is no body to combine with; choose New Body");
-      target = bodies.back().name;
-    }
-    const auto body = doc.body(target);
-    if (!body) throw CommandError("Target body: '" + target + "' does not exist");
-    const auto kind = op == "Join" ? kernel::BooleanOp::Join
-                    : op == "Cut"  ? kernel::BooleanOp::Cut
-                                   : kernel::BooleanOp::Intersect;
-    try {
-      doc.replaceBody(target, kernel::boolean(kind, body->shape, tool));
-    } catch (const kernel::KernelError& e) {
-      throw CommandError(e.what());
-    }
+    applyOperation(docOf(ctx), in, tool, def_.name);
   }
 
 private:
   CommandDef def_;
   Builder build_;
+};
+
+// ---------------------------------------------------------------------------
+// Sketch: a feature that stores solved 2D geometry on a plane. The GUI edits
+// it in sketch mode; scripts pass the geometry as JSON (tsr::sketch format).
+class CreateSketch final : public Command {
+public:
+  CreateSketch() {
+    def_.id = kCmdSketch;
+    def_.name = "Create Sketch";
+    def_.tooltip = "Creates a 2D sketch on a plane or a flat face. Draw lines, rectangles, circles and arcs, "
+                   "then add constraints and dimensions.";
+    def_.workspace = "Design";
+    def_.tab = "Solid";
+    def_.panel = "Create";
+    def_.icon = "sketch";
+    def_.feature = true;
+    def_.nameInput = "name";
+    def_.inputs = {
+        {.id = "name", .label = "Name", .tooltip = "Empty: Sketch<n>.", .type = InputType::String,
+         .defaultValue = std::string{}, .optional = true},
+        {.id = "plane", .label = "Plane", .tooltip = "XY, XZ, YZ or custom:... (see SketchGeometry.h).",
+         .type = InputType::String, .defaultValue = std::string("XY")},
+        {.id = "offset", .label = "Offset", .tooltip = "Moves the plane along its normal.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter},
+        {.id = "data", .label = "Geometry", .tooltip = "Sketch geometry and constraints (JSON).",
+         .type = InputType::String, .defaultValue = std::string{}, .optional = true},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+
+  std::string validate(const Inputs& in, CommandContext&) const override {
+    try {
+      (void)sketch::planeFrame(getString(in, "plane"), getReal(in, "offset"));
+      (void)sketch::Sketch::fromJson(getString(in, "data"));
+    } catch (const sketch::SketchError& e) {
+      return e.what();
+    }
+    const std::string name = getString(in, "name");
+    if (!name.empty() && !isIdentifier(name)) return "Name: letters, digits and underscores only";
+    return {};
+  }
+
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    if (getString(in, "name").empty()) in["name"] = docOf(ctx).nextSketchName();
+  }
+
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    SketchRecord rec;
+    rec.name = getString(in, "name");
+    if (rec.name.empty()) rec.name = doc.nextSketchName();
+    rec.plane = getString(in, "plane");
+    rec.offset = getReal(in, "offset");
+    try {
+      (void)sketch::planeFrame(rec.plane, rec.offset);
+      sketch::Sketch s = sketch::Sketch::fromJson(getString(in, "data"));
+      const auto res = sketch::solve(s);
+      if (!res.ok) throw CommandError(rec.name + ": " + res.message);
+      rec.data = s.toJson();
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(rec.name + ": " + e.what());
+    }
+    doc.setSketch(rec);
+  }
+
+private:
+  CommandDef def_;
+};
+
+// Profiles of a stored sketch, with its plane.
+struct SketchProfiles {
+  gp_Ax3 frame;
+  std::vector<sketch::Profile> profiles;
+};
+
+SketchProfiles profilesOf(const SketchRecord& rec) {
+  SketchProfiles out;
+  out.frame = sketch::planeFrame(rec.plane, rec.offset);
+  out.profiles = sketch::profiles(sketch::Sketch::fromJson(rec.data), out.frame);
+  return out;
+}
+
+std::optional<SketchRecord> sketchFor(const Document& doc, const std::string& name) {
+  if (!name.empty()) return doc.sketch(name);
+  const auto all = doc.sketches();
+  if (all.empty()) return std::nullopt;
+  return all.back();
+}
+
+// "x,y;x,y" -> points
+std::vector<std::pair<double, double>> parsePoints(const std::string& text) {
+  std::vector<std::pair<double, double>> out;
+  size_t start = 0;
+  while (start < text.size()) {
+    size_t end = text.find(';', start);
+    if (end == std::string::npos) end = text.size();
+    const std::string item = text.substr(start, end - start);
+    const size_t comma = item.find(',');
+    if (comma == std::string::npos) throw CommandError("Profiles: expected x,y pairs separated by ';'");
+    try {
+      out.emplace_back(std::stod(item.substr(0, comma)), std::stod(item.substr(comma + 1)));
+    } catch (const std::exception&) {
+      throw CommandError("Profiles: '" + item + "' is not an x,y pair");
+    }
+    start = end + 1;
+  }
+  return out;
+}
+
+class Extrude final : public Command {
+public:
+  Extrude() {
+    def_.id = kCmdExtrude;
+    def_.name = "Extrude";
+    def_.tooltip = "Adds depth to sketch profiles. Pick the profiles in the canvas, set the distance.";
+    def_.workspace = "Design";
+    def_.tab = "Solid";
+    def_.panel = "Create";
+    def_.icon = "extrude";
+    def_.shortcut = "E";
+    def_.feature = true;
+    def_.inputs = {
+        {.id = "sketch", .label = "Sketch", .tooltip = "Empty: the most recent sketch.", .type = InputType::Sketch,
+         .defaultValue = std::string{}, .optional = true},
+        {.id = "profiles", .label = "Profiles", .tooltip = "Click regions of the sketch. None picked: all of them.",
+         .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
+        choice("direction", "Direction", {"One Side", "Symmetric"}, "Symmetric extrudes the distance both ways."),
+        {.id = "distance", .label = "Distance", .tooltip = "Negative extrudes the other way.",
+         .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter},
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string name = getString(in, "sketch");
+    if (!sketchFor(doc, name))
+      return name.empty() ? "Sketch: there is no sketch to extrude; create one first"
+                          : "Sketch: '" + name + "' does not exist";
+    if (std::abs(getReal(in, "distance")) < 1e-9) return "Distance: must not be zero";
+    return validateOperation(in, doc);
+  }
+
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    // Record which sketch was meant, so later sketches do not change it.
+    if (getString(in, "sketch").empty())
+      if (auto rec = sketchFor(docOf(ctx), "")) in["sketch"] = rec->name;
+  }
+
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = sketchFor(doc, getString(in, "sketch"));
+    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+    SketchProfiles sp;
+    try {
+      sp = profilesOf(*rec);
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    }
+    if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
+
+    std::vector<TopoDS_Shape> faces;
+    const std::string picked = getString(in, "profiles");
+    if (picked.empty()) {
+      for (const auto& p : sp.profiles) faces.push_back(p.face);
+    } else {
+      std::vector<int> used;
+      for (const auto& [x, y] : parsePoints(picked)) {
+        const int i = sketch::profileAt(sp.profiles, sp.frame, x, y);
+        if (i < 0) throw CommandError("Profiles: a picked profile no longer exists in " + rec->name);
+        if (std::find(used.begin(), used.end(), i) == used.end()) {
+          used.push_back(i);
+          faces.push_back(sp.profiles[i].face);
+        }
+      }
+    }
+    const gp_Dir n = sp.frame.Direction();
+    TopoDS_Shape tool;
+    try {
+      tool = kernel::extrude(faces, {n.X(), n.Y(), n.Z()}, getReal(in, "distance"),
+                             getString(in, "direction") == "Symmetric");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError("Extrude: " + std::string(e.what()));
+    }
+    applyOperation(doc, in, tool, "Extrude");
+  }
+
+private:
+  CommandDef def_;
 };
 
 std::unique_ptr<Command> makeBox() {
@@ -234,6 +442,8 @@ std::unique_ptr<Command> makeCone() {
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
+  registry.add(std::make_unique<CreateSketch>());
+  registry.add(std::make_unique<Extrude>());
   registry.add(makeBox());
   registry.add(makeCylinder());
   registry.add(makeSphere());

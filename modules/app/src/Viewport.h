@@ -6,6 +6,7 @@
 // selects, right click opens the context menu. The ViewCube (top right)
 // snaps to standard views.
 #include "tsr/doc/Document.h"
+#include "tsr/sketch/SketchGeometry.h"
 
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_Shape.hxx>
@@ -13,15 +14,42 @@
 #include <AIS_ViewCube.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
+#include <gp_Ax3.hxx>
 
 #include <QOpenGLWidget>
 #include <QStringList>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
+class QKeyEvent;
+class QMouseEvent;
+
 namespace tsr::app {
+
+// Takes over the left mouse button and keys while active (sketch editing).
+// Middle-button navigation and the wheel keep working.
+class ViewInteractor {
+public:
+  virtual ~ViewInteractor() = default;
+  virtual void mousePress(QMouseEvent*) {}
+  virtual void mouseMove(QMouseEvent*) {}
+  virtual void mouseRelease(QMouseEvent*) {}
+  virtual void mouseDoubleClick(QMouseEvent*) {}
+  virtual bool keyPress(QKeyEvent*) { return false; }
+};
+
+// A finished sketch as shown in the canvas.
+struct SketchDisplay {
+  std::string name;
+  gp_Ax3 frame;
+  TopoDS_Shape curves;
+  TopoDS_Shape construction;
+  std::vector<sketch::Profile> profiles;
+  bool visible = true;
+};
 
 class Viewport : public QOpenGLWidget, public AIS_ViewController {
   Q_OBJECT
@@ -53,10 +81,31 @@ public:
   QStringList selectedBodies() const;
   void clearSelection();
 
+  // Sketches and their profiles (closed regions).
+  void setSketches(std::vector<SketchDisplay> sketches);
+  void setProfilePicking(bool on);   // profiles become clickable (Extrude)
+  void setPickedProfiles(const std::string& sketch, const std::vector<int>& indices);
+  // Origin planes and flat body faces become clickable (Create Sketch).
+  void setPlanePicking(bool on);
+  bool planePicking() const { return planePicking_; }
+
+  // For the sketch editor.
+  void setInteractor(ViewInteractor* interactor);
+  const Handle(AIS_InteractiveContext)& aisContext() const { return context_; }
+  bool planePoint(const QPointF& widgetPos, const gp_Ax3& frame, gp_Pnt& out) const;
+  double modelPerPixel() const;   // model length of one logical pixel
+  // Looks straight at the plane, centred on `center` (default: the plane origin).
+  void lookAt(const gp_Ax3& frame, double size = 0, std::optional<gp_Pnt> center = std::nullopt);
+  void setGridPlane(const gp_Ax3& frame);   // the layout grid follows the active sketch
+  void redraw() { update(); }
+
 signals:
+  void profileClicked(const QString& sketch, int index);
+  void planePicked(const QString& spec, const QString& label);
   void bodyClicked(const QString& name);
   void selectionChanged();
   void contextMenuRequested(const QPoint& globalPos);
+  void statusMessage(const QString& text);
 
 protected:
   void initializeGL() override;
@@ -66,6 +115,8 @@ protected:
   void mouseReleaseEvent(QMouseEvent* e) override;
   void mouseMoveEvent(QMouseEvent* e) override;
   void wheelEvent(QWheelEvent* e) override;
+  void mouseDoubleClickEvent(QMouseEvent* e) override;
+  void keyPressEvent(QKeyEvent* e) override;
 
   // AIS_ViewController
   void OnSelectionChanged(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
@@ -74,11 +125,21 @@ protected:
 private:
   void bindLeftButton();
   void rebuild();
+  void rebuildSketches();
+  void applyPickModes();
+  bool handlePickSelection();   // profile / plane clicks; true if consumed
+  Aspect_VKeyMouse aisButtons(Qt::MouseButtons b) const;
   void applyStyle(const Handle(AIS_Shape)& s);
   static Graphic3d_MaterialAspect bodyMaterial();
   Graphic3d_Vec2i toPixels(const QPointF& p) const;
   Aspect_Drawable nativeDrawable();
   void updateView() { update(); }
+  // After a programmatic camera or grid change: the main layers must be
+  // re-rendered, not just the immediate layer.
+  void redrawAll() {
+    if (!view_.IsNull()) view_->Invalidate();
+    update();
+  }
 
   Handle(V3d_Viewer) viewer_;
   Handle(V3d_View) view_;
@@ -91,12 +152,33 @@ private:
 
   Style style_ = Style::ShadedEdges;
   bool grid_ = true;
+  struct ProfileObject {
+    Handle(AIS_Shape) shape;
+    std::string sketch;
+    int index = 0;
+  };
+  std::vector<SketchDisplay> sketches_;
+  std::vector<Handle(AIS_Shape)> sketchCurves_;
+  std::vector<ProfileObject> profileObjects_;
+  std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
+  bool profilePicking_ = false;
+  bool planePicking_ = false;
+  std::string pickedSketch_;
+  std::vector<int> pickedProfiles_;
+  ViewInteractor* interactor_ = nullptr;
+
   bool orbitTool_ = false;
   bool panTool_ = false;
   bool glReady_ = false;
   bool fittedOnce_ = false;
   QString reason_;
   QPointF pressPos_;
+  struct PendingLook {
+    gp_Ax3 frame;
+    double size;
+    std::optional<gp_Pnt> center;
+  };
+  std::optional<PendingLook> pendingLook_;   // lookAt before GL was ready
 };
 
 } // namespace tsr::app

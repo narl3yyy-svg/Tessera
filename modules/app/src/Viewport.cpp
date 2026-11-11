@@ -16,6 +16,7 @@
 #include <StdSelect_BRepOwner.hxx>
 
 #include <QGuiApplication>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QPainter>
@@ -264,7 +265,12 @@ void Viewport::initializeGL() {
   if (first) {
     context_->Display(cube_, 0, 0, false);
     rebuild();
+    rebuildSketches();
     home();
+    if (pendingLook_) {
+      lookAt(pendingLook_->frame, pendingLook_->size, pendingLook_->center);
+      pendingLook_.reset();
+    }
   }
 }
 
@@ -322,12 +328,34 @@ void Viewport::handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const
   if (toAskNextFrame()) updateView(); // animation (ViewCube) in progress
 }
 
+Aspect_VKeyMouse Viewport::aisButtons(Qt::MouseButtons b) const {
+  // While an interactor (sketch editor) is active it owns the left button.
+  return toVKeys(interactor_ ? (b & ~Qt::LeftButton) : b);
+}
+
 void Viewport::mousePressEvent(QMouseEvent* e) {
   QOpenGLWidget::mousePressEvent(e);
   pressPos_ = e->position();
+  if (interactor_ && e->button() == Qt::LeftButton) {
+    interactor_->mousePress(e);
+    return;
+  }
   if (!glReady_) return;
-  if (UpdateMouseButtons(toPixels(e->position()), toVKeys(e->buttons()), toVKeys(e->modifiers()), false))
+  if (UpdateMouseButtons(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
     updateView();
+}
+
+void Viewport::mouseDoubleClickEvent(QMouseEvent* e) {
+  if (interactor_ && e->button() == Qt::LeftButton) {
+    interactor_->mouseDoubleClick(e);
+    return;
+  }
+  QOpenGLWidget::mouseDoubleClickEvent(e);
+}
+
+void Viewport::keyPressEvent(QKeyEvent* e) {
+  if (interactor_ && interactor_->keyPress(e)) return;
+  QOpenGLWidget::keyPressEvent(e);
 }
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
@@ -336,15 +364,20 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
     emit contextMenuRequested(e->globalPosition().toPoint());
     return;
   }
+  if (interactor_ && e->button() == Qt::LeftButton) {
+    interactor_->mouseRelease(e);
+    return;
+  }
   if (!glReady_) return;
-  if (UpdateMouseButtons(toPixels(e->position()), toVKeys(e->buttons()), toVKeys(e->modifiers()), false))
+  if (UpdateMouseButtons(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
     updateView();
 }
 
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
+  if (interactor_) interactor_->mouseMove(e);
   if (!glReady_) return;
-  if (UpdateMousePosition(toPixels(e->position()), toVKeys(e->buttons()), toVKeys(e->modifiers()), false))
+  if (UpdateMousePosition(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
     updateView();
 }
 
@@ -355,6 +388,7 @@ void Viewport::wheelEvent(QWheelEvent* e) {
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {
+  if (handlePickSelection()) return;
   const QStringList sel = selectedBodies();
   if (sel.size() == 1) emit bodyClicked(sel.first());
   emit selectionChanged();
@@ -406,6 +440,7 @@ void Viewport::rebuild() {
       if (selected.contains(QString::fromStdString(b.name))) context_->AddOrRemoveSelected(s, false);
     }
   }
+  applyPickModes();
   if (!fittedOnce_ && !bodies_.empty()) {
     fittedOnce_ = true;
     fitAll();
@@ -438,7 +473,7 @@ void Viewport::fitAll() {
   } else {
     view_->SetSize(30.0); // empty design: show about 300 mm of the grid
   }
-  updateView();
+  redrawAll();
 }
 
 void Viewport::home() {
@@ -465,7 +500,7 @@ void Viewport::setGridVisible(bool visible) {
   if (viewer_.IsNull()) return;
   if (visible) viewer_->ActivateGrid(Aspect_GT_Rectangular, Aspect_GDM_Lines);
   else viewer_->DeactivateGrid();
-  updateView();
+  redrawAll();
 }
 
 } // namespace tsr::app
