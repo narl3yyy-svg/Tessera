@@ -33,6 +33,14 @@ public:
   // The caller calls notifyChanged() after preview/execute/cancel.
   std::unique_ptr<CommandSession> begin(const std::string& commandId);
 
+  // Editing the design history. editFeature() starts an interactive edit of a
+  // feature's inputs (the dialog's preview/OK/cancel drive it like a new
+  // command); OK replaces the inputs and replays the timeline as one undo step.
+  std::unique_ptr<CommandSession> editFeature(int featureId);
+  std::string editFeature(int featureId, const Inputs& changes);   // non-interactive
+  std::string deleteFeature(int featureId);
+  std::string setFeatureSuppressed(int featureId, bool suppressed);
+
   bool undo();
   bool redo();
 

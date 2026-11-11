@@ -15,7 +15,10 @@ namespace tsr {
 // are all generated from / driven through this one description.
 // ---------------------------------------------------------------------------
 
-enum class InputType { Real, Integer, Bool, String };
+// Choice: a string that must be one of InputDef::choices (a dropdown).
+// Body:   the name of a body in the document, picked in the viewport; empty
+//         means "the most recent body" when the input is optional.
+enum class InputType { Real, Integer, Bool, String, Choice, Body };
 
 struct InputDef {
   std::string id;
@@ -27,7 +30,8 @@ struct InputDef {
   std::optional<double> min;    // internal units, inclusive
   std::optional<double> max;
   bool minExclusive = false;
-  bool optional = false;        // may be left empty (String only)
+  bool optional = false;        // may be left empty (String/Body)
+  std::vector<std::string> choices; // Choice only
 };
 
 struct CommandDef {
@@ -37,7 +41,11 @@ struct CommandDef {
   std::string workspace;   // "Design"
   std::string tab;         // "Solid"
   std::string panel;       // "Create"
-  std::string icon;        // resource name under resources/icons, may be empty
+  std::string icon;        // icon name (see app/Icons.cpp), may be empty
+  std::string shortcut;    // e.g. "E"; empty for none
+  // A feature is recorded in the design history (timeline) together with its
+  // inputs, can be edited later and is replayed on recompute.
+  bool feature = false;
   std::vector<InputDef> inputs;
 
   const InputDef* input(const std::string& inputId) const;
@@ -55,6 +63,8 @@ const std::string& getString(const Inputs& in, const std::string& id);
 // The document side of a command. Implemented by tsr::doc::Document over
 // OCAF transactions; tests use a fake.
 // ---------------------------------------------------------------------------
+class Command;
+
 class CommandContext {
 public:
   virtual ~CommandContext() = default;
@@ -62,6 +72,9 @@ public:
   virtual void commitTransaction() = 0;
   virtual void abortTransaction() = 0;
   virtual bool hasOpenTransaction() const = 0;
+  // Called inside the command's transaction after a successful apply() of a
+  // feature command (CommandDef::feature).
+  virtual void recordFeature(const Command&, const Inputs&) {}
 };
 
 class CommandError : public std::runtime_error {
@@ -93,7 +106,9 @@ public:
 class CommandSession {
 public:
   CommandSession(const Command& cmd, CommandContext& ctx);
-  ~CommandSession(); // cancels a pending preview
+  // Starts from the given inputs instead of the defaults (editing a feature).
+  CommandSession(const Command& cmd, CommandContext& ctx, const Inputs& initial);
+  virtual ~CommandSession(); // cancels a pending preview
 
   CommandSession(const CommandSession&) = delete;
   CommandSession& operator=(const CommandSession&) = delete;
@@ -120,6 +135,7 @@ public:
 
 private:
   void dropPreview();
+  std::string applyInTransaction(const std::string& name);
   std::string checkInput(const InputDef& d, const Value& v) const;
 
   const Command& cmd_;

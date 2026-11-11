@@ -27,6 +27,6 @@ if(TSR_WITH_PYTHON)
 endif()
 
 if(TSR_WITH_QT)
-  find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets)
+  find_package(Qt6 6.6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets)
   # KDDockWidgets is the target dock system (SPEC/DIVERGENCES.md, P0 item 2).
 endif()

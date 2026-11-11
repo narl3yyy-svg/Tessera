@@ -35,6 +35,12 @@ CommandSession::CommandSession(const Command& cmd, CommandContext& ctx) : cmd_(c
   for (const auto& d : cmd_.def().inputs) inputs_[d.id] = d.defaultValue;
 }
 
+CommandSession::CommandSession(const Command& cmd, CommandContext& ctx, const Inputs& initial)
+    : CommandSession(cmd, ctx) {
+  for (const auto& [k, v] : initial)
+    if (cmd_.def().input(k)) inputs_[k] = v;
+}
+
 CommandSession::~CommandSession() {
   if (!finished_) cancel();
 }
@@ -68,11 +74,21 @@ std::string CommandSession::checkInput(const InputDef& d, const Value& v) const 
     }
     case InputType::Bool:
       return std::holds_alternative<bool>(v) ? std::string{} : d.label + ": expected true/false";
-    case InputType::String: {
+    case InputType::String:
+    case InputType::Body: {
       auto p = std::get_if<std::string>(&v);
       if (!p) return d.label + ": expected text";
-      if (p->empty() && !d.optional) return d.label + ": required";
+      if (p->empty() && !d.optional) return d.label + (d.type == InputType::Body ? ": select a body" : ": required");
       return {};
+    }
+    case InputType::Choice: {
+      auto p = std::get_if<std::string>(&v);
+      if (!p) return d.label + ": expected one of the listed options";
+      for (const auto& c : d.choices)
+        if (c == *p) return {};
+      std::string opts;
+      for (const auto& c : d.choices) opts += (opts.empty() ? "" : ", ") + c;
+      return d.label + ": '" + *p + "' is not one of " + opts;
     }
   }
   return "unknown input type";
@@ -111,14 +127,20 @@ std::string CommandSession::preview() {
   dropPreview();
   if (!cmd_.supportsPreview()) return {};
   if (auto err = validate(); !err.empty()) return err;
-  ctx_.openTransaction(cmd_.def().name + " (preview)");
+  if (auto err = applyInTransaction(cmd_.def().name + " (preview)"); !err.empty()) return err;
+  previewActive_ = true;
+  return {};
+}
+
+std::string CommandSession::applyInTransaction(const std::string& name) {
+  ctx_.openTransaction(name);
   try {
     cmd_.apply(inputs_, ctx_);
+    if (cmd_.def().feature) ctx_.recordFeature(cmd_, inputs_);
   } catch (const std::exception& e) {
     ctx_.abortTransaction();
     return e.what();
   }
-  previewActive_ = true;
   return {};
 }
 
@@ -126,13 +148,7 @@ std::string CommandSession::execute() {
   if (finished_) return "command already finished";
   dropPreview();
   if (auto err = validate(); !err.empty()) return err;
-  ctx_.openTransaction(cmd_.def().name);
-  try {
-    cmd_.apply(inputs_, ctx_);
-  } catch (const std::exception& e) {
-    ctx_.abortTransaction();
-    return e.what();
-  }
+  if (auto err = applyInTransaction(cmd_.def().name); !err.empty()) return err;
   ctx_.commitTransaction();
   finished_ = true;
   return {};

@@ -1,6 +1,7 @@
 #include "CommandDialog.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -71,6 +72,33 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = le;
         break;
       }
+      case InputType::Choice: {
+        auto* combo = new QComboBox;
+        for (const auto& c : in.choices) combo->addItem(QString::fromStdString(c));
+        if (auto p = std::get_if<std::string>(&cur)) combo->setCurrentText(QString::fromStdString(*p));
+        connect(combo, &QComboBox::currentTextChanged, this,
+                [this, id](const QString& t) { onInputChanged(id, t.toStdString()); });
+        w = combo;
+        break;
+      }
+      case InputType::Body: {
+        // Picked from a list or by clicking the body in the 3D view.
+        auto* combo = new QComboBox;
+        if (in.optional) combo->addItem(tr("(most recent body)"), QString());
+        for (const auto& b : session_.document().bodies())
+          combo->addItem(QString::fromStdString(b.name), QString::fromStdString(b.name));
+        if (auto p = std::get_if<std::string>(&cur); p && !p->empty()) {
+          const QString name = QString::fromStdString(*p);
+          if (combo->findData(name) < 0) combo->addItem(name, name);
+          combo->setCurrentIndex(combo->findData(name));
+        }
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
+          onInputChanged(id, combo->currentData().toString().toStdString());
+        });
+        if (!bodyInput_) bodyInput_ = combo;
+        w = combo;
+        break;
+      }
     }
     w->setObjectName(QString::fromStdString(in.id));
     w->setToolTip(tip);
@@ -136,8 +164,23 @@ void CommandDialog::reject() {
   QDialog::reject();
 }
 
+bool CommandDialog::pickBody(const QString& name) {
+  if (!bodyInput_ || !bodyInput_->isEnabled()) return false;
+  int i = bodyInput_->findData(name);
+  if (i < 0) return false;
+  bodyInput_->setCurrentIndex(i);
+  return true;
+}
+
 bool CommandDialog::setInputForTest(const QString& id, const QVariant& value) {
   QWidget* w = findChild<QWidget*>(id);
+  if (auto* combo = qobject_cast<QComboBox*>(w)) {
+    int i = combo->findText(value.toString());
+    if (i < 0) i = combo->findData(value.toString());
+    if (i < 0) return false;
+    combo->setCurrentIndex(i);
+    return true;
+  }
   if (auto* sb = qobject_cast<QDoubleSpinBox*>(w)) { sb->setValue(value.toDouble()); return true; }
   if (auto* sb = qobject_cast<QSpinBox*>(w)) { sb->setValue(value.toInt()); return true; }
   if (auto* cb = qobject_cast<QCheckBox*>(w)) { cb->setChecked(value.toBool()); return true; }

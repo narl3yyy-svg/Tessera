@@ -17,6 +17,8 @@ const char* typeName(InputType t) {
     case InputType::Integer: return "integer";
     case InputType::Bool: return "bool";
     case InputType::String: return "string";
+    case InputType::Choice: return "choice";
+    case InputType::Body: return "body";
   }
   return "?";
 }
@@ -56,6 +58,7 @@ void bindTsr(py::module_& m) {
         di["unit"] = std::string(unitSymbol(i.unit));
         di["min"] = i.min ? py::cast(*i.min) : py::none();
         di["max"] = i.max ? py::cast(*i.max) : py::none();
+        if (i.type == InputType::Choice) di["choices"] = i.choices;
         inputs.append(di);
       }
       py::dict dd;
@@ -75,6 +78,35 @@ void bindTsr(py::module_& m) {
     for (auto [k, v] : kwargs) in[k.cast<std::string>()] = fromPy(v);
     if (auto err = activeSession().run(id, in); !err.empty()) throw std::runtime_error(err);
   }, py::arg("command_id"), "Run a command with keyword inputs (Real inputs in internal units: cm, rad).");
+
+  m.def("features", [] {
+    py::list out;
+    for (const auto& f : activeSession().document().features()) {
+      py::dict d;
+      d["id"] = f.id;
+      d["name"] = f.name;
+      d["command"] = f.commandId;
+      py::dict in;
+      for (const auto& [k, v] : f.inputs) in[py::str(k)] = toPy(v);
+      d["inputs"] = in;
+      d["error"] = f.error;
+      d["suppressed"] = f.suppressed;
+      out.append(d);
+    }
+    return out;
+  }, "The design history (timeline), oldest first.");
+
+  m.def("edit_feature", [](int id, const py::kwargs& kwargs) {
+    Inputs in;
+    for (auto [k, v] : kwargs) in[k.cast<std::string>()] = fromPy(v);
+    if (auto err = activeSession().editFeature(id, in); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("feature_id"), "Change a feature's inputs and replay the timeline.");
+  m.def("delete_feature", [](int id) {
+    if (auto err = activeSession().deleteFeature(id); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("feature_id"));
+  m.def("suppress_feature", [](int id, bool suppressed) {
+    if (auto err = activeSession().setFeatureSuppressed(id, suppressed); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("feature_id"), py::arg("suppressed") = true);
 
   m.def("undo", [] { return activeSession().undo(); });
   m.def("redo", [] { return activeSession().redo(); });

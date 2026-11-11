@@ -5,8 +5,12 @@ add_executable(tessera
   src/MainWindow.cpp
   src/MainWindow.h
   src/CommandDialog.cpp
-  src/CommandDialog.h)
-target_link_libraries(tessera PRIVATE tsr::api Qt6::Widgets)
+  src/CommandDialog.h
+  src/Icons.cpp
+  src/Icons.h
+  src/Viewport.cpp
+  src/Viewport.h)
+target_link_libraries(tessera PRIVATE tsr::api Qt6::Widgets Qt6::OpenGLWidgets TKV3d TKOpenGl TKService)
 
 include(GNUInstallDirs)
 install(TARGETS tessera tessera-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

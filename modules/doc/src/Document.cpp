@@ -8,6 +8,10 @@
 #include <TNaming_Builder.hxx>
 #include <TNaming_NamedShape.hxx>
 
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <vector>
 
@@ -16,6 +20,7 @@ namespace tsr::doc {
 namespace {
 constexpr int kParamsTag = 1;
 constexpr int kBodiesTag = 2;
+constexpr int kFeaturesTag = 3;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in SPEC/DIVERGENCES.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -41,6 +46,55 @@ std::string stringOf(const Handle(TDataStd_NamedData)& nd, const char* key) {
   const TCollection_ExtendedString k(key);
   return nd->HasString(k) ? utf8(nd->GetString(k)) : std::string{};
 }
+
+nlohmann::json toJson(const Inputs& in) {
+  nlohmann::json j = nlohmann::json::object();
+  for (const auto& [k, v] : in)
+    std::visit([&](const auto& x) {
+      using T = std::decay_t<decltype(x)>;
+      if constexpr (std::is_same_v<T, std::monostate>) j[k] = nullptr;
+      else j[k] = x;
+    }, v);
+  return j;
+}
+
+Inputs fromJson(const std::string& text) {
+  Inputs in;
+  const auto j = nlohmann::json::parse(text, nullptr, /*allow_exceptions=*/false);
+  if (!j.is_object()) return in;
+  for (const auto& [k, v] : j.items()) {
+    if (v.is_boolean()) in[k] = v.get<bool>();
+    else if (v.is_number_integer()) in[k] = v.get<std::int64_t>();
+    else if (v.is_number()) in[k] = v.get<double>();
+    else if (v.is_string()) in[k] = v.get<std::string>();
+    else in[k] = std::monostate{};
+  }
+  return in;
+}
+
+int bodyNumber(const std::string& name) {
+  if (name.rfind("Body", 0) != 0 || name.size() == 4 || name.size() > 12) return 0;
+  for (size_t i = 4; i < name.size(); ++i)
+    if (!std::isdigit(static_cast<unsigned char>(name[i]))) return 0;
+  return std::stoi(name.substr(4));
+}
+
+Handle(TDataStd_NamedData) featureData(const Handle(TDocStd_Document)& doc, int id) {
+  const TDF_Label l = doc->Main().FindChild(kFeaturesTag, false).FindChild(id, false);
+  Handle(TDataStd_NamedData) nd;
+  if (l.IsNull() || !l.FindAttribute(TDataStd_NamedData::GetID(), nd))
+    throw DocumentError("no feature with id " + std::to_string(id));
+  return nd;
+}
+
+TDF_Label findBodyLabel(const Handle(TDocStd_Document)& doc, const std::string& name) {
+  for (TDF_ChildIterator it(doc->Main().FindChild(kBodiesTag, false)); it.More(); it.Next()) {
+    Handle(TNaming_NamedShape) ns;
+    if (it.Value().FindAttribute(TNaming_NamedShape::GetID(), ns) && !ns->IsEmpty() && nameOf(it.Value()) == name)
+      return it.Value();
+  }
+  return {};
+}
 } // namespace
 
 Document::Document() {
@@ -62,6 +116,7 @@ void Document::initLayout() {
   // Creating labels is not an undoable modification; attributes are.
   doc_->Main().FindChild(kParamsTag, true);
   doc_->Main().FindChild(kBodiesTag, true);
+  doc_->Main().FindChild(kFeaturesTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -155,6 +210,112 @@ void Document::addBody(const std::string& name, const TopoDS_Shape& shape) {
   const TDF_Label l = doc_->Main().FindChild(kBodiesTag, false).NewChild();
   TDataStd_Name::Set(l, ext(name));
   TNaming_Builder(l).Generated(shape);
+}
+
+std::optional<Body> Document::body(const std::string& name) const {
+  for (auto& b : bodies())
+    if (b.name == name) return b;
+  return std::nullopt;
+}
+
+void Document::replaceBody(const std::string& name, const TopoDS_Shape& shape) {
+  requireTransaction("replaceBody");
+  if (shape.IsNull()) throw DocumentError("cannot set a null body");
+  const TDF_Label l = findBodyLabel(doc_, name);
+  if (l.IsNull()) throw DocumentError("no body named '" + name + "'");
+  TNaming_Builder(l).Generated(shape);
+}
+
+void Document::removeBody(const std::string& name) {
+  requireTransaction("removeBody");
+  const TDF_Label l = findBodyLabel(doc_, name);
+  if (l.IsNull()) throw DocumentError("no body named '" + name + "'");
+  l.ForgetAllAttributes(true);
+}
+
+std::string Document::nextBodyName() const {
+  int n = 0;
+  for (const auto& b : bodies()) n = std::max(n, bodyNumber(b.name));
+  return "Body" + std::to_string(n + 1);
+}
+
+std::vector<Feature> Document::features() const {
+  std::vector<Feature> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kFeaturesTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue; // removed
+    Feature f;
+    f.id = it.Value().Tag();
+    f.name = nameOf(it.Value());
+    f.commandId = stringOf(nd, "command");
+    f.inputs = fromJson(stringOf(nd, "inputs"));
+    f.error = stringOf(nd, "error");
+    f.suppressed = nd->HasInteger("suppressed") && nd->GetInteger("suppressed") != 0;
+    out.push_back(std::move(f));
+  }
+  return out;
+}
+
+std::optional<Feature> Document::feature(int id) const {
+  for (auto& f : features())
+    if (f.id == id) return f;
+  return std::nullopt;
+}
+
+void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
+  requireTransaction("recordFeature");
+  const CommandDef& d = cmd.def();
+  int n = 1;
+  for (const auto& f : features())
+    if (f.commandId == d.id) ++n;
+  std::string base = d.name;
+  base.erase(std::remove(base.begin(), base.end(), ' '), base.end());
+  const TDF_Label l = doc_->Main().FindChild(kFeaturesTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(base + std::to_string(n)));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  nd->SetString("command", ext(d.id));
+  nd->SetString("inputs", ext(toJson(inputs).dump()));
+  nd->SetString("error", ext(""));
+  nd->SetInteger("suppressed", 0);
+}
+
+void Document::setFeatureInputs(int id, const Inputs& inputs) {
+  requireTransaction("setFeatureInputs");
+  featureData(doc_, id)->SetString("inputs", ext(toJson(inputs).dump()));
+}
+
+void Document::setFeatureSuppressed(int id, bool suppressed) {
+  requireTransaction("setFeatureSuppressed");
+  featureData(doc_, id)->SetInteger("suppressed", suppressed ? 1 : 0);
+}
+
+void Document::removeFeature(int id) {
+  requireTransaction("removeFeature");
+  (void)featureData(doc_, id);
+  doc_->Main().FindChild(kFeaturesTag, false).FindChild(id, false).ForgetAllAttributes(true);
+}
+
+void Document::recompute(const CommandRegistry& registry) {
+  requireTransaction("recompute");
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kBodiesTag, false)); it.More(); it.Next())
+    if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
+
+  for (const Feature& f : features()) {
+    std::string error;
+    if (!f.suppressed) {
+      if (const Command* cmd = registry.find(f.commandId)) {
+        try {
+          cmd->apply(f.inputs, *this);
+        } catch (const std::exception& e) {
+          error = e.what();
+        }
+      } else {
+        error = "unknown command '" + f.commandId + "'";
+      }
+    }
+    Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
+    if (stringOf(nd, "error") != error) nd->SetString("error", ext(error));
+  }
 }
 
 std::string Document::ocafBytes() const {

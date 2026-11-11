@@ -8,6 +8,7 @@
 
 class QLabel;
 class QDialogButtonBox;
+class QComboBox;
 
 namespace tsr::app {
 
@@ -22,6 +23,9 @@ public:
   // For scripted GUI tests: set an input by id as the user would.
   bool setInputForTest(const QString& id, const QVariant& value);
 
+  // A body was clicked in the 3D view: fill the first body input, if any.
+  bool pickBody(const QString& name);
+
 public slots:
   void accept() override;
   void reject() override;
@@ -35,6 +39,7 @@ private:
   std::unique_ptr<CommandSession> cmd_;
   QLabel* error_ = nullptr;
   QDialogButtonBox* buttons_ = nullptr;
+  QComboBox* bodyInput_ = nullptr;
 };
 
 } // namespace tsr::app

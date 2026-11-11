@@ -2,7 +2,16 @@
 
 *Precision, joined.* A native parametric CAD application for KDE/Kubuntu, built on OpenCASCADE.
 
-Status: **P0 skeleton** (`0.1.0-alpha`). See `SPEC/DIVERGENCES.md` for every known gap.
+Status: **P1, early alpha** (`0.1.0-alpha`). What works today:
+
+- 3D viewport with ViewCube, layout grid, shaded/edges/wireframe styles, standard views and fit/home
+- Navigation: middle-drag pans, Shift+middle-drag orbits, wheel zooms at the cursor, left click/drag selects
+- Box, Cylinder, Sphere, Torus and Cone with New Body / Join / Cut / Intersect, target body picked by clicking it
+- Parametric timeline: double-click a feature to change it and everything after it replays; suppress, delete, undo
+- Browser (bodies with visibility, origin, parameters), command search (`S`), right-click menu with Repeat
+- `.tsr` files, unlimited practical undo, Python scripting (`tsr.*` and the start of the `adsk.*` API)
+
+See `ROADMAP.md` for what comes next and `SPEC/DIVERGENCES.md` for every known gap.
 
 ## Install (Kubuntu 26.04)
 
@@ -29,6 +38,7 @@ scripts/build.sh            # configure + build + ctest in build/
 ```
 
 Run: `build/modules/app/tessera [file.tsr]`. Headless: `build/modules/api/tessera-cli --help`.
+Screenshot a scripted model: `tessera --script tests/gui/demo_model.py --screenshot out.png`.
 
 Only the dependency-free core: `cmake -B build-core -DTSR_WITH_OCCT=OFF -DTSR_WITH_PYTHON=OFF -DTSR_WITH_QT=OFF`.
 
