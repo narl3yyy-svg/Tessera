@@ -88,6 +88,11 @@ public:
   // Origin planes and flat body faces become clickable (Create Sketch).
   void setPlanePicking(bool on);
   bool planePicking() const { return planePicking_; }
+  // Body edges become clickable (Fillet, Chamfer); picked ones are highlighted.
+  void setEdgePicking(bool on);
+  void setPickedEdges(const std::vector<TopoDS_Shape>& edges);
+  // The current shape of a displayed body (what the user sees and clicks).
+  TopoDS_Shape bodyShape(const QString& name) const;
 
   // For the sketch editor.
   void setInteractor(ViewInteractor* interactor);
@@ -101,6 +106,7 @@ public:
 
 signals:
   void profileClicked(const QString& sketch, int index);
+  void edgeClicked(const QString& body, const TopoDS_Shape& edge);
   void planePicked(const QString& spec, const QString& label);
   void bodyClicked(const QString& name);
   void selectionChanged();
@@ -162,6 +168,8 @@ private:
   std::vector<ProfileObject> profileObjects_;
   std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
   bool profilePicking_ = false;
+  bool edgePicking_ = false;
+  std::vector<Handle(AIS_Shape)> pickedEdgeObjects_;
   bool planePicking_ = false;
   std::string pickedSketch_;
   std::vector<int> pickedProfiles_;

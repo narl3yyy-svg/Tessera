@@ -115,6 +115,18 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (!w.finishSketch()) return fail("finish edited sketch");
   if (std::abs(volume() - (15 - pi)) > 1e-6) return fail("extrude did not follow the sketch edit");
   if (!s.undo() || std::abs(volume() - (15 - pi * 0.25)) > 1e-6) return fail("undo sketch edit");
+
+  // Fillet an edge through the dialog (edge picked as the canvas would).
+  s.newDocument();
+  if (!s.run("tsr.primitive.box", {{"length", 2.0}, {"width", 2.0}, {"height", 2.0}}).empty()) return fail("box");
+  auto* fl = w.startCommand(QStringLiteral("tsr.feature.fillet"));
+  if (!fl || !fl->hasEdgesInput()) return fail("fillet dialog");
+  fl->setEdges(QStringLiteral("1,0,2"));
+  if (!fl->setInputForTest(QStringLiteral("radius"), 5.0)) return fail("fillet radius");
+  fl->accept();
+  QApplication::processEvents();
+  if (std::abs(volume() - (8 - (0.25 - pi * 0.25 / 4) * 2)) > 1e-6) return fail("fillet volume");
+  if (s.document().features().back().name != "Fillet1") return fail("fillet feature");
   std::puts("smoke: OK");
   return 0;
 }

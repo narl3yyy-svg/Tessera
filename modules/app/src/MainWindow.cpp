@@ -128,6 +128,7 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   setCentralWidget(viewport_);
   connect(viewport_, &Viewport::contextMenuRequested, this, &MainWindow::showContextMenu);
   connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
+  connect(viewport_, &Viewport::edgeClicked, this, &MainWindow::onEdgeClicked);
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
     viewport_->setPlanePicking(false);
     if (startSketch(spec)) statusBar()->showMessage(tr("Sketching on %1.").arg(label), 4000);
@@ -503,6 +504,8 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   active_ = dlg;
   connect(dlg, &QObject::destroyed, this, [this] {
     viewport_->setProfilePicking(false);
+    viewport_->setEdgePicking(false);
+    pickedEdges_.clear();
     refresh();
   });
   connect(dlg, &CommandDialog::inputsChanged, this, [this] { updateProfilePicking(); });
@@ -510,6 +513,21 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   placeDialog(dlg);
   refresh();
   updateProfilePicking();
+  // Editing an existing feature: show its edges (one entry per reference,
+  // null when the reference does not resolve on the current body).
+  pickedEdges_.clear();
+  if (dlg->hasEdgesInput()) {
+    const TopoDS_Shape body = viewport_->bodyShape(dlg->currentBody());
+    for (const QString& ref : dlg->currentEdges().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+      TopoDS_Shape e;
+      try {
+        if (!body.IsNull()) e = kernel::resolveEdges(body, ref.toStdString()).front();
+      } catch (const std::exception&) {
+      }
+      pickedEdges_.push_back(e);
+    }
+  }
+  updateEdgePicking();
   return dlg;
 }
 

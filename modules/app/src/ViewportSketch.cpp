@@ -179,13 +179,42 @@ void Viewport::setPlanePicking(bool on) {
   updateView();
 }
 
+void Viewport::setEdgePicking(bool on) {
+  if (edgePicking_ == on) return;
+  edgePicking_ = on;
+  if (!on) setPickedEdges({});
+  applyPickModes();
+}
+
+void Viewport::setPickedEdges(const std::vector<TopoDS_Shape>& edges) {
+  if (context_.IsNull()) return;
+  for (auto& e : pickedEdgeObjects_) context_->Remove(e, false);
+  pickedEdgeObjects_.clear();
+  for (const auto& e : edges) {
+    if (e.IsNull()) continue;
+    Handle(AIS_Shape) a = new AIS_Shape(e);
+    lineStyle(a, rgb(0, 160, 255), 4.0, Aspect_TOL_SOLID);
+    context_->Display(a, AIS_WireFrame, -1, false);
+    context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+    pickedEdgeObjects_.push_back(a);
+  }
+  updateView();
+}
+
+TopoDS_Shape Viewport::bodyShape(const QString& name) const {
+  for (const auto& b : bodies_)
+    if (b.name == name.toStdString()) return b.shape;
+  return {};
+}
+
 void Viewport::applyPickModes() {
   if (context_.IsNull()) return;
   const int faceMode = AIS_Shape::SelectionMode(TopAbs_FACE);
+  const int edgeMode = AIS_Shape::SelectionMode(TopAbs_EDGE);
   for (const auto& [name, shape] : shapes_) {
     if (!context_->IsDisplayed(shape)) continue;
     context_->Deactivate(shape);
-    context_->Activate(shape, planePicking_ ? faceMode : 0);
+    context_->Activate(shape, planePicking_ ? faceMode : edgePicking_ ? edgeMode : 0);
   }
   for (auto& s : sketchCurves_) context_->Deactivate(s);
   for (auto& p : profileObjects_) {
@@ -207,6 +236,18 @@ bool Viewport::handlePickSelection() {
       emit profileClicked(QString::fromStdString(p.sketch), p.index);
       return true;
     }
+  if (edgePicking_) {
+    const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(owner);
+    if (!brep.IsNull() && brep->Shape().ShapeType() == TopAbs_EDGE) {
+      for (const auto& [name, shape] : shapes_)
+        if (shape == obj) {
+          const TopoDS_Shape edge = brep->Shape();
+          context_->ClearSelected(false);
+          emit edgeClicked(QString::fromStdString(name), edge);
+          return true;
+        }
+    }
+  }
   if (!planePicking_) return false;
   for (const auto& [shape, spec] : planeObjects_)
     if (shape == obj) {

@@ -7,6 +7,7 @@
 #include "Viewport.h"
 
 #include "tsr/doc/DocCommands.h"
+#include "tsr/kernel/Kernel.h"
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <QButtonGroup>
@@ -299,6 +300,51 @@ void MainWindow::updateProfilePicking() {
     return;
   }
   viewport_->setPickedProfiles(sketchName.toStdString(), indices);
+}
+
+// ---------------------------------------------------------------------------
+// Edge picking (Fillet, Chamfer)
+
+void MainWindow::updateEdgePicking() {
+  const bool on = active_ && active_->hasEdgesInput();
+  viewport_->setEdgePicking(on);
+  if (on) viewport_->setPickedEdges(pickedEdges_);
+}
+
+void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
+  if (!active_ || !active_->hasEdgesInput()) return;
+  const TopoDS_Shape shape = viewport_->bodyShape(body);
+  if (shape.IsNull()) return;
+  // Edges from another body start a new selection.
+  QStringList refs = active_->currentEdges().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+  if (!active_->currentBody().isEmpty() && active_->currentBody() != body) {
+    refs.clear();
+    pickedEdges_.clear();
+  }
+  active_->pickBody(body);
+  // Clicking a picked edge again removes it (compared by position: the
+  // preview rebuilds the body, so the shapes are new objects).
+  const auto mid = kernel::edgeMidpoint(edge);
+  for (int i = 0; i < static_cast<int>(pickedEdges_.size()); ++i) {
+    if (pickedEdges_[i].IsNull()) continue;
+    const auto m = kernel::edgeMidpoint(pickedEdges_[i]);
+    if (std::abs(m.x - mid.x) + std::abs(m.y - mid.y) + std::abs(m.z - mid.z) < 1e-6) {
+      pickedEdges_.erase(pickedEdges_.begin() + i);
+      if (i < refs.size()) refs.removeAt(i);
+      active_->setEdges(refs.join(QLatin1Char(';')));
+      updateEdgePicking();
+      return;
+    }
+  }
+  try {
+    refs << QString::fromStdString(kernel::edgeReference(shape, edge));
+  } catch (const std::exception& e) {
+    statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
+    return;
+  }
+  pickedEdges_.push_back(edge);
+  active_->setEdges(refs.join(QLatin1Char(';')));
+  updateEdgePicking();
 }
 
 void MainWindow::onProfileClicked(const QString& sketchName, int index) {

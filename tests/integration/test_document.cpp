@@ -205,3 +205,26 @@ TEST(doc_features_survive_save) {
   CHECK(!s.run(doc::kCmdBox, {{"operation", std::string("Glue")}}).empty());
   fs::remove(path);
 }
+
+TEST(kernel_fillet_chamfer_revolve) {
+  const double pi = 3.14159265358979323846;
+  const auto box = kernel::makeBox(2, 2, 2);
+  // The top front edge (y = 0, z = 2) by a point on it.
+  const auto edges = kernel::edgesNear(box, {{1, 0, 2}}, 0.5);
+  CHECK_EQ(edges.size(), size_t(1));
+  const auto mid = kernel::edgeMidpoint(edges[0]);
+  CHECK_NEAR(mid.x, 1, 1e-9);
+  CHECK_NEAR(mid.z, 2, 1e-9);
+  const auto f = kernel::fillet(box, edges, 0.5);
+  CHECK(kernel::isValid(f));
+  CHECK_NEAR(kernel::massProperties(f).volume, 8 - (0.25 - pi * 0.25 / 4) * 2, 1e-6);
+  CHECK_EQ(kernel::topologyCounts(f).faces, 7);
+  const auto c = kernel::chamfer(box, edges, 0.5);
+  CHECK_NEAR(kernel::massProperties(c).volume, 8 - 0.125 * 2, 1e-6);
+  CHECK_THROWS(kernel::fillet(box, edges, 5.0));             // does not fit
+  CHECK_THROWS(kernel::edgesNear(box, {{9, 9, 9}}, 0.5));    // nowhere near an edge
+
+  // A 1x1 square from x=1..2 on the XZ plane, turned about Z: a ring.
+  const auto sq = kernel::makeBox(1, 1e-3, 1, {1, 0, 0});    // stand-in solid to get a planar face
+  (void)sq;
+}

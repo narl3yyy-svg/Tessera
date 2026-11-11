@@ -21,7 +21,9 @@ namespace tsr {
 // Sketch: the name of a sketch; empty means "the most recent sketch".
 // Profiles: regions of a sketch, as "x,y;x,y" points inside them (sketch
 //         coordinates, cm), picked in the viewport; empty means all of them.
-enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles };
+// Edges:  edges of a body, as "x,y,z;x,y,z" points on them (cm), picked in
+//         the viewport; each point selects the nearest edge on replay.
+enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges };
 
 struct InputDef {
   std::string id;

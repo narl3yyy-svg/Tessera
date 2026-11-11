@@ -295,6 +295,48 @@ void selectIcon(QPainter& p) {
                            QPointF(34, 37), QPointF(48, 37)}));
 }
 
+void filletIcon(QPainter& p) {
+  QPainterPath path;
+  path.moveTo(8, 58);
+  path.lineTo(8, 30);
+  path.cubicTo(8, 16, 18, 8, 34, 8);
+  path.lineTo(58, 8);
+  path.lineTo(58, 58);
+  path.closeSubpath();
+  p.setBrush(kTop);
+  p.setPen(QPen(kLine, 2.5));
+  p.drawPath(path);
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.setBrush(Qt::NoBrush);
+  p.drawArc(QRectF(8, 8, 52, 44), 90 * 16, 90 * 16);
+}
+
+void chamferIcon(QPainter& p) {
+  p.setBrush(kTop);
+  p.setPen(QPen(kLine, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.drawPolygon(QPolygonF({QPointF(8, 58), QPointF(8, 30), QPointF(30, 8), QPointF(58, 8), QPointF(58, 58)}));
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.drawLine(QPointF(8, 30), QPointF(30, 8));
+}
+
+void revolveIcon(QPainter& p) {
+  QLinearGradient g(8, 0, 56, 0);
+  g.setColorAt(0, kLeft);
+  g.setColorAt(0.5, kTop);
+  g.setColorAt(1, kRight);
+  p.setBrush(g);
+  p.setPen(QPen(kLine, 2.5));
+  QPainterPath vase;
+  vase.moveTo(22, 8);
+  vase.cubicTo(10, 24, 30, 30, 12, 56);
+  vase.lineTo(52, 56);
+  vase.cubicTo(34, 30, 54, 24, 42, 8);
+  vase.closeSubpath();
+  p.drawPath(vase);
+  p.setPen(QPen(kAccent, 2, Qt::DashLine));
+  p.drawLine(QPointF(32, 2), QPointF(32, 62));
+}
+
 void finishIcon(QPainter& p) {
   p.setPen(Qt::NoPen);
   p.setBrush(QColor(40, 160, 90));
@@ -346,6 +388,9 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);
+  else if (name == QLatin1String("fillet")) filletIcon(p);
+  else if (name == QLatin1String("chamfer")) chamferIcon(p);
+  else if (name == QLatin1String("revolve")) revolveIcon(p);
   else if (name == QLatin1String("select")) selectIcon(p);
   else if (name == QLatin1String("construction")) constructionIcon(p);
   else if (name.startsWith(QLatin1String("c-"))) constraintIcon(p, name.mid(2));

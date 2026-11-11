@@ -5,6 +5,8 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <TopoDS_Shape.hxx>
+
 #include <map>
 #include <vector>
 
@@ -80,6 +82,8 @@ private:
   void syncSketchTools();
   void updateProfilePicking();
   void onProfileClicked(const QString& sketch, int index);
+  void onEdgeClicked(const QString& body, const TopoDS_Shape& edge);
+  void updateEdgePicking();
   bool sketchVisible(const std::string& name) const;
   bool maybeSave();
   bool saveAs();
@@ -105,6 +109,7 @@ private:
   QAbstractButton* constructionButton_ = nullptr;
   std::vector<QShortcut*> sketchShortcuts_;
   std::map<std::string, bool> sketchVisibility_;   // user overrides from the browser
+  std::vector<TopoDS_Shape> pickedEdges_;          // shown highlighted while picking
   QString lastCommand_;
 };
 

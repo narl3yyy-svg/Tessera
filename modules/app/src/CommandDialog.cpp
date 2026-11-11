@@ -99,6 +99,20 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::Edges: {
+        auto* box = new QWidget;
+        auto* row = new QHBoxLayout(box);
+        row->setContentsMargins(0, 0, 0, 0);
+        edgesLabel_ = new QLabel;
+        auto* clear = new QPushButton(tr("Clear"));
+        clear->setObjectName(QStringLiteral("clearEdges"));
+        row->addWidget(edgesLabel_, 1);
+        row->addWidget(clear);
+        edgesId_ = id;
+        connect(clear, &QPushButton::clicked, this, [this] { setEdges(QString()); });
+        w = box;
+        break;
+      }
       case InputType::Profiles: {
         // Filled by clicking profiles in the 3D view.
         auto* box = new QWidget;
@@ -200,6 +214,25 @@ void CommandDialog::reject() {
 }
 
 bool CommandDialog::hasProfilesInput() const { return !profilesId_.empty(); }
+bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
+
+QString CommandDialog::currentEdges() const {
+  if (edgesId_.empty()) return {};
+  if (auto s = std::get_if<std::string>(&cmd_->inputs().at(edgesId_))) return QString::fromStdString(*s);
+  return {};
+}
+
+QString CommandDialog::currentBody() const {
+  for (const auto& in : cmd_->def().inputs)
+    if (in.type == InputType::Body)
+      if (auto s = std::get_if<std::string>(&cmd_->inputs().at(in.id))) return QString::fromStdString(*s);
+  return {};
+}
+
+void CommandDialog::setEdges(const QString& edges) {
+  if (!edgesId_.empty()) onInputChanged(edgesId_, edges.toStdString());
+  updateProfilesLabel();
+}
 
 QString CommandDialog::currentSketch() const {
   for (const auto& in : cmd_->def().inputs)
@@ -231,6 +264,11 @@ void CommandDialog::setProfiles(const QString& sketch, const QString& profiles) 
 }
 
 void CommandDialog::updateProfilesLabel() {
+  if (edgesLabel_) {
+    const QString e = currentEdges();
+    const int n = e.isEmpty() ? 0 : e.count(QLatin1Char(';')) + 1;
+    edgesLabel_->setText(n == 0 ? tr("Click edges in the canvas") : tr("%n edge(s)", nullptr, n));
+  }
   if (!profilesLabel_) return;
   const QString p = currentProfiles();
   const int n = p.isEmpty() ? 0 : p.count(QLatin1Char(';')) + 1;

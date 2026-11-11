@@ -4,6 +4,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace tsr::kernel {
@@ -44,6 +45,33 @@ TopoDS_Shape makeCone(double r1, double r2, double height, Vec3 base = {}, Axis 
 // negative). Symmetric: `distance` on each side. Faces are fused into one
 // solid where they touch. Throws KernelError.
 TopoDS_Shape extrude(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double distance, bool symmetric);
+
+// Revolves planar faces about the axis through `origin` along `dir` by
+// `angle` radians (2*pi for a full turn). Symmetric: half the angle each way.
+TopoDS_Shape revolve(const std::vector<TopoDS_Shape>& faces, Vec3 origin, Vec3 dir, double angle, bool symmetric);
+
+// Edges are referred to by a point on them: each point selects the edge of
+// `shape` nearest to it. Throws KernelError if a point is not near any edge
+// (farther than `tolerance`).
+std::vector<TopoDS_Shape> edgesNear(const TopoDS_Shape& shape, const std::vector<Vec3>& points, double tolerance);
+
+// Edge references that survive edits of earlier features. A reference is
+// "x,y,z" (a point on the edge) or that plus a signature recorded when the
+// edge was picked: curve type, position relative to the body's bounding box,
+// direction and the normals of the two faces that meet there. On replay the
+// best-matching edge of the (possibly resized) body is chosen. References
+// are separated by ';'.
+std::string edgeReference(const TopoDS_Shape& body, const TopoDS_Shape& edge);
+// Upgrades plain points to full references against `body`.
+std::string completeEdgeReferences(const TopoDS_Shape& body, const std::string& refs);
+std::vector<TopoDS_Shape> resolveEdges(const TopoDS_Shape& body, const std::string& refs);
+// A point on the middle of an edge, for referring to it later.
+Vec3 edgeMidpoint(const TopoDS_Shape& edge);
+
+// Rounds / bevels edges (tangent-continuous neighbours are included). Throws
+// KernelError, e.g. when the size does not fit the adjacent faces.
+TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius);
+TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance);
 
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError

@@ -306,6 +306,25 @@ std::vector<std::pair<double, double>> parsePoints(const std::string& text) {
   return out;
 }
 
+// The faces of the picked profiles; all of them when none are picked.
+std::vector<TopoDS_Shape> pickedFaces(const SketchProfiles& sp, const std::string& picked, const std::string& sketchName) {
+  std::vector<TopoDS_Shape> faces;
+  if (picked.empty()) {
+    for (const auto& p : sp.profiles) faces.push_back(p.face);
+    return faces;
+  }
+  std::vector<int> used;
+  for (const auto& [x, y] : parsePoints(picked)) {
+    const int i = sketch::profileAt(sp.profiles, sp.frame, x, y);
+    if (i < 0) throw CommandError("Profiles: a picked profile no longer exists in " + sketchName);
+    if (std::find(used.begin(), used.end(), i) == used.end()) {
+      used.push_back(i);
+      faces.push_back(sp.profiles[i].face);
+    }
+  }
+  return faces;
+}
+
 class Extrude final : public Command {
 public:
   Extrude() {
@@ -359,21 +378,7 @@ public:
     }
     if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
 
-    std::vector<TopoDS_Shape> faces;
-    const std::string picked = getString(in, "profiles");
-    if (picked.empty()) {
-      for (const auto& p : sp.profiles) faces.push_back(p.face);
-    } else {
-      std::vector<int> used;
-      for (const auto& [x, y] : parsePoints(picked)) {
-        const int i = sketch::profileAt(sp.profiles, sp.frame, x, y);
-        if (i < 0) throw CommandError("Profiles: a picked profile no longer exists in " + rec->name);
-        if (std::find(used.begin(), used.end(), i) == used.end()) {
-          used.push_back(i);
-          faces.push_back(sp.profiles[i].face);
-        }
-      }
-    }
+    const auto faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
     const gp_Dir n = sp.frame.Direction();
     TopoDS_Shape tool;
     try {
@@ -439,16 +444,201 @@ std::unique_ptr<Command> makeCone() {
       });
 }
 
+
+// ---------------------------------------------------------------------------
+// Revolve: profiles of a sketch turned about an axis.
+class Revolve final : public Command {
+public:
+  Revolve() {
+    def_.id = kCmdRevolve;
+    def_.name = "Revolve";
+    def_.tooltip = "Turns sketch profiles about an axis: shafts, knobs, rings, bottles.";
+    def_.workspace = "Design";
+    def_.tab = "Solid";
+    def_.panel = "Create";
+    def_.icon = "revolve";
+    def_.feature = true;
+    def_.inputs = {
+        {.id = "sketch", .label = "Sketch", .tooltip = "Empty: the most recent sketch.", .type = InputType::Sketch,
+         .defaultValue = std::string{}, .optional = true},
+        {.id = "profiles", .label = "Profiles", .tooltip = "Click regions of the sketch. None picked: all of them.",
+         .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
+        choice("axis", "Axis", {"Sketch Y axis", "Sketch X axis", "Construction line", "X", "Y", "Z"},
+               "Axis to turn about. Construction line: the sketch's first construction line."),
+        choice("direction", "Direction", {"One Side", "Symmetric"}, "Symmetric turns half the angle each way."),
+        {.id = "angle", .label = "Angle", .tooltip = "360 deg for a full turn.", .type = InputType::Real,
+         .defaultValue = 2 * 3.14159265358979323846, .unit = Unit::Degree},
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string name = getString(in, "sketch");
+    if (!sketchFor(doc, name))
+      return name.empty() ? "Sketch: there is no sketch to revolve; create one first"
+                          : "Sketch: '" + name + "' does not exist";
+    if (std::abs(getReal(in, "angle")) < 1e-9) return "Angle: must not be zero";
+    return validateOperation(in, doc);
+  }
+
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    if (getString(in, "sketch").empty())
+      if (auto rec = sketchFor(docOf(ctx), "")) in["sketch"] = rec->name;
+  }
+
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = sketchFor(doc, getString(in, "sketch"));
+    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+    SketchProfiles sp;
+    sketch::Sketch sk;
+    try {
+      sp = profilesOf(*rec);
+      sk = sketch::Sketch::fromJson(rec->data);
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    }
+    if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to revolve");
+    const auto faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
+
+    // Axis in world coordinates.
+    gp_Pnt o(0, 0, 0);
+    gp_Dir d(0, 0, 1);
+    const std::string axis = getString(in, "axis");
+    if (axis == "Sketch Y axis") {
+      o = sp.frame.Location();
+      d = sp.frame.YDirection();
+    } else if (axis == "Sketch X axis") {
+      o = sp.frame.Location();
+      d = sp.frame.XDirection();
+    } else if (axis == "Construction line") {
+      bool found = false;
+      for (const auto& e : sk.entities)
+        if (e.construction && e.type == sketch::EntityType::Line) {
+          const gp_Pnt a = sketch::toWorld(sp.frame, sk.points[e.a].x, sk.points[e.a].y);
+          const gp_Pnt b = sketch::toWorld(sp.frame, sk.points[e.b].x, sk.points[e.b].y);
+          if (a.Distance(b) < 1e-9) continue;
+          o = a;
+          d = gp_Dir(gp_Vec(a, b));
+          found = true;
+          break;
+        }
+      if (!found) throw CommandError("Axis: " + rec->name + " has no construction line (press X while drawing a line)");
+    } else if (axis == "X") {
+      d = gp_Dir(1, 0, 0);
+    } else if (axis == "Y") {
+      d = gp_Dir(0, 1, 0);
+    }
+    TopoDS_Shape tool;
+    try {
+      tool = kernel::revolve(faces, {o.X(), o.Y(), o.Z()}, {d.X(), d.Y(), d.Z()}, getReal(in, "angle"),
+                             getString(in, "direction") == "Symmetric");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+    applyOperation(doc, in, tool, "Revolve");
+  }
+
+private:
+  CommandDef def_;
+};
+
+// ---------------------------------------------------------------------------
+// Fillet / Chamfer: change the edges of one body.
+
+class EdgeFeature final : public Command {
+public:
+  enum class Kind { Fillet, Chamfer };
+
+  explicit EdgeFeature(Kind kind) : kind_(kind) {
+    const bool f = kind == Kind::Fillet;
+    def_.id = f ? kCmdFillet : kCmdChamfer;
+    def_.name = f ? "Fillet" : "Chamfer";
+    def_.tooltip = f ? "Rounds the selected edges of a body. Connected smooth edges are included."
+                     : "Bevels the selected edges of a body with an equal-distance chamfer.";
+    def_.workspace = "Design";
+    def_.tab = "Solid";
+    def_.panel = "Modify";
+    def_.icon = f ? "fillet" : "chamfer";
+    def_.shortcut = f ? "F" : "";
+    def_.feature = true;
+    def_.inputs = {
+        {.id = "body", .label = "Body", .tooltip = "Empty: the most recent body. Picking an edge sets it.",
+         .type = InputType::Body, .defaultValue = std::string{}, .optional = true},
+        {.id = "edges", .label = "Edges", .tooltip = "Click the edges in the canvas.", .type = InputType::Edges,
+         .defaultValue = std::string{}},
+        {.id = f ? "radius" : "distance", .label = f ? "Radius" : "Distance", .tooltip = {},
+         .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0, .max = std::nullopt,
+         .minExclusive = true},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string body = getString(in, "body");
+    if (body.empty() ? doc.bodies().empty() : !doc.body(body))
+      return body.empty() ? "Body: there is no body to " + std::string(kind_ == Kind::Fillet ? "fillet" : "chamfer")
+                          : "Body: '" + body + "' does not exist";
+    return {};
+  }
+
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "body").empty()) {
+      const auto bodies = doc.bodies();
+      if (!bodies.empty()) in["body"] = bodies.back().name;
+    }
+    // Record a signature for each picked edge so replays find it again.
+    if (const auto body = doc.body(getString(in, "body"))) {
+      try {
+        in["edges"] = kernel::completeEdgeReferences(body->shape, getString(in, "edges"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Edges: ") + e.what());
+      }
+    }
+  }
+
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::string name = getString(in, "body");
+    if (name.empty()) {
+      const auto bodies = doc.bodies();
+      if (bodies.empty()) throw CommandError("Body: there is no body");
+      name = bodies.back().name;
+    }
+    const auto body = doc.body(name);
+    if (!body) throw CommandError("Body: '" + name + "' does not exist");
+    try {
+      const auto edges = kernel::resolveEdges(body->shape, getString(in, "edges"));
+      const TopoDS_Shape result = kind_ == Kind::Fillet ? kernel::fillet(body->shape, edges, getReal(in, "radius"))
+                                                        : kernel::chamfer(body->shape, edges, getReal(in, "distance"));
+      doc.replaceBody(name, result);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  Kind kind_;
+  CommandDef def_;
+};
+
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CreateSketch>());
   registry.add(std::make_unique<Extrude>());
+  registry.add(std::make_unique<Revolve>());
   registry.add(makeBox());
   registry.add(makeCylinder());
   registry.add(makeSphere());
   registry.add(makeTorus());
   registry.add(makeCone());
+  registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
+  registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));
   registry.add(std::make_unique<AddUserParameter>());
 }
 

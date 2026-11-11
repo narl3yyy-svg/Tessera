@@ -32,6 +32,12 @@ public:
   QString currentProfiles() const;
   void setProfiles(const QString& sketch, const QString& profiles);
 
+  // Edges picked in the 3D view (Fillet, Chamfer).
+  bool hasEdgesInput() const;
+  QString currentEdges() const;
+  QString currentBody() const;
+  void setEdges(const QString& edges);
+
 signals:
   void inputsChanged();
 
@@ -52,6 +58,8 @@ private:
   QComboBox* sketchInput_ = nullptr;
   QLabel* profilesLabel_ = nullptr;
   std::string profilesId_;
+  QLabel* edgesLabel_ = nullptr;
+  std::string edgesId_;
   void updateProfilesLabel();
 };
 

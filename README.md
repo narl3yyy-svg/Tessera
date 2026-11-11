@@ -12,6 +12,10 @@ Status: **P2, early alpha** (`0.1.0-alpha`). What works today:
   concentric, midpoint, fix; Sketch Dimension (D) for lengths, distances, diameters, radii and angles, edited by
   double-clicking. Blue = free, black = fully constrained. Drag geometry with Select (Q).
 - **Extrude (E)**: click the profiles to extrude, one side or symmetric, New Body / Join / Cut / Intersect
+- **Revolve**: turn profiles about the sketch's X/Y axis, a construction line, or a world axis; full or partial,
+  one side or symmetric
+- **Fillet (F)** and **Chamfer**: click edges in the canvas (smoothly connected edges follow); picked edges are found
+  again after you change earlier features
 - Change a sketch dimension later and every extrude built on it updates
 - Box, Cylinder, Sphere, Torus and Cone with New Body / Join / Cut / Intersect, target body picked by clicking it
 - Parametric timeline: double-click a feature to change it and everything after it replays; suppress, delete, undo
