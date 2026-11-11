@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Tessera
+GenericName=Parametric CAD
+Comment=Precision, joined.
+Exec=tessera %f
+Icon=org.tessera.Tessera
+Terminal=false
+Categories=Graphics;Engineering;3DGraphics;Qt;KDE;
+MimeType=application/x-tessera;
+Keywords=CAD;3D;modeling;parametric;
