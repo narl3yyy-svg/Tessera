@@ -1,6 +1,7 @@
 #include "CommandDialog.h"
 #include "MainWindow.h"
 #include "SketchEditor.h"
+#include "Theme.h"
 #include "Viewport.h"
 
 #include "tsr/doc/DocCommands.h"
@@ -147,6 +148,7 @@ int main(int argc, char** argv) {
   QApplication::setApplicationVersion(QStringLiteral(TSR_VERSION_STRING));
   QApplication::setDesktopFileName(QStringLiteral("org.tessera.Tessera"));
   QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("org.tessera.Tessera")));
+  tsr::app::Theme::instance().apply(tsr::app::Theme::saved(), /*save=*/false);
 
   QCommandLineParser parser;
   parser.setApplicationDescription(QStringLiteral("Tessera — precision, joined."));

@@ -1,4 +1,5 @@
 #include "Viewport.h"
+#include "Theme.h"
 
 #include <AIS_AnimationCamera.hxx>
 #include <V3d_AmbientLight.hxx>
@@ -46,6 +47,7 @@ public:
 constexpr unsigned keys(unsigned mouse, unsigned flags = 0) { return mouse | flags; }
 
 Quantity_Color rgb(int r, int g, int b) { return Quantity_Color(r / 255.0, g / 255.0, b / 255.0, Quantity_TOC_sRGB); }
+Quantity_Color qc(const QColor& c) { return rgb(c.red(), c.green(), c.blue()); }
 
 Aspect_VKeyMouse toVKeys(Qt::MouseButtons b) {
   Aspect_VKeyMouse k = Aspect_VKeyMouse_NONE;
@@ -125,7 +127,7 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     viewer_->SetRectangularGridValues(0, 0, 1.0, 1.0, 0);     // 10 mm cells
     viewer_->SetRectangularGridGraphicValues(25.0, 25.0, 0);  // 500 mm across
     viewer_->ActivateGrid(Aspect_GT_Rectangular, Aspect_GDM_Lines);
-    viewer_->Grid()->SetColors(rgb(205, 211, 218), rgb(160, 168, 178));
+
 
     context_ = new AIS_InteractiveContext(viewer_);
     context_->SetAutomaticHilight(true);
@@ -145,14 +147,13 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     view_->SetShadingModel(Graphic3d_TypeOfShadingModel_Phong);
     view_->ChangeRenderingParams().NbMsaaSamples = 4;
     view_->ChangeRenderingParams().IsAntialiasingEnabled = true;
-    view_->SetBgGradientColors(rgb(250, 251, 253), rgb(196, 206, 218), Aspect_GradientFillMethod_Vertical);
+
     view_->TriedronDisplay(Aspect_TOTP_LEFT_LOWER, Quantity_NOC_GRAY40, 0.08, V3d_ZBUFFER);
     view_->SetProj(V3d_TypeOfOrientation_Zup_AxoRight);
 
     cube_ = new AIS_ViewCube();
     cube_->SetSize(55);
-    cube_->SetBoxColor(rgb(236, 239, 243));
-    cube_->SetTextColor(rgb(60, 66, 74));
+
     cube_->SetFontHeight(12);
     cube_->SetDrawAxes(false);
     cube_->SetViewAnimation(ViewAnimation());
@@ -168,6 +169,12 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     context_.Nullify();
     return;
   }
+
+  applyTheme();
+  connect(&Theme::instance(), &Theme::changed, this, [this] {
+    applyTheme();
+    if (glReady_) rebuild();
+  });
 
   // Mouse bindings (gesture = what a drag does, scheme = what a click selects).
   AIS_MouseGestureMap& g = ChangeMouseGestureMap();
@@ -316,10 +323,10 @@ void Viewport::paintEvent(QPaintEvent* e) {
   // No GL view: plain placeholder so the window is still usable.
   QPainter p(this);
   QLinearGradient bg(0, 0, 0, height());
-  bg.setColorAt(0, QColor(250, 251, 253));
-  bg.setColorAt(1, QColor(196, 206, 218));
+  bg.setColorAt(0, themeColors().viewTop);
+  bg.setColorAt(1, themeColors().viewBottom);
   p.fillRect(rect(), bg);
-  p.setPen(QColor(90, 98, 110));
+  p.setPen(themeColors().overlayText);
   p.drawText(rect(), Qt::AlignCenter | Qt::TextWordWrap, reason_);
 }
 
@@ -420,7 +427,7 @@ void Viewport::applyStyle(const Handle(AIS_Shape)& s) {
   const Handle(Prs3d_Drawer)& d = s->Attributes();
   d->SetFaceBoundaryDraw(style_ == Style::ShadedEdges);
   d->SetFaceBoundaryUpperContinuity(GeomAbs_C0); // sharp edges only, no seams on round faces
-  d->SetFaceBoundaryAspect(new Prs3d_LineAspect(rgb(30, 34, 40), Aspect_TOL_SOLID, 1.0));
+  d->SetFaceBoundaryAspect(new Prs3d_LineAspect(qc(themeColors().edges), Aspect_TOL_SOLID, 1.0));
   context_->SetDisplayMode(s, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, false);
 }
 
@@ -433,6 +440,7 @@ void Viewport::rebuild() {
   for (const auto& b : bodies_) {
     Handle(AIS_Shape) s = new AIS_Shape(b.shape);
     s->SetMaterial(bodyMaterial());
+    if (ghosted_) s->SetTransparency(0.78);
     applyStyle(s);
     shapes_[b.name] = s;
     if (!hidden_[b.name]) {
@@ -493,6 +501,29 @@ void Viewport::viewFrom(V3d_TypeOfOrientation o) {
 void Viewport::setStyle(Style s) {
   style_ = s;
   if (glReady_) rebuild();
+}
+
+void Viewport::setBodiesGhosted(bool on) {
+  if (ghosted_ == on) return;
+  ghosted_ = on;
+  if (glReady_) rebuild();
+}
+
+void Viewport::applyTheme() {
+  if (view_.IsNull()) {
+    update();
+    return;
+  }
+  const auto& c = themeColors();
+  view_->SetBgGradientColors(qc(c.viewTop), qc(c.viewBottom), Aspect_GradientFillMethod_Vertical);
+  viewer_->Grid()->SetColors(qc(c.grid), qc(c.gridMajor));
+  cube_->SetBoxColor(qc(c.cubeBox));
+  cube_->SetTextColor(qc(c.cubeText));
+  cube_->SetInnerColor(qc(c.cubeText));
+  if (!context_.IsNull() && context_->IsDisplayed(cube_)) context_->Redisplay(cube_, false);
+  view_->TriedronErase();
+  view_->TriedronDisplay(Aspect_TOTP_LEFT_LOWER, qc(c.overlayText), 0.08, V3d_ZBUFFER);
+  redrawAll();
 }
 
 void Viewport::setGridVisible(bool visible) {

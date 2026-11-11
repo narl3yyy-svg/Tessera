@@ -1,4 +1,5 @@
 #include "SketchEditor.h"
+#include "Theme.h"
 
 #include "tsr/core/Units.h"
 #include "tsr/doc/DocCommands.h"
@@ -28,8 +29,11 @@ constexpr double kHVTolerance = 0.0524; // tan(3 degrees): draw "almost horizont
 
 Quantity_Color rgb(int r, int g, int b) { return Quantity_Color(r / 255.0, g / 255.0, b / 255.0, Quantity_TOC_sRGB); }
 
-const Quantity_Color kFree = rgb(0, 110, 220);
-const Quantity_Color kFixed = rgb(25, 25, 25);
+Quantity_Color qc(const QColor& c) { return rgb(c.red(), c.green(), c.blue()); }
+// Free / fully constrained colours depend on the theme (blue/black on a
+// light canvas, light blue/white on a dark one).
+Quantity_Color freeColor() { return qc(themeColors().sketchFree); }
+Quantity_Color fixedColor() { return qc(themeColors().sketchFixed); }
 const Quantity_Color kConstruction = rgb(235, 130, 30);
 const Quantity_Color kSelected = rgb(0, 190, 255);
 const Quantity_Color kHover = rgb(255, 170, 0);
@@ -95,6 +99,7 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
     view_->lookAt(frame_);
   }
   setTool(Tool::Line);
+  connect(&Theme::instance(), &Theme::changed, this, [this] { rebuild(); });
   rebuild();
 }
 
@@ -944,7 +949,7 @@ void SketchEditor::rebuild() {
     if (selected(k, i)) return kSelected;
     if (hovered(k, i)) return kHover;
     if (construction) return kConstruction;
-    return fixed ? kFixed : kFree;
+    return fixed ? fixedColor() : freeColor();
   };
 
   for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
@@ -981,8 +986,8 @@ void SketchEditor::rebuild() {
     t->SetHeight(sketch::isDimension(c.type) ? 14 : 12);
     t->SetColor(selected(Hit::Label, i) ? kSelected
                 : hovered(Hit::Label, i) ? kHover
-                : sketch::isDimension(c.type) ? rgb(20, 20, 20)
-                                             : rgb(110, 115, 125));
+                : sketch::isDimension(c.type) ? qc(themeColors().sketchLabel)
+                                             : qc(themeColors().sketchGlyph));
     t->SetHJustification(Graphic3d_HTA_CENTER);
     t->SetVJustification(Graphic3d_VTA_CENTER);
     ctx->Display(t, 0, -1, false);

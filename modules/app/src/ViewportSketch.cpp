@@ -1,5 +1,6 @@
 // Viewport: sketches, profiles, plane picking and the sketch-editor hooks.
 #include "Viewport.h"
+#include "Theme.h"
 
 #include <BRepAdaptor_Surface.hxx>
 #include <Graphic3d_Camera.hxx>
@@ -106,7 +107,8 @@ void Viewport::rebuildSketches() {
     if (!sk.visible) continue;
     if (!sk.curves.IsNull()) {
       Handle(AIS_Shape) c = new AIS_Shape(sk.curves);
-      lineStyle(c, rgb(40, 70, 120), 2.0, Aspect_TOL_SOLID);
+      const QColor sc = themeColors().sketchFinished;
+      lineStyle(c, rgb(sc.red(), sc.green(), sc.blue()), 2.0, Aspect_TOL_SOLID);
       context_->Display(c, AIS_WireFrame, -1, false);
       sketchCurves_.push_back(c);
     }

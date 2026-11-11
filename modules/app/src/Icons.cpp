@@ -1,5 +1,7 @@
 #include "Icons.h"
 
+#include <QAbstractButton>
+#include <QAction>
 #include <QHash>
 
 #include <array>
@@ -13,11 +15,16 @@ namespace {
 
 // All command icons are drawn here from simple geometry, so the project
 // ships no third-party artwork. 64x64 logical canvas.
-const QColor kLine(40, 52, 68);
-const QColor kTop(170, 205, 240);
-const QColor kLeft(110, 160, 215);
-const QColor kRight(70, 125, 190);
-const QColor kAccent(246, 116, 0);
+QColor kLine(40, 52, 68);
+QColor kTop(170, 205, 240);
+QColor kLeft(110, 160, 215);
+QColor kRight(70, 125, 190);
+QColor kAccent(246, 116, 0);
+bool gDark = false;
+QHash<QString, QIcon>& cache() {
+  static QHash<QString, QIcon> c;
+  return c;
+}
 
 void face(QPainter& p, const QPolygonF& poly, const QColor& c) {
   p.setBrush(c);
@@ -405,17 +412,48 @@ QPixmap render(const QString& name, int size) {
 } // namespace
 
 QIcon themed(const QString& themeName, const QString& fallbackName) {
-  return QIcon::fromTheme(themeName, icon(fallbackName));
+  // Desktop icon themes are drawn for light panels; use ours on dark ones.
+  return gDark ? icon(fallbackName) : QIcon::fromTheme(themeName, icon(fallbackName));
 }
 
 QIcon icon(const QString& name) {
-  static QHash<QString, QIcon> cache;
-  auto it = cache.find(name);
-  if (it != cache.end()) return *it;
+  auto it = cache().find(name);
+  if (it != cache().end()) return *it;
   QIcon ic;
   for (int s : {16, 24, 32, 48, 64}) ic.addPixmap(render(name, s));
-  cache.insert(name, ic);
+  cache().insert(name, ic);
   return ic;
+}
+
+void setIconTheme(const Theme::Colors& c) {
+  kLine = c.iconLine;
+  kTop = c.iconTop;
+  kLeft = c.iconLeft;
+  kRight = c.iconRight;
+  kAccent = c.iconAccent;
+  gDark = c.window.lightness() < 128;
+  cache().clear();
+}
+
+void setIcon(QAbstractButton* button, const QString& name) {
+  button->setProperty("tsrIcon", name);
+  button->setIcon(icon(name));
+}
+
+void setIcon(QAction* action, const QString& name) {
+  action->setProperty("tsrIcon", name);
+  action->setIcon(icon(name));
+}
+
+void retintIcons(QObject* root) {
+  for (QAbstractButton* b : root->findChildren<QAbstractButton*>()) {
+    const QString n = b->property("tsrIcon").toString();
+    if (!n.isEmpty()) b->setIcon(icon(n));
+  }
+  for (QAction* a : root->findChildren<QAction*>()) {
+    const QString n = a->property("tsrIcon").toString();
+    if (!n.isEmpty()) a->setIcon(icon(n));
+  }
 }
 
 } // namespace tsr::app

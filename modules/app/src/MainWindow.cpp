@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
 #include "Icons.h"
+#include "Theme.h"
 #include "SketchEditor.h"
 #include "Viewport.h"
 
@@ -51,9 +52,9 @@ QString commandIcon(const doc::Session& s, const std::string& commandId) {
   return c ? qs(c->def().icon) : QStringLiteral("?");
 }
 
-QToolButton* flatButton(const QIcon& icon, const QString& tip) {
+QToolButton* flatButton(const QString& iconName, const QString& tip) {
   auto* b = new QToolButton;
-  b->setIcon(icon);
+  if (!iconName.isEmpty()) setIcon(b, iconName);
   b->setToolTip(tip);
   b->setAutoRaise(true);
   b->setIconSize(QSize(22, 22));
@@ -150,6 +151,11 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   units->setContentsMargins(8, 0, 8, 0);
   statusBar()->addPermanentWidget(units);
 
+  connect(&Theme::instance(), &Theme::changed, this, [this] {
+    retintIcons(this);
+    styleNavBar();
+    refresh();
+  });
   listener_ = session_.addListener([this] { refresh(); });
   refresh();
 }
@@ -172,7 +178,7 @@ void MainWindow::buildAppBar() {
                       });
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("document-open")), tr("&Open…"), QKeySequence::Open, this,
                       [this] { openFile(); });
-  QAction* save = fileMenu->addAction(themed(QStringLiteral("document-save"), QStringLiteral("save")), tr("&Save"),
+  QAction* save = fileMenu->addAction(icon(QStringLiteral("save")), tr("&Save"),
                                       QKeySequence::Save, this, [this] {
                                         if (session_.path()) saveTo(qs(session_.path()->string()));
                                         else saveAs();
@@ -189,20 +195,22 @@ void MainWindow::buildAppBar() {
 
   auto* fileButton = new QToolButton;
   fileButton->setText(tr("File"));
-  fileButton->setIcon(themed(QStringLiteral("application-menu"), QStringLiteral("file")));
+  setIcon(fileButton, QStringLiteral("file"));
   fileButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
   fileButton->setPopupMode(QToolButton::InstantPopup);
   fileButton->setMenu(fileMenu);
   bar->addWidget(fileButton);
   bar->addAction(save);
 
-  undo_ = new QAction(themed(QStringLiteral("edit-undo"), QStringLiteral("undo")), tr("Undo"), this);
+  undo_ = new QAction(tr("Undo"), this);
+  setIcon(undo_, QStringLiteral("undo"));
   undo_->setShortcut(QKeySequence::Undo);
   connect(undo_, &QAction::triggered, this, [this] {
     if (editor_) editor_->undo();
     else session_.undo();
   });
-  redo_ = new QAction(themed(QStringLiteral("edit-redo"), QStringLiteral("redo")), tr("Redo"), this);
+  redo_ = new QAction(tr("Redo"), this);
+  setIcon(redo_, QStringLiteral("redo"));
   redo_->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
   connect(redo_, &QAction::triggered, this, [this] {
     if (editor_) editor_->redo();
@@ -286,7 +294,7 @@ void MainWindow::buildRibbon() {
         auto* b = new QToolButton;
         b->setObjectName(id);
         b->setText(qs(d.name));
-        b->setIcon(icon(qs(d.icon)));
+        setIcon(b, qs(d.icon));
         b->setIconSize(QSize(32, 32));
         b->setToolButtonStyle(Qt::ToolButtonIconOnly);
         b->setAutoRaise(true);
@@ -294,7 +302,7 @@ void MainWindow::buildRibbon() {
         b->setAccessibleName(qs(d.name));
         connect(b, &QToolButton::clicked, this, [this, id] { startCommand(id); });
         buttons->addWidget(b);
-        menu->addAction(icon(qs(d.icon)), qs(d.name), this, [this, id] { startCommand(id); });
+        setIcon(menu->addAction(qs(d.name), this, [this, id] { startCommand(id); }), qs(d.icon));
       }
       col->addLayout(buttons);
       auto* title = new QToolButton;
@@ -332,15 +340,14 @@ void MainWindow::buildNavBar() {
   navBar_ = new QWidget(viewport_);
   navBar_->setObjectName(QStringLiteral("navBar"));
   navBar_->setAutoFillBackground(true);
-  navBar_->setStyleSheet(QStringLiteral(
-      "#navBar { background: rgba(245,247,250,235); border: 1px solid rgba(0,0,0,40); border-radius: 6px; }"));
+  styleNavBar();
   auto* row = new QHBoxLayout(navBar_);
   row->setContentsMargins(6, 2, 6, 2);
   row->setSpacing(2);
 
-  auto* orbit = flatButton(icon(QStringLiteral("orbit")), tr("Orbit (left-drag). Shift+middle-drag also orbits."));
+  auto* orbit = flatButton(QStringLiteral("orbit"), tr("Orbit (left-drag). Shift+middle-drag also orbits."));
   orbit->setCheckable(true);
-  auto* pan = flatButton(icon(QStringLiteral("pan")), tr("Pan (left-drag). Middle-drag also pans."));
+  auto* pan = flatButton(QStringLiteral("pan"), tr("Pan (left-drag). Middle-drag also pans."));
   pan->setCheckable(true);
   connect(orbit, &QToolButton::toggled, this, [this, pan](bool on) {
     if (on) pan->setChecked(false);
@@ -350,12 +357,12 @@ void MainWindow::buildNavBar() {
     if (on) orbit->setChecked(false);
     viewport_->setPanTool(on);
   });
-  auto* fitB = flatButton(icon(QStringLiteral("fit")), tr("Fit (F6)"));
+  auto* fitB = flatButton(QStringLiteral("fit"), tr("Fit (F6)"));
   connect(fitB, &QToolButton::clicked, viewport_, &Viewport::fitAll);
-  auto* homeB = flatButton(icon(QStringLiteral("home")), tr("Home view (Home)"));
+  auto* homeB = flatButton(QStringLiteral("home"), tr("Home view (Home)"));
   connect(homeB, &QToolButton::clicked, viewport_, &Viewport::home);
 
-  auto* views = flatButton(QIcon::fromTheme(QStringLiteral("view-list-icons")), tr("Standard views"));
+  auto* views = flatButton(QString(), tr("Standard views"));
   views->setText(tr("Views"));
   views->setToolButtonStyle(Qt::ToolButtonTextOnly);
   views->setPopupMode(QToolButton::InstantPopup);
@@ -371,7 +378,7 @@ void MainWindow::buildNavBar() {
   }
   views->setMenu(viewMenu);
 
-  auto* display = flatButton(QIcon(), tr("Display settings"));
+  auto* display = flatButton(QString(), tr("Display settings"));
   display->setText(tr("Display"));
   display->setToolButtonStyle(Qt::ToolButtonTextOnly);
   display->setPopupMode(QToolButton::InstantPopup);
@@ -392,11 +399,29 @@ void MainWindow::buildNavBar() {
   grid->setCheckable(true);
   grid->setChecked(true);
   connect(grid, &QAction::toggled, viewport_, &Viewport::setGridVisible);
+  displayMenu->addSeparator();
+  QAction* darkTheme = displayMenu->addAction(tr("Dark theme"));
+  darkTheme->setObjectName(QStringLiteral("darkTheme"));
+  darkTheme->setCheckable(true);
+  darkTheme->setChecked(Theme::instance().dark());
+  connect(darkTheme, &QAction::toggled, this, [](bool on) {
+    Theme::instance().apply(on ? Theme::Mode::Dark : Theme::Mode::Light);
+  });
   display->setMenu(displayMenu);
 
   for (QWidget* w : std::initializer_list<QWidget*>{orbit, pan, fitB, homeB, views, display}) row->addWidget(w);
   navBar_->adjustSize();
   viewport_->installEventFilter(this);
+}
+
+void MainWindow::styleNavBar() {
+  if (!navBar_) return;
+  const auto& c = themeColors();
+  navBar_->setStyleSheet(QStringLiteral("#navBar { background: rgba(%1,%2,%3,%4); border: 1px solid rgba(%5,%6,%7,%8); "
+                                        "border-radius: 6px; }")
+                             .arg(c.navBackground.red()).arg(c.navBackground.green()).arg(c.navBackground.blue())
+                             .arg(c.navBackground.alpha()).arg(c.navBorder.red()).arg(c.navBorder.green())
+                             .arg(c.navBorder.blue()).arg(c.navBorder.alpha()));
 }
 
 void MainWindow::buildShortcuts() {
@@ -683,7 +708,7 @@ void MainWindow::refreshTimeline() {
     }
     if (!f.error.empty()) {
       tip += QStringLiteral("<br><span style='color:#c0392b'>%1</span>").arg(qs(f.error).toHtmlEscaped());
-      it->setBackground(QColor(240, 180, 175));
+      it->setBackground(themeColors().errorBackground);
     }
     tip += tr("<br><i>Double-click to edit</i>");
     it->setToolTip(tip);

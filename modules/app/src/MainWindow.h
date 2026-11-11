@@ -76,6 +76,7 @@ private:
   void showContextMenu(const QPoint& globalPos);
   void showTimelineMenu(const QPoint& pos);
   void focusSearch();
+  void styleNavBar();
   void enterSketchMode();
   void exitSketchMode();
   QWidget* buildSketchTab();

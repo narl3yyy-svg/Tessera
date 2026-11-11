@@ -11,6 +11,8 @@ add_executable(tessera
   src/CommandDialog.cpp
   src/CommandDialog.h
   src/Icons.cpp
+  src/Theme.cpp
+  src/Theme.h
   src/Icons.h
   src/Viewport.cpp
   src/Viewport.h)

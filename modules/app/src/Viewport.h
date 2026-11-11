@@ -74,6 +74,9 @@ public:
   void setStyle(Style s);
   Style style() const { return style_; }
   void setGridVisible(bool visible);
+  void applyTheme();   // background, grid and ViewCube colours
+  // Bodies drawn see-through (while a sketch is being edited).
+  void setBodiesGhosted(bool on);
   bool gridVisible() const { return grid_; }
   void setOrbitTool(bool on);   // left-drag orbits instead of selecting
   void setPanTool(bool on);     // left-drag pans
@@ -169,6 +172,7 @@ private:
   std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
   bool profilePicking_ = false;
   bool edgePicking_ = false;
+  bool ghosted_ = false;
   std::vector<Handle(AIS_Shape)> pickedEdgeObjects_;
   bool planePicking_ = false;
   std::string pickedSketch_;

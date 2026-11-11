@@ -112,6 +112,7 @@ void MainWindow::enterSketchMode() {
   for (int i = 1; i < ribbon_->count(); ++i) ribbon_->setTabEnabled(i, false);
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(true);
   timeline_->setEnabled(false);
+  viewport_->setBodiesGhosted(true);
   syncSketchTools();
   refresh();
   viewport_->setFocus();
@@ -128,6 +129,7 @@ void MainWindow::exitSketchMode() {
   constructionButton_ = nullptr;
   for (int i = 0; i < ribbon_->count(); ++i) ribbon_->setTabEnabled(i, true);
   timeline_->setEnabled(true);
+  viewport_->setBodiesGhosted(false);
   delete editor_;   // restores the view's grid and mouse handling
   editor_ = nullptr;
   refresh();
@@ -186,7 +188,7 @@ QWidget* MainWindow::buildSketchTab() {
                         const QString& key) {
     auto* b = new QToolButton;
     b->setObjectName(QStringLiteral("sketch.") + iconName);
-    b->setIcon(icon(iconName));
+    setIcon(b, iconName);
     b->setIconSize(QSize(30, 30));
     b->setAutoRaise(true);
     b->setCheckable(true);
@@ -210,7 +212,7 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), QStringLiteral("P"));
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
-  construction->setIcon(icon(QStringLiteral("construction")));
+  setIcon(construction, QStringLiteral("construction"));
   construction->setIconSize(QSize(30, 30));
   construction->setAutoRaise(true);
   construction->setCheckable(true);
@@ -235,7 +237,7 @@ QWidget* MainWindow::buildSketchTab() {
 
   QHBoxLayout* view = panel(tr("VIEW"));
   auto* look = new QToolButton;
-  look->setIcon(icon(QStringLiteral("sketch")));
+  setIcon(look, QStringLiteral("sketch"));
   look->setIconSize(QSize(30, 30));
   look->setAutoRaise(true);
   look->setToolTip(tr("Look at the sketch plane"));
@@ -245,7 +247,8 @@ QWidget* MainWindow::buildSketchTab() {
   view->addWidget(look);
 
   row->addStretch();
-  auto* finish = new QPushButton(icon(QStringLiteral("finish")), tr("FINISH SKETCH"));
+  auto* finish = new QPushButton(tr("FINISH SKETCH"));
+  setIcon(finish, QStringLiteral("finish"));
   finish->setObjectName(QStringLiteral("finishSketch"));
   finish->setIconSize(QSize(26, 26));
   finish->setToolTip(tr("Save the sketch to the design and leave sketch mode"));
