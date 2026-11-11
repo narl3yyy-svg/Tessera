@@ -12,3 +12,7 @@ include(GNUInstallDirs)
 install(TARGETS tessera tessera-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES ${PROJECT_SOURCE_DIR}/packaging/org.tessera.Tessera.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/org.tessera.Tessera.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+install(FILES ${PROJECT_SOURCE_DIR}/packaging/org.tessera.Tessera.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)

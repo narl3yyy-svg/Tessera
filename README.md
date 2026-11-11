@@ -4,7 +4,21 @@
 
 Status: **P0 skeleton** (`0.1.0-alpha`). See `SPEC/DIVERGENCES.md` for every known gap.
 
-## Build (Kubuntu 26.04)
+## Install (Kubuntu 26.04)
+
+From the top of the checkout, as your normal user (not `sudo`):
+
+```bash
+./install.sh            # build, test, install to /usr/local (sudo only for the copy step)
+./install.sh --user     # or install to ~/.local without sudo
+./install.sh --deps     # also apt-install missing build packages (APT_PROXY=socks5h://... if offline)
+```
+
+Tessera then appears in the KDE menu under Graphics, `.tsr` files open with it, and `tessera` / `tessera-cli` are on
+the PATH. Remove it with `./uninstall.sh` (or `./uninstall.sh --user`); `--dry-run` lists the files first. Only files the
+installer recorded are removed, never your designs.
+
+## Build for development
 
 ```bash
 sudo apt install -y build-essential cmake ninja-build qt6-base-dev \
