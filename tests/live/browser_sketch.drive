@@ -1,0 +1,18 @@
+# Live: right-click the XY origin plane in the Browser > Create Sketch, draw a
+# circle, finish.
+waitfor tsr.feature.extrude
+wait 600
+bdclick Origin                # double-click expands the Origin folder
+wait 300
+brclick XY
+wait 400
+key Down
+key Return
+waitfor sketch.circle
+wait 500
+click sketch.circle
+sclick 0 0
+sclick 10 0
+key Escape
+click palette.finish
+wait 800

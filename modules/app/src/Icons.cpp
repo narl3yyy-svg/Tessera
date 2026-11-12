@@ -193,6 +193,20 @@ void sketchIcon(QPainter& p) {
   p.drawPolygon(QPolygonF({QPointF(26, 36), QPointF(24, 42), QPointF(30, 38)}));
 }
 
+// A fully defined sketch: the sketch icon with a small red lock.
+void sketchLockedIcon(QPainter& p) {
+  sketchIcon(p);
+  const QColor red(210, 50, 45);
+  p.setBrush(Qt::NoBrush);
+  p.setPen(QPen(red, 4));
+  p.drawArc(QRectF(41, 30, 14, 16), 0, 180 * 16);
+  p.drawLine(QPointF(41, 38), QPointF(41, 42));
+  p.drawLine(QPointF(55, 38), QPointF(55, 42));
+  p.setPen(Qt::NoPen);
+  p.setBrush(red);
+  p.drawRoundedRect(QRectF(37, 40, 22, 18), 3, 3);
+}
+
 void extrudeIcon(QPainter& p) {
   face(p, {QPointF(8, 44), QPointF(32, 32), QPointF(56, 44), QPointF(32, 56)}, kTop);
   face(p, {QPointF(8, 44), QPointF(8, 22), QPointF(32, 10), QPointF(32, 32)}, kLeft);
@@ -896,6 +910,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("home")) home(p);
   else if (name == QLatin1String("fit")) fit(p);
   else if (name == QLatin1String("sketch")) sketchIcon(p);
+  else if (name == QLatin1String("sketch-locked")) sketchLockedIcon(p);
   else if (name == QLatin1String("extrude")) extrudeIcon(p);
   else if (name == QLatin1String("line")) lineIcon(p);
   else if (name == QLatin1String("rectangle")) rectIcon(p);

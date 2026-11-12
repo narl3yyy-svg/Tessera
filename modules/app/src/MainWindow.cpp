@@ -1,4 +1,6 @@
 #include "MainWindow.h"
+#include "tsr/sketch/Sketch.h"
+#include <cstring>
 #include "CommandDialog.h"
 #include "MarkingMenu.h"
 #include "ParametersDialog.h"
@@ -57,7 +59,9 @@ constexpr int kSketchRole = Qt::UserRole + 3;
 constexpr int kUnitsRole = Qt::UserRole + 4;
 constexpr int kAnalysisRole = Qt::UserRole + 5;
 constexpr int kParametersRole = Qt::UserRole + 6;
-constexpr int kPlaneRole = Qt::UserRole + 6;
+constexpr int kPlaneRole = Qt::UserRole + 7;
+constexpr int kOriginRole = Qt::UserRole + 8;   // an origin plane: its spec ("XY")
+constexpr int kSketchLockedRole = Qt::UserRole + 9;   // a fully defined sketch
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -131,6 +135,8 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
         return;
       }
   });
+  browser_->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect(browser_, &QTreeWidget::customContextMenuRequested, this, &MainWindow::showBrowserMenu);
   auto* browserDock = new QDockWidget(tr("BROWSER"));
   browserDock->setObjectName(QStringLiteral("browserDock"));
   browserDock->setWidget(browser_);
@@ -680,6 +686,9 @@ void MainWindow::buildShortcuts() {
     } else if (active_) active_->reject();
     else viewport_->clearSelection();
   });
+  add(QKeySequence(Qt::Key_V), [this] {
+    if (!editor_ && !active_) toggleSelectedVisibility();
+  });
   add(QKeySequence(Qt::Key_Delete), [this] {
     if (editor_) editor_->deleteSelection();
   });
@@ -1038,6 +1047,58 @@ void MainWindow::refresh() {
   refreshTimeline();
 }
 
+// Right-click in the Browser: Create Sketch on a plane, Edit Sketch, and
+// Show / Hide (V) for anything with a visibility box.
+void MainWindow::showBrowserMenu(const QPoint& pos) {
+  QTreeWidgetItem* it = browser_->itemAt(pos);
+  if (!it) return;
+  browser_->setCurrentItem(it);
+  QMenu m(this);
+  m.setObjectName(QStringLiteral("browserMenu"));
+  QString planeSpec = it->data(0, kOriginRole).toString();
+  if (planeSpec.isEmpty()) {
+    const QString name = it->data(0, kPlaneRole).toString();
+    if (!name.isEmpty() && session_.document().plane(name.toStdString())) planeSpec = name;
+  }
+  if (!planeSpec.isEmpty() && !editor_ && !active_) {
+    QAction* a = m.addAction(icon(QStringLiteral("sketch")), tr("Create Sketch"));
+    a->setObjectName(QStringLiteral("browserCreateSketch"));
+    connect(a, &QAction::triggered, this, [this, planeSpec] {
+      if (startSketch(planeSpec)) statusBar()->showMessage(tr("Sketching on %1.").arg(planeSpec), 3000);
+    });
+  }
+  const QString sketch = it->data(0, kSketchRole).toString();
+  if (!sketch.isEmpty() && !editor_ && !active_)
+    for (const auto& f : session_.document().features())
+      if (f.commandId == doc::kCmdSketch && qs(f.name) == sketch) {
+        const int id = f.id;
+        m.addAction(icon(QStringLiteral("sketch")), tr("Edit Sketch"), this, [this, id] { editSketch(id); });
+        break;
+      }
+  if (it->flags() & Qt::ItemIsUserCheckable) {
+    const bool shown = it->checkState(0) == Qt::Checked;
+    QAction* a = m.addAction(shown ? tr("Hide\tV") : tr("Show\tV"));
+    connect(a, &QAction::triggered, this, [it, shown] { it->setCheckState(0, shown ? Qt::Unchecked : Qt::Checked); });
+  }
+  if (m.isEmpty()) return;
+  m.exec(browser_->viewport()->mapToGlobal(pos));
+}
+
+// V: shows or hides what is selected (bodies in the canvas, else the
+// Browser's current item).
+void MainWindow::toggleSelectedVisibility() {
+  const QStringList bodies = viewport_->selectedBodies();
+  if (!bodies.isEmpty()) {
+    for (const QString& b : bodies) viewport_->setBodyVisible(b, !viewport_->isBodyVisible(b));
+    viewport_->clearSelection();
+    refresh();
+    return;
+  }
+  QTreeWidgetItem* it = browser_->currentItem();
+  if (it && (it->flags() & Qt::ItemIsUserCheckable))
+    it->setCheckState(0, it->checkState(0) == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+}
+
 void MainWindow::refreshBrowser(const QString& docName) {
   const QSignalBlocker block(browser_);
   doc::Document& d = session_.document();
@@ -1066,7 +1127,16 @@ void MainWindow::refreshBrowser(const QString& docName) {
 
   auto* origin = new QTreeWidgetItem(root, {tr("Origin")});
   origin->setIcon(0, QIcon::fromTheme(QStringLiteral("crosshairs")));
-  for (const char* o : {"O", "X", "Y", "Z", "XY", "XZ", "YZ"}) new QTreeWidgetItem(origin, {QString::fromLatin1(o)});
+  for (const char* o : {"O", "X", "Y", "Z", "XY", "XZ", "YZ"}) {
+    auto* it = new QTreeWidgetItem(origin, {QString::fromLatin1(o)});
+    if (std::strlen(o) == 2) {
+      it->setData(0, kOriginRole, QString::fromLatin1(o));
+      it->setIcon(0, icon(QStringLiteral("plane")));
+      it->setToolTip(0, tr("Right-click > Create Sketch"));
+    } else {
+      it->setIcon(0, icon(std::strlen(o) == 1 && o[0] == 'O' ? QStringLiteral("point") : QStringLiteral("axis")));
+    }
+  }
 
   const auto bodies = d.bodies();
   auto* bodiesItem = new QTreeWidgetItem(root, {tr("Bodies (%1)").arg(bodies.size())});
@@ -1118,7 +1188,17 @@ void MainWindow::refreshBrowser(const QString& docName) {
     for (const auto& s : sketches) {
       const QString n = qs(s.name);
       auto* it = new QTreeWidgetItem(sk, {n});
-      it->setToolTip(0, tr("Double-click to edit"));
+      // Fully defined sketches show a lock, as in the familiar Browser.
+      bool locked = false;
+      try {
+        auto sketchCopy = sketch::Sketch::fromJson(s.data);
+        const auto r = sketch::solve(sketchCopy);
+        locked = r.ok && r.dof == 0 && !sketchCopy.entities.empty();
+      } catch (const std::exception&) {
+      }
+      it->setIcon(0, icon(locked ? QStringLiteral("sketch-locked") : QStringLiteral("sketch")));
+      it->setData(0, kSketchLockedRole, locked);
+      it->setToolTip(0, locked ? tr("Fully defined. Double-click to edit") : tr("Double-click to edit"));
       it->setData(0, kSketchRole, n);
       it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
       it->setCheckState(0, sketchVisible(s.name) ? Qt::Checked : Qt::Unchecked);

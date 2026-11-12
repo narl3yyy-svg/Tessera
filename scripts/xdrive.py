@@ -25,6 +25,7 @@ Script lines (blank lines and # comments ignored):
   adrag DX DY                drag the in-canvas arrow by DX, DY pixels
   a2drag DX DY               drag the second arrow (Two Sides extrude)
   tclick NAME                click a feature in the timeline
+  bclick / brclick / bdclick TEXT   click / right-click / double-click a Browser item
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
   hold KEY / release KEY     keep a key down (ctrl, shift, alt or a key name) / let it go
   srclick X Y                right-click sketch coordinates (mm)
@@ -226,6 +227,20 @@ def main():
             time.sleep(0.3)
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
+        elif cmd in ("bclick", "brclick", "bdclick"):
+            end = time.time() + 5
+            while a[0] not in geometry().get("browser", {}):
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: no browser item %s" % (n, a[0]))
+                time.sleep(0.1)
+            x, y = geometry()["browser"][a[0]]
+            if cmd == "brclick":
+                move(x, y)
+                button(True, 3)
+                button(False, 3)
+            else:
+                click(x, y, 2 if cmd == "bdclick" else 1)
+            time.sleep(0.3)
         elif cmd == "tclick":
             end = time.time() + 5
             while a[0] not in geometry().get("timeline", {}):

@@ -3,6 +3,7 @@
 
 #include <TDF_ChildIterator.hxx>
 #include <TDF_Label.hxx>
+#include <TDataStd_Integer.hxx>
 #include <TDataStd_Name.hxx>
 #include <TDataStd_NamedData.hxx>
 #include <TNaming_Builder.hxx>
@@ -121,6 +122,9 @@ Document::Document() {
   ocafApplication()->NewDocument(TCollection_ExtendedString(kOcafFormat), doc_);
   if (doc_.IsNull()) throw DocumentError("OCAF could not create a document");
   initLayout();
+  // A layout version on the root: an empty design still has something to
+  // store (OCAF refuses to save a document with no attributes at all).
+  TDataStd_Integer::Set(doc_->Main(), 1);
 }
 
 Document::Document(FromOcaf, Handle(TDocStd_Document) doc) : doc_(std::move(doc)) { initLayout(); }

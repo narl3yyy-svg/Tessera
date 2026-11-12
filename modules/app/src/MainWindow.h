@@ -82,6 +82,8 @@ public:
   QTabWidget* ribbon() const { return ribbon_; }
   QTreeWidget* browser() const { return browser_; }
   QListWidget* timeline() const { return timeline_; }
+  // V: shows or hides the selected bodies, else the Browser's current item.
+  void toggleSelectedVisibility();
   Viewport* viewport() const { return viewport_; }
 
 signals:
@@ -145,6 +147,7 @@ private:
   void updateEdgePicking();
   // In-canvas drag arrow for the open panel (MainWindowArrow.cpp).
   void updateDragArrow();
+  void showBrowserMenu(const QPoint& pos);
   std::optional<gp_Pnt> patternCentre();
   std::map<QString, gp_Pnt> patternCentres_;   // per feature name, while a pattern is open
   void onDragArrow(double value);

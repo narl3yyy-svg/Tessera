@@ -41,4 +41,10 @@ tsr.open(p)
 assert abs(root.bRepBodies.item(0).volume - v) < 1e-9
 with open(os.path.join(d, "part.3mf"), "rb") as f:
     assert f.read(2) == b"PK"
+# A new, empty design saves and opens again (nothing drawn yet).
+tsr.new_document()
+empty = os.path.join(d, "empty.tsr")
+tsr.save(empty)
+tsr.open(empty)
+assert root.bRepBodies.count == 0 and tsr.features() == []
 print("api io/units: OK")

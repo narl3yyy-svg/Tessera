@@ -88,7 +88,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Intersect (Project / Include menu) puts body edges that cross the sketch plane into it (Days 4, 7).
 - [ ] Dragging a circle centre onto a line midpoint (triangle glyph) adds the midpoint constraint on release (Day 14).
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
-- [ ] Fully defined sketch: curves turn black and the sketch shows a lock icon in the Browser (Days 6, 7, 8).
+- [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
+- [ ] Fully defined curves change colour (black in the light theme).
 - [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); 3-point arc; Centerline linetype (Day 8).
 - [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
 - [ ] Dimension: where the cursor is dragged decides horizontal / vertical / aligned; dimensions can be named d1, d2 ... and used in others (Days 5, 8).
@@ -98,7 +99,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Right-click a flat face > Create Sketch sketches on that face (Days 1, 5, 7).
 - [x] Two Sides extrude: an arrow per side.
 - [ ] Pattern directions picked as model edges, and an arrow drag before typing values (Day 1).
-- [ ] Right-click an origin plane in the Browser > Create Sketch (Days 2, 3, 6).
+- [x] Right-click an origin or construction plane in the Browser > Create Sketch (Days 2, 3, 6).
 - [ ] Thread: Full Length on by default; off gives a length arrow and an offset arrow (Days 4, 9); Modeled checkbox.
 - [ ] Hole: click a face, then drag the hole centre; it snaps to circle centres (Day 6).
 - [ ] Chamfer types: Equal Distance, Two Distances, Distance and Angle (Day 8).
@@ -107,7 +108,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [ ] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [ ] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
-- [ ] V hides / shows the selected item (Day 6); Shift-click a range of bodies in the Browser (Day 7).
+- [x] V hides / shows the selected bodies, or the Browser item (Day 6).
+- [ ] Shift-click a range of bodies in the Browser (Day 7).
 - [ ] Appearance (A): drag a material onto a body or onto selected faces (Days 2, 7, 9).
 - [ ] Insert > Canvas (reference image) with Calibrate (Day 2).
 - [ ] Capture Design History on an imported STEP file; Create Components from Bodies (Day 10).

@@ -27,6 +27,7 @@
 #include <TopExp_Explorer.hxx>
 #include <QCommandLineParser>
 #include <QListWidget>
+#include <QTreeWidgetItemIterator>
 #include <QPainter>
 #include <QPixmap>
 #include <QTabWidget>
@@ -503,6 +504,32 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     QApplication::processEvents();
     if (w.analysisPanel() || w.viewport()->analysis().kind != tsr::app::AnalysisKind::None) return fail("analysis remove");
   }
+  // Browser: a fully defined sketch shows a lock; V hides the current body;
+  // a construction plane's double-click no longer opens Change Parameters.
+  s.newDocument();
+  {
+    if (!s.run("tsr.primitive.box", {{"length", 1.0}, {"width", 1.0}, {"height", 1.0}}).empty()) return fail("box for browser");
+    const std::string data =
+        R"({"points":[[0,0],[1,0]],"entities":[{"type":"line","p":[0,1]}],)"
+        R"("constraints":[{"type":"horizontal","e":[0]},{"type":"distance","e":[0],"v":1.0}]})";
+    if (const auto err = s.run("tsr.sketch.create", {{"plane", std::string("XY")}, {"data", data}}); !err.empty())
+      return fail(("defined sketch: " + err).c_str());
+    QApplication::processEvents();
+    QTreeWidgetItem* skItem = nullptr;
+    QTreeWidgetItem* bodyItem = nullptr;
+    for (QTreeWidgetItemIterator it(w.browser()); *it; ++it) {
+      if ((*it)->text(0) == QLatin1String("Sketch1")) skItem = *it;
+      if ((*it)->text(0) == QLatin1String("Body1")) bodyItem = *it;
+    }
+    if (!skItem || !skItem->data(0, Qt::UserRole + 9).toBool()) return fail("fully defined sketch has no lock");
+    if (!bodyItem) return fail("browser body item");
+    w.browser()->setCurrentItem(bodyItem);
+    w.toggleSelectedVisibility();
+    QApplication::processEvents();
+    if (w.viewport()->isBodyVisible(QStringLiteral("Body1"))) return fail("V did not hide the body");
+    w.toggleSelectedVisibility();
+    QApplication::processEvents();
+  }
   // Marking menu: Create Sketch from the ring starts plane picking / sketch.
   s.newDocument();
   {
@@ -574,6 +601,16 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
       items[it->data(Qt::AccessibleTextRole).toString()] = QJsonArray{g.x(), g.y()};
     }
     o[QStringLiteral("timeline")] = items;
+    // Browser items by text (first visible one wins), centre in global coordinates.
+    QJsonObject tree;
+    QTreeWidget* br = w.browser();
+    for (QTreeWidgetItemIterator it(br); *it; ++it) {
+      const QRect r = br->visualItemRect(*it);
+      if (r.isEmpty() || tree.contains((*it)->text(0))) continue;
+      const QPoint g = br->viewport()->mapToGlobal(r.center());
+      tree[(*it)->text(0)] = QJsonArray{g.x(), g.y()};
+    }
+    o[QStringLiteral("browser")] = tree;
   }
   {
     // World axes (1 cm each) on screen: an affine map for the (orthographic) view.
