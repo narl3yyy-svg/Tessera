@@ -701,7 +701,13 @@ void MainWindow::buildShortcuts() {
     if (!editor_ && !active_) toggleSelectedVisibility();
   });
   add(QKeySequence(Qt::Key_Delete), [this] {
-    if (editor_) editor_->deleteSelection();
+    if (editor_) {
+      editor_->deleteSelection();
+    } else if (!active_ && timeline_->hasFocus() && timeline_->currentItem()) {
+      // A feature selected in the timeline (undo brings it back).
+      const int id = timeline_->currentItem()->data(kFeatureIdRole).toInt();
+      if (auto err = session_.deleteFeature(id); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+    }
   });
   // Sketch tool keys, active only in sketch mode.
   const std::pair<Qt::Key, SketchEditor::Tool> keys[] = {
@@ -989,6 +995,15 @@ void MainWindow::showTimelineMenu(const QPoint& pos) {
   if (!f) return;
   QMenu m(this);
   m.addAction(tr("Edit Feature"), this, [this, id] { editFeature(id); });
+  // Features made from a sketch: open that sketch.
+  if (auto s = f->inputs.find("sketch"); s != f->inputs.end())
+    if (auto name = std::get_if<std::string>(&s->second); name && !name->empty())
+      for (const auto& g : session_.document().features())
+        if (g.commandId == doc::kCmdSketch && g.name == *name) {
+          const int sid = g.id;
+          m.addAction(icon(QStringLiteral("sketch")), tr("Edit Profile Sketch"), this, [this, sid] { editSketch(sid); });
+          break;
+        }
   m.addAction(f->suppressed ? tr("Unsuppress Feature") : tr("Suppress Feature"), this, [this, id, f] {
     if (auto err = session_.setFeatureSuppressed(id, !f->suppressed); !err.empty())
       statusBar()->showMessage(qs(err), 5000);

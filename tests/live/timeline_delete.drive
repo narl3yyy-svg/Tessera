@@ -1,0 +1,7 @@
+# Live: click the Extrude in the timeline and press Delete (as in the familiar
+# tool); the sketch stays.
+waitfor tsr.feature.extrude
+wait 500
+tclick Extrude1
+key Delete
+wait 500

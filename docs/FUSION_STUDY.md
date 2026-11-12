@@ -25,10 +25,10 @@ behaviours found there that Tessera does not match yet. Each finding moves to `d
 | 15 | https://www.youtube.com/watch?v=QnDJl9W5Uso || transcript |
 | 16 | https://www.youtube.com/watch?v=vr_zPVEsyjs || transcript |
 | 17 | https://www.youtube.com/watch?v=DJULiA1aTtM || transcript |
-| 18 | https://www.youtube.com/watch?v=fYDJLdOV_zE | |
+| 18 | https://www.youtube.com/watch?v=fYDJLdOV_zE || transcript |
 | 19 | https://www.youtube.com/watch?v=smbb4rJPBGg | |
 | 20 | https://www.youtube.com/watch?v=Q1Thdrt40MA | |
-| 21 | https://www.youtube.com/watch?v=OsdL0VoaGl0 | |
+| 21 | https://www.youtube.com/watch?v=OsdL0VoaGl0 || transcript |
 | 22 | https://www.youtube.com/watch?v=5PsR8bL-Wv4 | |
 | 23 | https://www.youtube.com/watch?v=EzJMWLX0IbU | |
 | 24 | https://www.youtube.com/watch?v=WtEWbNIaK9Q | |
@@ -108,6 +108,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [ ] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [ ] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
+- [x] Select a feature in the timeline and press Delete (Day 20); right-click > Edit Profile Sketch.
+- [ ] Ground / Unground components (thumbtack in the Browser); drag components in the canvas; As-Built Joint (Shift+J); joint limits with drag flags; right-click a joint > Animate / Lock (Day 23).
 - [x] V hides / shows the selected bodies, or the Browser item (Day 6).
 - [ ] Shift-click a range of bodies in the Browser (Day 7).
 - [ ] Appearance (A): drag a material onto a body or onto selected faces (Days 2, 7, 9).
