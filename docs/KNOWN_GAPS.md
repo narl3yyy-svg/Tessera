@@ -57,7 +57,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P5-6 | A plane picked from a body face is copied when picked (not associative to the face) | Needs topological naming | P6 |
 | P6-1 | Sweep: the path is all curves of one sketch (one connected chain); no guide rails, twist or scaling; the profile must sit at the start of the path | P6 scope | later |
 | P6-2 | Loft: one profile per sketch (its largest region), no rails or centre line, no point sections | P6 scope | later |
-| P6-3 | Press Pull moves flat faces only (offset of curved faces is planned with Offset Face) | P6 scope | P7 |
+| P6-3 | ~~Press Pull moves flat faces only~~ Closed: curved faces are offset. Draft has one pull direction and neutral plane for all faces (no parting line or two-sided draft) | | closed |
 | P7-1 | Model parameters (feature values) are listed and editable in Change Parameters but have no names (`d1`, `d2`) that other expressions can use; only user parameters can be referenced | Needs stable per-input names | P8 |
 | P7-2 | Expression rules: a bare number takes the unit of what it meets (the field's unit, the parameter's unit, or the length it is added to); trig functions read bare numbers as degrees; floor/ceil/round work in the display unit. Fusion's exact rules for mixed units are not yet checked against the reference | Not yet probed in the reference (R6) | R6 |
 | P7-3 | In command panels, expressions are typed into numeric fields (Real inputs); whole-number fields (pattern quantities) take expressions from scripts and Change Parameters but the panel's spin box takes digits only | Qt spin box | P8 |

@@ -45,6 +45,8 @@
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
+#include <BRepOffsetAPI_DraftAngle.hxx>
+#include <BRepOffset_MakeOffset.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <Poly_Triangulation.hxx>
 #include <TopoDS_Shell.hxx>
@@ -1120,14 +1122,55 @@ TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
   return r;
 }
 
+TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance) {
+  if (faces.empty()) throw KernelError("Offset Face: select a face");
+  if (std::abs(distance) < 1e-9) throw KernelError("Offset Face: the distance must not be zero");
+  TopoDS_Shape result = guarded("Offset Face", [&]() -> TopoDS_Shape {
+    BRepOffset_MakeOffset mo;
+    mo.Initialize(body, 0.0, 1e-6, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Intersection);
+    for (const auto& f : faces) mo.SetOffsetOnFace(TopoDS::Face(f), distance);
+    mo.MakeOffsetShape();
+    if (!mo.IsDone()) return TopoDS_Shape();
+    TopoDS_Shape s = mo.Shape();
+    ShapeUpgrade_UnifySameDomain unify(s, true, true, false);
+    unify.Build();
+    return unify.Shape();
+  });
+  if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
+    throw KernelError("Offset Face: could not move those faces that far (try a smaller distance)");
+  return result;
+}
+
+TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
+                   double angle) {
+  if (faces.empty()) throw KernelError("Draft: select the faces to tilt");
+  if (std::abs(angle) < 1e-9) throw KernelError("Draft: the angle must not be zero");
+  if (std::abs(angle) >= 1.5) throw KernelError("Draft: the angle must be less than 85 degrees");
+  const gp_Dir dir(pullDir.x, pullDir.y, pullDir.z);
+  const gp_Pln neutral(gp_Pnt(planeOrigin.x, planeOrigin.y, planeOrigin.z), dir);
+  TopoDS_Shape result = guarded("Draft", [&]() -> TopoDS_Shape {
+    BRepOffsetAPI_DraftAngle d(body);
+    for (const auto& f : faces) {
+      d.Add(TopoDS::Face(f), dir, angle, neutral);
+      if (!d.AddDone()) throw KernelError("Draft: a face cannot be drafted in that direction (is it parallel to the plane?)");
+    }
+    d.Build();
+    return d.IsDone() ? d.Shape() : TopoDS_Shape();
+  });
+  if (!isValid(result)) throw KernelError("Draft: could not tilt those faces by that angle");
+  return result;
+}
+
 TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance) {
   if (faces.empty()) throw KernelError("Press Pull: select a face");
   if (std::abs(distance) < 1e-9) throw KernelError("Press Pull: the distance must not be zero");
+  // Curved faces are offset (as Offset Face does); flat ones are pushed or pulled.
+  for (const auto& fs : faces)
+    if (BRepAdaptor_Surface(TopoDS::Face(fs)).GetType() != GeomAbs_Plane) return offsetFaces(body, faces, distance);
   TopoDS_Shape result = body;
   for (const auto& fs : faces) {
     const TopoDS_Face& f = TopoDS::Face(fs);
     BRepAdaptor_Surface surf(f);
-    if (surf.GetType() != GeomAbs_Plane) throw KernelError("Press Pull: only flat faces can be pushed or pulled");
     gp_Dir n = surf.Plane().Axis().Direction();
     if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
     const TopoDS_Shape prism = guarded("Press Pull", [&] { return BRepPrimAPI_MakePrism(f, gp_Vec(n) * distance).Shape(); });

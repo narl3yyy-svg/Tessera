@@ -717,6 +717,15 @@ void pipeIcon(QPainter& p) {
   p.drawEllipse(QPointF(8, 52), 6, 3);
 }
 
+void offsetFaceIcon(QPainter& p) {
+  cube(p, 6, 18, 40, kTop, kLeft, kRight);
+  p.setPen(QPen(kAccent, 2.5, Qt::DashLine));
+  p.setBrush(Qt::NoBrush);
+  p.drawPolygon(QPolygonF({QPointF(30, 4), QPointF(58, 16), QPointF(58, 30), QPointF(30, 18)}));
+  p.setPen(QPen(kAccent, 2.5));
+  p.drawLine(QPointF(44, 26), QPointF(52, 20));
+}
+
 void coilIcon(QPainter& p) {
   p.setBrush(Qt::NoBrush);
   for (int i = 0; i < 4; ++i) {
@@ -867,6 +876,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("spline")) splineIcon(p);
   else if (name == QLatin1String("pipe")) pipeIcon(p);
   else if (name == QLatin1String("coil")) coilIcon(p);
+  else if (name == QLatin1String("offset-face")) offsetFaceIcon(p);
   else if (name == QLatin1String("sketch-fillet")) sketchFilletIcon(p);
   else if (name == QLatin1String("offset")) offsetIcon(p);
   else if (name == QLatin1String("hole")) holeIcon(p);

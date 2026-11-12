@@ -25,6 +25,8 @@ inline constexpr const char* kCmdSweep = "tsr.feature.sweep";
 inline constexpr const char* kCmdLoft = "tsr.feature.loft";
 inline constexpr const char* kCmdPressPull = "tsr.feature.pressPull";
 inline constexpr const char* kCmdPipe = "tsr.feature.pipe";
+inline constexpr const char* kCmdOffsetFace = "tsr.feature.offsetFace";
+inline constexpr const char* kCmdDraft = "tsr.feature.draft";
 inline constexpr const char* kCmdCoil = "tsr.feature.coil";
 inline constexpr const char* kCmdOffsetPlane = "tsr.construct.offsetPlane";
 inline constexpr const char* kCmdPlaneAtAngle = "tsr.construct.planeAtAngle";
@@ -68,6 +70,8 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 //   tsr.feature.mirror       body, plane, offset, operation ("New Body"/"Join")
 //   tsr.feature.scale        body, factor, about ("Body centre"/"Origin")
 //   tsr.feature.remove       body
+//   tsr.feature.offsetFace   body, faces, distance
+//   tsr.feature.draft        body, faces, plane (pull direction = its normal; neutral plane), angle, flip
 //   tsr.feature.pipe         path (sketch), section, size, hollow ("No"/"Yes"), thickness, operation
 //   tsr.feature.coil         plane, x, y, diameter, type, revolutions, height, pitch, angle,
 //                            section, position, size, operation

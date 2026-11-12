@@ -1968,10 +1968,71 @@ private:
   CommandDef def_;
 };
 
+// Offset Face and Draft: change chosen faces of one body.
+class FaceFeature final : public Command {
+public:
+  enum class Kind { Offset, Draft };
+  explicit FaceFeature(Kind kind) : kind_(kind) {
+    if (kind == Kind::Offset) {
+      commonDef(def_, kCmdOffsetFace, "Offset Face", "Moves faces (flat or curved) along their normals.", "offset-face");
+    } else {
+      commonDef(def_, kCmdDraft, "Draft", "Tilts faces so parts release from a mould: pick the pull direction plane, then faces.", "draft");
+    }
+    def_.inputs = {bodyInput(),
+                   {.id = "faces", .label = "Faces", .tooltip = "Click the faces in the canvas.", .type = InputType::Faces,
+                    .defaultValue = std::string{}}};
+    if (kind == Kind::Offset) {
+      def_.inputs.push_back({.id = "distance", .label = "Distance", .tooltip = "Positive grows the body.",
+                             .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter});
+    } else {
+      def_.inputs.push_back(planeChoice("Pull direction (its normal) and neutral plane (where faces keep their size)."));
+      def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = "Draft angle.", .type = InputType::Real,
+                             .defaultValue = 0.0872664626, .unit = Unit::Degree, .min = -1.48, .max = 1.48});
+      def_.inputs.push_back(choice("flip", "Direction", {"Normal", "Flipped"}, "Flipped: pull the other way."));
+    }
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Faces: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape shape = doc.body(name)->shape;
+    try {
+      const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
+      if (kind_ == Kind::Offset) {
+        doc.replaceBody(name, kernel::offsetFaces(shape, faces, getReal(in, "distance")));
+      } else {
+        const gp_Ax3 f = planeOf(doc, in, "plane", "-");
+        gp_Dir n = f.Direction();
+        if (getString(in, "flip") == "Flipped") n.Reverse();
+        const gp_Pnt o = f.Location();
+        doc.replaceBody(name, kernel::draft(shape, faces, {n.X(), n.Y(), n.Z()}, {o.X(), o.Y(), o.Z()}, getReal(in, "angle")));
+      }
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  Kind kind_;
+  CommandDef def_;
+};
+
 class PressPull final : public Command {
 public:
   PressPull() {
-    commonDef(def_, kCmdPressPull, "Press Pull", "Pushes or pulls flat faces of a body: positive adds, negative removes.", "presspull");
+    commonDef(def_, kCmdPressPull, "Press Pull", "Pushes or pulls faces of a body: positive adds, negative removes. Curved faces are offset.", "presspull");
     def_.shortcut = "Q";
     def_.inputs = {
         bodyInput(),
@@ -2031,6 +2092,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
   registry.add(std::make_unique<Pipe>());
+  registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Offset));
+  registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Draft));
   registry.add(std::make_unique<Coil>());
   using CAP = ConstructAxisPoint::Kind;
   for (CAP k : {CAP::AxisCylinder, CAP::AxisEdge, CAP::AxisTwoPoints, CAP::AxisTwoPlanes, CAP::PointVertex,

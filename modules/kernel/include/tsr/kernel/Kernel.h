@@ -146,6 +146,16 @@ TopoDS_Shape coil(Vec3 origin, Vec3 axis, Vec3 xdir, double diameter, double tur
 // `distance` (positive adds material, negative removes it).
 TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);
 
+// Offset Face: moves faces of any kind along their normals (positive grows
+// the body); neighbouring faces extend or trim to meet them.
+TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);
+
+// Draft: tilts faces by `angle` (rad) about where they cross the neutral
+// plane (through `planeOrigin`, normal `pullDir`), measured from the pull
+// direction. Positive adds material above the plane.
+TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
+                   double angle);
+
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError
 // if OCCT fails or the result is empty (e.g. a cut that removes everything).
