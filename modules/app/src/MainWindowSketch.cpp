@@ -211,8 +211,11 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Select, QStringLiteral("select"), tr("Select / move"), QStringLiteral("Q"));
   toolButton(create, T::Line, QStringLiteral("line"), tr("Line"), QStringLiteral("L"));
   toolButton(create, T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R"));
+  toolButton(create, T::CenterRectangle, QStringLiteral("center-rectangle"), tr("Center Rectangle"), {});
   toolButton(create, T::Circle, QStringLiteral("circle"), tr("Center Diameter Circle"), QStringLiteral("C"));
   toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
+  toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
+  toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), QStringLiteral("P"));
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
@@ -227,6 +230,9 @@ QWidget* MainWindow::buildSketchTab() {
   create->addWidget(construction);
   constructionButton_ = construction;
 
+  QHBoxLayout* modify = panel(tr("MODIFY"));
+  toolButton(modify, T::Trim, QStringLiteral("trim"), tr("Trim"), QStringLiteral("T"));
+
   QHBoxLayout* constraints = panel(tr("CONSTRAINTS"));
   toolButton(constraints, T::Dimension, QStringLiteral("dimension"), tr("Sketch Dimension"), QStringLiteral("D"));
   toolButton(constraints, T::Coincident, QStringLiteral("c-coincident"), tr("Coincident"), {});
@@ -237,6 +243,8 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(constraints, T::Tangent, QStringLiteral("c-tangent"), tr("Tangent"), {});
   toolButton(constraints, T::Concentric, QStringLiteral("c-concentric"), tr("Concentric"), {});
   toolButton(constraints, T::Midpoint, QStringLiteral("c-midpoint"), tr("Midpoint"), {});
+  toolButton(constraints, T::Collinear, QStringLiteral("c-collinear"), tr("Collinear"), {});
+  toolButton(constraints, T::Symmetry, QStringLiteral("c-symmetry"), tr("Symmetry"), {});
   toolButton(constraints, T::Fix, QStringLiteral("c-fix"), tr("Fix/Unfix"), {});
 
   QHBoxLayout* view = panel(tr("VIEW"));

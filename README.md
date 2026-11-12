@@ -30,7 +30,31 @@ Status: **P2, early alpha** (`0.1.0-alpha`). What works today:
 - Dark theme by default (Display > Dark theme switches to light; remembered between runs)
 - `.tsr` files, unlimited practical undo, Python scripting (`tsr.*` and the start of the `adsk.*` API)
 
-See `ROADMAP.md` for what comes next and `SPEC/DIVERGENCES.md` for every known gap.
+Sketching works the way Fusion users expect: after the first click the size boxes appear next to the shape; type
+a value, **Tab** to the next box, **Enter** to create it (typed sizes become dimensions). Tools: Line, 2-Point and
+Center Rectangle, Circle, Arc, Polygon, Slot, Point, Trim, Sketch Dimension and 11 constraints (including Collinear
+and Symmetry). CREATE also has **Hole** (H; simple, counterbore, countersink, at sketch points) and **Rectangular /
+Circular Pattern**.
+
+## Planned
+
+Not built yet (menus show these greyed out). Order is roughly the order of work; `ROADMAP.md` has the full checklist.
+
+| Area | Planned |
+|---|---|
+| Construct | Offset Plane, Plane at Angle, Midplane, Tangent Plane, Axis (cylinder / edge / two points), Point — usable for sketches, Split and Mirror |
+| Create | Sweep, Loft, Coil, Pipe, Thread, Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, feature patterns |
+| Modify | Press Pull (Q), Draft, Offset Face, Replace Face, Split Face, Align, Appearance (A), Physical Material, Change Parameters table |
+| Sketch | Extend, Offset (O), sketch Fillet/Chamfer, Spline, Ellipse, Conic, Text, Mirror, Circular/Rectangular sketch patterns, Project/Include (P), Midpoint Line, 3-Point Rectangle/Circle/Arc, Tangent Arc, Sketch Palette (show/hide options, slice), Curvature/Polygon constraints |
+| Extrude | Drag arrow in the canvas, To Object / To Face extents, thin extrude |
+| Parameters | Expressions and parameter names in every value (`width/2 + 3 mm`) |
+| Assemble | Components, Joints (J), As-Built Joints, Rigid Groups, Drive Joints, Motion Links, Contact Sets |
+| Inspect | Curvature Comb, Zebra, Draft and Curvature Map analysis, Minimum Radius |
+| Insert | SVG / DXF, Canvas, Decal |
+| Other workspaces | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |
+| Files | DXF export of sketches; named views; design history tools |
+
+See `ROADMAP.md` for the phases and `SPEC/DIVERGENCES.md` for every known gap in what is already built.
 
 ## Install (Kubuntu 26.04)
 

@@ -137,6 +137,7 @@ public:
   const Handle(AIS_InteractiveContext)& aisContext() const { return context_; }
   bool planePoint(const QPointF& widgetPos, const gp_Ax3& frame, gp_Pnt& out) const;
   double modelPerPixel() const;   // model length of one logical pixel
+  QPointF toWidget(const gp_Pnt& p) const;   // where a 3D point appears in the widget
   // Looks straight at the plane, centred on `center` (default: the plane origin).
   void lookAt(const gp_Ax3& frame, double size = 0, std::optional<gp_Pnt> center = std::nullopt);
   void setGridPlane(const gp_Ax3& frame);   // the layout grid follows the active sketch

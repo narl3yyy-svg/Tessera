@@ -4,7 +4,11 @@
 #include "tsr/kernel/Io.h"
 #include "tsr/kernel/Kernel.h"
 
+#include <BRepPrimAPI_MakeCone.hxx>
+#include <BRepPrimAPI_MakeCylinder.hxx>
+#include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <gp_Ax2.hxx>
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
 
@@ -102,7 +106,7 @@ InputDef offset(const char* id, const char* label) {
 
 InputDef choice(const char* id, const char* label, std::vector<std::string> options, const char* tip) {
   std::string first = options.front();
-  return InputDef{.id = id, .label = label, .tooltip = tip, .type = InputType::Choice,
+  return InputDef{.id = id, .label = label, .tooltip = tip ? tip : "", .type = InputType::Choice,
                   .defaultValue = first, .choices = std::move(options)};
 }
 
@@ -1041,6 +1045,213 @@ public:
 private:
   CommandDef def_;
 };
+
+// ---------------------------------------------------------------------------
+// Hole: drilled at every point of a sketch (points not used by curves), into
+// the material on the side opposite the sketch plane's normal.
+class Hole final : public Command {
+public:
+  Hole() {
+    commonDef(def_, kCmdHole, "Hole", "Simple, counterbore or countersink holes at the points of a sketch.", "hole", "Create");
+    def_.shortcut = "H";
+    auto len = [](const char* id, const char* label, double v, const char* when = "") {
+      return InputDef{.id = id, .label = label, .tooltip = {}, .type = InputType::Real, .defaultValue = v,
+                      .unit = Unit::Millimeter, .min = 0.0, .max = std::nullopt, .minExclusive = true,
+                      .visibleWhen = when};
+    };
+    def_.inputs = {
+        {.id = "sketch", .label = "Sketch (points)", .tooltip = "Holes go at this sketch's points. Empty: latest sketch.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+        choice("holeType", "Hole Type", {"Simple", "Counterbore", "Countersink"}, {}),
+        len("diameter", "Diameter", 0.5),
+        choice("extent", "Extents", {"Distance", "All"}, "All: through the whole body."),
+        len("depth", "Depth", 1.0, "extent=Distance"),
+        len("cboreDiameter", "Counterbore Diameter", 0.9, "holeType=Counterbore"),
+        len("cboreDepth", "Counterbore Depth", 0.3, "holeType=Counterbore"),
+        len("csinkDiameter", "Countersink Diameter", 1.0, "holeType=Countersink"),
+        InputDef{.id = "csinkAngle", .label = "Countersink Angle", .tooltip = {}, .type = InputType::Real,
+                 .defaultValue = 1.5707963267948966, .unit = Unit::Degree, .min = 0.1, .max = 3.0,
+                 .visibleWhen = "holeType=Countersink"},
+        choice("flip", "Direction", {"Into material", "Flipped"}, "Holes go opposite the sketch plane's normal; Flipped reverses."),
+        bodyInput("target", "Body"),
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (!sketchFor(doc, getString(in, "sketch"))) return "Sketch: there is no sketch with hole points";
+    return checkBody(in, doc, "target");
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "sketch").empty())
+      if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+    defaultBody(in, doc, "target");
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = sketchFor(doc, getString(in, "sketch"));
+    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+    const std::string target = bodyName(in, doc, "target");
+    sketch::Sketch sk;
+    gp_Ax3 frame;
+    try {
+      sk = sketch::Sketch::fromJson(rec->data);
+      frame = sketch::planeFrame(rec->plane, rec->offset);
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    }
+    std::vector<bool> used(sk.points.size(), false);
+    used[0] = true;
+    for (const auto& e : sk.entities)
+      for (int p : {e.a, e.b, e.center})
+        if (p >= 0) used[p] = true;
+    std::vector<gp_Pnt> centres;
+    for (size_t i = 0; i < sk.points.size(); ++i)
+      if (!used[i]) centres.push_back(sketch::toWorld(frame, sk.points[i].x, sk.points[i].y));
+    if (centres.empty()) throw CommandError(rec->name + " has no points: add points (P) where the holes go");
+
+    TopoDS_Shape body = doc.body(target)->shape;
+    const auto bb = kernel::boundingBox(body);
+    const double size = std::hypot(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z) +
+                        std::hypot(bb.max.x, bb.max.y, bb.max.z) + std::hypot(bb.min.x, bb.min.y, bb.min.z) + 1;
+    gp_Dir into = frame.Direction().Reversed();
+    if (getString(in, "flip") == "Flipped") into.Reverse();
+    const double depth = getString(in, "extent") == "All" ? size : getReal(in, "depth");
+    const double r = getReal(in, "diameter") / 2;
+    const std::string type = getString(in, "holeType");
+    const double eps = 1e-3;   // start just outside the face so the cut is clean
+    try {
+      for (const gp_Pnt& c : centres) {
+        const gp_Pnt start = c.Translated(-gp_Vec(into) * eps);
+        auto cyl = [&](double radius, double length) {
+          const gp_Ax2 ax(start, into);
+          return BRepPrimAPI_MakeCylinder(ax, radius, length + eps).Shape();
+        };
+        TopoDS_Shape tool = cyl(r, depth);
+        if (type == "Counterbore") {
+          const double cr = getReal(in, "cboreDiameter") / 2;
+          if (cr <= r) throw CommandError("Counterbore Diameter must be larger than the hole");
+          tool = kernel::boolean(kernel::BooleanOp::Join, tool, cyl(cr, getReal(in, "cboreDepth")));
+        } else if (type == "Countersink") {
+          const double sr = getReal(in, "csinkDiameter") / 2;
+          if (sr <= r) throw CommandError("Countersink Diameter must be larger than the hole");
+          const double h = (sr - r) / std::tan(getReal(in, "csinkAngle") / 2);
+          const TopoDS_Shape cone = BRepPrimAPI_MakeCone(gp_Ax2(start, into), sr + eps, r, h + eps).Shape();
+          tool = kernel::boolean(kernel::BooleanOp::Join, tool, cone);
+        }
+        body = kernel::boolean(kernel::BooleanOp::Cut, body, tool);
+      }
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(std::string("Hole: ") + e.what() + " (are the points on the body?)");
+    } catch (const Standard_Failure& f) {
+      throw CommandError(std::string("Hole: ") + f.GetMessageString());
+    }
+    doc.replaceBody(target, body);
+  }
+
+private:
+  CommandDef def_;
+};
+
+// ---------------------------------------------------------------------------
+// Patterns of a body.
+kernel::Vec3 axisVec(const std::string& a) {
+  return a == "X" ? kernel::Vec3{1, 0, 0} : a == "Y" ? kernel::Vec3{0, 1, 0} : kernel::Vec3{0, 0, 1};
+}
+
+void placeCopies(Document& doc, const std::string& name, const std::vector<TopoDS_Shape>& copies, bool join) {
+  if (join) {
+    TopoDS_Shape all = doc.body(name)->shape;
+    for (const auto& c : copies) all = kernel::boolean(kernel::BooleanOp::Join, all, c);
+    doc.replaceBody(name, all);
+  } else {
+    for (const auto& c : copies) doc.addBody(doc.nextBodyName(), c);
+  }
+}
+
+class RectangularPattern final : public Command {
+public:
+  RectangularPattern() {
+    commonDef(def_, kCmdRectPattern, "Rectangular Pattern", "Copies a body in rows and columns.", "pattern-rect", "Create");
+    auto count = [](const char* id, const char* label, std::int64_t v) {
+      return InputDef{.id = id, .label = label, .tooltip = "Including the original.", .type = InputType::Integer,
+                      .defaultValue = v, .unit = Unit::None, .min = 1.0, .max = 1000.0};
+    };
+    auto spacing = [](const char* id, const char* label) {
+      return InputDef{.id = id, .label = label, .tooltip = "Distance between copies.", .type = InputType::Real,
+                      .defaultValue = 2.0, .unit = Unit::Millimeter};
+    };
+    def_.inputs = {bodyInput(),
+                   choice("direction1", "Direction 1", {"X", "Y", "Z"}, {}), count("quantity1", "Quantity", 3),
+                   spacing("distance1", "Spacing"),
+                   choice("direction2", "Direction 2", {"Y", "Z", "X"}, {}), count("quantity2", "Quantity 2", 1),
+                   spacing("distance2", "Spacing 2"),
+                   choice("result", "Result", {"Join", "New Bodies"}, "Join: one body; New Bodies: separate copies.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    const auto d1 = axisVec(getString(in, "direction1")), d2 = axisVec(getString(in, "direction2"));
+    const double s1 = getReal(in, "distance1"), s2 = getReal(in, "distance2");
+    std::vector<TopoDS_Shape> copies;
+    try {
+      for (std::int64_t i = 0; i < getInt(in, "quantity1"); ++i)
+        for (std::int64_t j = 0; j < getInt(in, "quantity2"); ++j) {
+          if (i == 0 && j == 0) continue;
+          const kernel::Vec3 off{d1.x * s1 * i + d2.x * s2 * j, d1.y * s1 * i + d2.y * s2 * j, d1.z * s1 * i + d2.z * s2 * j};
+          copies.push_back(kernel::moved(s, off, {}, {0, 0, 1}, 0));
+        }
+      placeCopies(doc, name, copies, getString(in, "result") == "Join");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class CircularPattern final : public Command {
+public:
+  CircularPattern() {
+    commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies a body around an axis through the origin.", "pattern-circ", "Create");
+    def_.inputs = {bodyInput(),
+                   choice("axis", "Axis", {"Z", "Y", "X"}, "World axis through the origin."),
+                   InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
+                            .type = InputType::Integer, .defaultValue = std::int64_t{6}, .unit = Unit::None,
+                            .min = 2.0, .max = 1000.0},
+                   InputDef{.id = "angle", .label = "Total Angle", .tooltip = "360 deg: evenly around.",
+                            .type = InputType::Real, .defaultValue = 2 * 3.14159265358979323846, .unit = Unit::Degree},
+                   choice("result", "Result", {"Join", "New Bodies"}, {})};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    const auto n = getInt(in, "quantity");
+    const double total = getReal(in, "angle");
+    const bool full = std::abs(std::abs(total) - 2 * 3.14159265358979323846) < 1e-9;
+    const double step = full ? total / n : total / std::max<std::int64_t>(n - 1, 1);
+    std::vector<TopoDS_Shape> copies;
+    try {
+      for (std::int64_t i = 1; i < n; ++i) copies.push_back(kernel::moved(s, {}, {}, axisVec(getString(in, "axis")), step * i));
+      placeCopies(doc, name, copies, getString(in, "result") == "Join");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
@@ -1052,6 +1263,9 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(makeSphere());
   registry.add(makeTorus());
   registry.add(makeCone());
+  registry.add(std::make_unique<Hole>());
+  registry.add(std::make_unique<RectangularPattern>());
+  registry.add(std::make_unique<CircularPattern>());
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));

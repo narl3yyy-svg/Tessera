@@ -199,6 +199,24 @@ private:
         r.push_back(P(E(e[0]).center).x - P(E(e[1]).center).x);
         r.push_back(P(E(e[0]).center).y - P(E(e[1]).center).y);
         return;
+      case ConstraintType::Collinear: {
+        if (e.size() != 2 || isRound(e[0]) || isRound(e[1])) bad();
+        r.push_back(pointLineDistance(E(e[1]).a, e[0]));
+        r.push_back(pointLineDistance(E(e[1]).b, e[0]));
+        return;
+      }
+      case ConstraintType::Symmetry: {
+        if (p.size() != 2 || e.size() != 1 || isRound(e[0])) bad();
+        // The midpoint lies on the line and the pair is perpendicular to it.
+        const Entity& l = E(e[0]);
+        double dx, dy;
+        dir(e[0], dx, dy);
+        const double n = std::max(std::hypot(dx, dy), 1e-12);
+        const double mx = (P(p[0]).x + P(p[1]).x) / 2, my = (P(p[0]).y + P(p[1]).y) / 2;
+        r.push_back((dx * (my - P(l.a).y) - dy * (mx - P(l.a).x)) / n);
+        r.push_back((dx * (P(p[1]).x - P(p[0]).x) + dy * (P(p[1]).y - P(p[0]).y)) / n);
+        return;
+      }
       case ConstraintType::Fix:
         if (p.size() != 1) bad();
         r.push_back(P(p[0]).x - c.value);

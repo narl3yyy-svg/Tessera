@@ -289,6 +289,19 @@ void constraintIcon(QPainter& p, const QString& kind) {
   } else if (kind == QLatin1String("midpoint")) {
     p.drawLine(QPointF(8, 44), QPointF(56, 20));
     dot(p, 32, 32, kAccent);
+  } else if (kind == QLatin1String("collinear")) {
+    p.drawLine(QPointF(4, 46), QPointF(26, 34));
+    p.drawLine(QPointF(38, 28), QPointF(60, 16));
+    p.setPen(QPen(kAccent, 1.5, Qt::DashLine));
+    p.drawLine(QPointF(26, 34), QPointF(38, 28));
+  } else if (kind == QLatin1String("symmetry")) {
+    p.setPen(QPen(kAccent, 2, Qt::DashLine));
+    p.drawLine(QPointF(32, 4), QPointF(32, 60));
+    dot(p, 14, 30);
+    dot(p, 50, 30);
+    p.setPen(QPen(kLine, 2.5));
+    p.drawLine(QPointF(8, 46), QPointF(24, 46));
+    p.drawLine(QPointF(40, 46), QPointF(56, 46));
   } else if (kind == QLatin1String("concentric")) {
     p.drawEllipse(QPointF(32, 32), 24, 24);
     p.drawEllipse(QPointF(32, 32), 12, 12);
@@ -639,6 +652,68 @@ void draftIcon(QPainter& p) {
   face(p, {QPointF(54, 56), QPointF(44, 8), QPointF(36, 8), QPointF(46, 56)}, QColor(220, 80, 70));
 }
 
+
+void centerRectIcon(QPainter& p) {
+  stroke(p);
+  p.drawRect(QRectF(10, 16, 44, 32));
+  p.setPen(QPen(kAccent, 1.5, Qt::DashLine));
+  p.drawLine(QPointF(10, 16), QPointF(54, 48));
+  p.drawLine(QPointF(54, 16), QPointF(10, 48));
+  dot(p, 32, 32);
+}
+
+void polygonIcon(QPainter& p) {
+  stroke(p);
+  QPolygonF hex;
+  for (int i = 0; i < 6; ++i) hex << QPointF(32 + 24 * std::cos(i * M_PI / 3), 32 + 24 * std::sin(i * M_PI / 3));
+  p.drawPolygon(hex);
+  dot(p, 32, 32);
+}
+
+void slotIcon(QPainter& p) {
+  stroke(p);
+  p.drawRoundedRect(QRectF(6, 20, 52, 24), 12, 12);
+  dot(p, 18, 32);
+  dot(p, 46, 32);
+}
+
+void trimIcon(QPainter& p) {
+  stroke(p);
+  p.drawLine(QPointF(8, 40), QPointF(30, 40));
+  p.setPen(QPen(QColor(220, 60, 50), 3, Qt::DashLine));
+  p.drawLine(QPointF(30, 40), QPointF(56, 40));
+  // scissors
+  p.setPen(QPen(kLine, 2.5));
+  p.setBrush(Qt::NoBrush);
+  p.drawEllipse(QPointF(20, 16), 6, 6);
+  p.drawEllipse(QPointF(38, 16), 6, 6);
+  p.drawLine(QPointF(24, 20), QPointF(36, 34));
+  p.drawLine(QPointF(34, 20), QPointF(22, 34));
+}
+
+void holeIcon(QPainter& p) {
+  cube(p, 6, 10, 52, kTop, kLeft, kRight);
+  p.setBrush(kLine);
+  p.drawEllipse(QRectF(24, 17, 16, 8));
+  p.setPen(QPen(kAccent, 2, Qt::DashLine));
+  p.drawLine(QPointF(32, 4), QPointF(32, 30));
+}
+
+void patternIcon(QPainter& p, bool circular) {
+  if (circular) {
+    for (int i = 0; i < 6; ++i) {
+      const double a = i * M_PI / 3;
+      cube(p, 26 + 20 * std::cos(a), 24 + 20 * std::sin(a), 12, kTop, kLeft, kRight);
+    }
+    p.setPen(QPen(kAccent, 2, Qt::DashLine));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(32, 32), 20, 20);
+  } else {
+    for (int i = 0; i < 3; ++i)
+      for (int j = 0; j < 2; ++j) cube(p, 4 + i * 20, 8 + j * 26, 16, kTop, kLeft, kRight);
+  }
+}
+
 void fallback(QPainter& p, const QString& name) {
   p.setBrush(kTop);
   p.drawRoundedRect(QRectF(6, 6, 52, 52), 8, 8);
@@ -682,6 +757,13 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("construction")) constructionIcon(p);
   else if (name.startsWith(QLatin1String("c-"))) constraintIcon(p, name.mid(2));
   else if (name == QLatin1String("shell")) shellIcon(p);
+  else if (name == QLatin1String("center-rectangle")) centerRectIcon(p);
+  else if (name == QLatin1String("polygon")) polygonIcon(p);
+  else if (name == QLatin1String("slot")) slotIcon(p);
+  else if (name == QLatin1String("trim")) trimIcon(p);
+  else if (name == QLatin1String("hole")) holeIcon(p);
+  else if (name == QLatin1String("pattern-rect")) patternIcon(p, false);
+  else if (name == QLatin1String("pattern-circ")) patternIcon(p, true);
   else if (name == QLatin1String("combine")) combineIcon(p);
   else if (name == QLatin1String("split")) splitIcon(p);
   else if (name == QLatin1String("move")) moveIcon(p);

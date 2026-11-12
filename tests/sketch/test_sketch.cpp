@@ -201,3 +201,28 @@ TEST(sketch_remove_points_keeps_standalone_points) {
   s.removePoints({0});   // the origin stays
   CHECK_EQ(s.points.size(), size_t(1));
 }
+
+TEST(sketch_collinear_and_symmetry) {
+  Sketch s;
+  const int a = s.addLine(0, 0, 2, 0.1);
+  const int b = s.addLine(3, 0.5, 5, 0.7);
+  s.addConstraint(C(ConstraintType::Collinear, {}, {a, b}));
+  CHECK(solve(s).ok);
+  const auto& la = s.entities[a];
+  const auto& lb = s.entities[b];
+  auto cross = [&](int p) {
+    const double dx = s.points[la.b].x - s.points[la.a].x, dy = s.points[la.b].y - s.points[la.a].y;
+    return dx * (s.points[p].y - s.points[la.a].y) - dy * (s.points[p].x - s.points[la.a].x);
+  };
+  CHECK_NEAR(cross(lb.a), 0, 1e-8);
+  CHECK_NEAR(cross(lb.b), 0, 1e-8);
+
+  Sketch t;
+  const int axis = t.addLine(0, -2, 0.01, 2, true);
+  const int p = t.addPoint(-1.2, 0.5), q = t.addPoint(0.9, 0.7);
+  t.addConstraint(C(ConstraintType::Vertical, {}, {axis}));
+  t.addConstraint(C(ConstraintType::Symmetry, {p, q}, {axis}));
+  CHECK(solve(t).ok);
+  CHECK_NEAR(t.points[p].x + t.points[q].x, 2 * t.points[t.entities[axis].a].x, 1e-8);
+  CHECK_NEAR(t.points[p].y, t.points[q].y, 1e-8);
+}

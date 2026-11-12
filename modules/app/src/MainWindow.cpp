@@ -596,7 +596,7 @@ void MainWindow::buildShortcuts() {
       {Qt::Key_L, SketchEditor::Tool::Line},      {Qt::Key_R, SketchEditor::Tool::Rectangle},
       {Qt::Key_C, SketchEditor::Tool::Circle},    {Qt::Key_A, SketchEditor::Tool::Arc},
       {Qt::Key_P, SketchEditor::Tool::Point},     {Qt::Key_D, SketchEditor::Tool::Dimension},
-      {Qt::Key_Q, SketchEditor::Tool::Select}};
+      {Qt::Key_Q, SketchEditor::Tool::Select},    {Qt::Key_T, SketchEditor::Tool::Trim}};
   for (const auto& [key, tool] : keys) {
     auto* s = new QShortcut(QKeySequence(key), this);
     s->setEnabled(false);

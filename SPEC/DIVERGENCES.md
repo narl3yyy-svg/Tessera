@@ -38,3 +38,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P4-3 | Section Analysis and the units choice for new designs are app settings; section analysis is not saved in the document | P4 scope | later |
 | P4-4 | Export writes mm for mesh and STEP/IGES files; F3D, IPT, SKP, SAT, DWG, USD are not available (proprietary or unsupported by the kernel) | Formats | accepted |
 | P4-5 | ASSEMBLE, CONFIGURE, CONSTRUCT and several INSPECT/INSERT entries, and the SURFACE/MESH/SHEET METAL/PLASTIC/MANAGE/UTILITIES tabs, are shown disabled | Not built yet | see ROADMAP.md |
+| P5-1 | Hole places holes at a sketch's points (not by clicking on a face); the direction is opposite the sketch plane's normal unless flipped | P5 scope | P6 (face point placement) |
+| P5-2 | Patterns copy whole bodies (not features or faces); circular patterns turn about a world axis through the origin | P5 scope | P6 |
+| P5-3 | Trim removes up to the nearest crossings; trimmed pieces do not get coincident constraints to the crossing curves | P5 scope | P6 |
+| P5-4 | Size boxes exist for Line (length, angle), Rectangle, Center Rectangle (width, height), Circle (diameter), Polygon (diameter, sides) and Slot (length, width); not yet for arcs | P5 scope | P6 |

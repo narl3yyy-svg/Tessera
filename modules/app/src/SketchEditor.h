@@ -32,6 +32,7 @@ public:
   enum class Tool {
     Select, Line, Rectangle, Circle, Arc, Point, Dimension,
     Coincident, HorizontalVertical, Parallel, Perpendicular, Equal, Tangent, Fix, Midpoint, Concentric,
+    CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -68,6 +69,11 @@ public:
   // value into the open dimension box.
   void clickAt(double x, double y);
   bool submitValue(const QString& text);
+  void hoverAt(double x, double y) {   // as if the cursor moved there (tests, screenshots)
+    cursorX_ = x;
+    cursorY_ = y;
+    updatePreview(x, y);
+  }
 
   // ViewInteractor
   void mousePress(QMouseEvent* e) override;
@@ -75,6 +81,7 @@ public:
   void mouseRelease(QMouseEvent* e) override;
   void mouseDoubleClick(QMouseEvent* e) override;
   bool keyPress(QKeyEvent* e) override;
+  bool eventFilter(QObject* watched, QEvent* e) override;
 
   // Typing a value while drawing (like the on-canvas input): a length for a
   // line, a diameter for a circle, "w x h" for a rectangle. For tests too.
@@ -117,9 +124,33 @@ private:
   std::optional<std::pair<double, double>> labelAnchor(int constraintIndex) const;
   QString labelText(const sketch::Constraint& c) const;
 
+  // On-canvas size boxes (the heads-up inputs). After the first click of a
+  // drawing tool they show the live sizes; typing a value locks it (Tab moves
+  // to the next box, Enter creates the shape), and locked values become
+  // dimensions on the new geometry.
+  struct HudField {
+    QPointer<QLineEdit> edit;
+    enum Kind { Length, Angle, Count } kind = Length;
+    bool locked = false;
+    bool editing = false;
+    double value = 0;
+  };
+  std::vector<HudField> hud_;
+  bool hudTool() const;
+  void ensureHud();
+  void clearHud();
+  bool hudLocked(size_t i) const { return i < hud_.size() && hud_[i].locked; }
+  double hudValue(size_t i) const { return i < hud_.size() ? hud_[i].value : 0; }
+  bool hudAnyLocked() const;
+  bool lockField(size_t i);
+  void commitHud();
+  std::pair<double, double> hudTarget(double x, double y) const;
+  void updateHud(double x, double y);
+  int polygonSides() const;
+  void trimAt(double x, double y);
+
   void snapToGrid(double& x, double& y) const;
   QString lengthText(double cm) const;
-  void openTypedBox(const QString& initial);
 
   doc::Session& session_;
   Unit unit_ = Unit::Millimeter;

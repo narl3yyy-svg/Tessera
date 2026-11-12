@@ -138,6 +138,44 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     return fail("typed line is not 30 mm");
   w.cancelSketch();
 
+  // Sizes typed into the boxes before the shape exists.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::CenterRectangle);
+  ed->clickAt(0, 0);
+  if (!ed->typeValue(QStringLiteral("60 x 30"))) return fail("center rectangle sizes");
+  ed->setTool(Tool::Polygon);
+  ed->clickAt(10, 10);
+  if (!ed->typeValue(QStringLiteral("20, 8"))) return fail("polygon diameter and sides");
+  ed->setTool(Tool::Slot);
+  ed->clickAt(-10, -10);
+  if (!ed->typeValue(QStringLiteral("30 x 8"))) return fail("slot length and width");
+  if (!ed->status().ok) return fail("typed shapes do not solve");
+  {
+    const auto& sk2 = ed->sketch();
+    double minx = 1e9, maxx = -1e9;
+    for (const auto& e : sk2.entities)
+      if (e.type == tsr::sketch::EntityType::Line && !e.construction && std::abs(sk2.points[e.a].y - sk2.points[e.b].y) < 1e-9 &&
+          std::abs(sk2.points[e.a].x) < 4 && std::abs(sk2.points[e.b].x) < 4) {
+        minx = std::min({minx, sk2.points[e.a].x, sk2.points[e.b].x});
+        maxx = std::max({maxx, sk2.points[e.a].x, sk2.points[e.b].x});
+      }
+    if (std::abs(maxx - minx - 6.0) > 1e-6) return fail("center rectangle is not 60 mm wide");
+  }
+  // Trim: a line across a circle loses its middle part.
+  const size_t before = ed->sketch().entities.size();
+  ed->setTool(Tool::Line);
+  ed->clickAt(20, 0);
+  ed->clickAt(40, 0);
+  ed->escape();
+  ed->setTool(Tool::Circle);
+  ed->clickAt(30, 0);
+  ed->clickAt(32, 0);
+  ed->setTool(Tool::Trim);
+  ed->clickAt(30.5, 0);   // on the line, inside the circle
+  if (ed->sketch().entities.size() != before + 3) return fail("trim did not split the line");
+  w.cancelSketch();
+
   // Fillet an edge through the dialog (edge picked as the canvas would).
   s.newDocument();
   if (!s.run("tsr.primitive.box", {{"length", 2.0}, {"width", 2.0}, {"height", 2.0}}).empty()) return fail("box");
@@ -188,6 +226,8 @@ int main(int argc, char** argv) {
   QCommandLineOption commandOpt(QStringLiteral("start-command"),
                                 QStringLiteral("Open this command's dialog after startup (screenshots)."), QStringLiteral("id"));
   parser.addOption(commandOpt);
+  QCommandLineOption hudOpt(QStringLiteral("demo-hud"), QStringLiteral("Start a rectangle with its size boxes (screenshots)."));
+  parser.addOption(hudOpt);
   parser.addOption(smokeOpt);
   parser.addOption(scriptOpt);
   parser.addOption(shotOpt);
@@ -220,6 +260,15 @@ int main(int argc, char** argv) {
       return 1;
     }
     window.viewport()->fitAll();
+  }
+  if (parser.isSet(hudOpt)) {
+    QTimer::singleShot(500, &window, [&window] {
+      if (auto* ed = window.startSketch(QStringLiteral("XY"))) {
+        ed->setTool(tsr::app::SketchEditor::Tool::Rectangle);
+        ed->clickAt(0, 0);
+        ed->hoverAt(4.0, 2.5);
+      }
+    });
   }
   if (parser.isSet(commandOpt)) {
     const QString id = parser.value(commandOpt);

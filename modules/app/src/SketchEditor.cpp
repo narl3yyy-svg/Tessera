@@ -12,18 +12,22 @@
 #include <Prs3d_PointAspect.hxx>
 
 #include <QCursor>
+#include <QStyle>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QRegularExpression>
 #include <QMouseEvent>
 
 #include <algorithm>
+#include <optional>
+#include <tuple>
 #include <cmath>
 
 namespace tsr::app {
 
 using sketch::Constraint;
 using sketch::ConstraintType;
+using sketch::Entity;
 using sketch::EntityType;
 
 namespace {
@@ -128,9 +132,9 @@ void SketchEditor::setTool(Tool t) {
   clearPreview();
   switch (t) {
     case Tool::Select: emit message(tr("Select: click to select, drag points or lines to move them, Delete removes.")); break;
-    case Tool::Line: emit message(tr("Line: click points. Click the first point to close; double-click or Esc to stop.")); break;
-    case Tool::Rectangle: emit message(tr("Rectangle: click two opposite corners.")); break;
-    case Tool::Circle: emit message(tr("Circle: click the centre, then a point on the circle.")); break;
+    case Tool::Line: emit message(tr("Line: click points, or type the length (Tab: angle) and press Enter. Click the first point to close.")); break;
+    case Tool::Rectangle: emit message(tr("Rectangle: click a corner; type width, Tab, height, Enter (or click the other corner).")); break;
+    case Tool::Circle: emit message(tr("Circle: click the centre; type the diameter and press Enter (or click).")); break;
     case Tool::Arc: emit message(tr("Arc: click the centre, the start, then the end (counter-clockwise).")); break;
     case Tool::Point: emit message(tr("Point: click to place points.")); break;
     case Tool::Dimension: emit message(tr("Dimension: click a line, circle or arc; or two points/lines. Type the value, Enter.")); break;
@@ -143,11 +147,18 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Fix: emit message(tr("Fix: click a point or curve to lock it in place.")); break;
     case Tool::Midpoint: emit message(tr("Midpoint: click a point, then a line.")); break;
     case Tool::Concentric: emit message(tr("Concentric: click two circles/arcs.")); break;
+    case Tool::CenterRectangle: emit message(tr("Center Rectangle: click the centre, then a corner. Type sizes in the boxes (Tab, Enter).")); break;
+    case Tool::Polygon: emit message(tr("Polygon: click the centre, then a corner. The boxes take the diameter and the number of sides.")); break;
+    case Tool::Slot: emit message(tr("Slot: click one end centre, then the other. The boxes take length and width.")); break;
+    case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
+    case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
+    case Tool::Symmetry: emit message(tr("Symmetry: click two points, then the line of symmetry.")); break;
   }
   rebuild();
 }
 
 void SketchEditor::resetSteps() {
+  clearHud();
   steps_.clear();
   picks_.clear();
   chainStart_ = -1;
@@ -380,6 +391,12 @@ void SketchEditor::clickAt(double x, double y) {
 }
 
 void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPointF& widgetPos) {
+  // Typed sizes override the cursor (the cursor still gives the direction).
+  const bool locked = hudTool() && !steps_.empty() && hudAnyLocked();
+  if (hudTool() && !steps_.empty()) std::tie(x, y) = hudTarget(x, y);
+  auto exact = [&](double px, double py, int exclude = -1) {
+    return locked ? Pick{{}, px, py} : pickPoint(px, py, exclude);
+  };
   switch (tool_) {
     case Tool::Select: {
       const Hit h = hitTest(x, y);
@@ -396,8 +413,10 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         return;
       }
       checkpoint();
+      const bool lockLen = hudLocked(0);
+      const double len = hudValue(0);
       const int a = materialize(steps_.back());
-      const Pick end = pickPoint(x, y, a);
+      const Pick end = exact(x, y, a);
       if (std::hypot(end.x - sk_.points[a].x, end.y - sk_.points[a].y) < tolerance() / 2) {
         undo_.pop_back();
         return;
@@ -406,7 +425,9 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       if (chainStart_ < 0) chainStart_ = a;
       const int l = sk_.addLine(a, b, construction_);
       autoHorizontalVertical(l);
+      if (lockLen) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l}, len});
       const bool closed = end.hit.kind == Hit::Point && b == chainStart_;
+      clearHud();
       solveAndShow();
       if (closed) {
         resetSteps();
@@ -421,8 +442,10 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         return;
       }
       const Pick a = steps_.front();
-      const Pick c = pickPoint(x, y);
+      const Pick c = exact(x, y);
       if (std::abs(c.x - a.x) < tolerance() / 2 || std::abs(c.y - a.y) < tolerance() / 2) return;
+      const bool lockW = hudLocked(0), lockH = hudLocked(1);
+      const double w = hudValue(0), h = hudValue(1);
       checkpoint();
       const int p0 = materialize(a);
       const int p2 = materialize(c);
@@ -432,11 +455,107 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       const int l2 = sk_.addLine(p2, p3, construction_), l3 = sk_.addLine(p3, p0, construction_);
       for (int l : {l0, l2}) sk_.addConstraint({ConstraintType::Horizontal, {}, {l}});
       for (int l : {l1, l3}) sk_.addConstraint({ConstraintType::Vertical, {}, {l}});
+      if (lockW) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l0}, w});
+      if (lockH) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l1}, h});
       resetSteps();
       solveAndShow();
       if (!res_.ok) undo();
       return;
     }
+    case Tool::CenterRectangle: {
+      if (steps_.empty()) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick c = steps_.front();
+      const double hx = std::abs(x - c.x), hy = std::abs(y - c.y);
+      if (hx < tolerance() / 4 || hy < tolerance() / 4) return;
+      const bool lockW = hudLocked(0), lockH = hudLocked(1);
+      const double w = hudValue(0), h = hudValue(1);
+      checkpoint();
+      const int pc = materialize(c);
+      const double cx = sk_.points[pc].x, cy = sk_.points[pc].y;
+      const int p0 = sk_.addPoint(cx - hx, cy - hy), p1 = sk_.addPoint(cx + hx, cy - hy);
+      const int p2 = sk_.addPoint(cx + hx, cy + hy), p3 = sk_.addPoint(cx - hx, cy + hy);
+      const int l0 = sk_.addLine(p0, p1, construction_), l1 = sk_.addLine(p1, p2, construction_);
+      const int l2 = sk_.addLine(p2, p3, construction_), l3 = sk_.addLine(p3, p0, construction_);
+      const int d0 = sk_.addLine(p0, p2, true);
+      sk_.addLine(p1, p3, true);
+      for (int l : {l0, l2}) sk_.addConstraint({ConstraintType::Horizontal, {}, {l}});
+      for (int l : {l1, l3}) sk_.addConstraint({ConstraintType::Vertical, {}, {l}});
+      sk_.addConstraint({ConstraintType::Midpoint, {pc}, {d0}});
+      if (lockW) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l0}, w});
+      if (lockH) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l1}, h});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::Polygon: {
+      if (steps_.empty()) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick c = steps_.front();
+      const double r = std::hypot(x - c.x, y - c.y);
+      if (r < tolerance() / 2) return;
+      const int n = polygonSides();
+      const bool lockD = hudLocked(0);
+      const double d = hudValue(0);
+      const double a0 = std::atan2(y - c.y, x - c.x);
+      checkpoint();
+      const int pc = materialize(c);
+      const int circle = sk_.addCircleAt(pc, r, true);
+      std::vector<int> pts, lines;
+      for (int i = 0; i < n; ++i) {
+        const double a = a0 + 2 * kPi * i / n;
+        pts.push_back(sk_.addPoint(sk_.points[pc].x + r * std::cos(a), sk_.points[pc].y + r * std::sin(a)));
+      }
+      for (int i = 0; i < n; ++i) lines.push_back(sk_.addLine(pts[i], pts[(i + 1) % n], construction_));
+      for (int p : pts) sk_.addConstraint({ConstraintType::PointOnEntity, {p}, {circle}});
+      for (int i = 1; i < n; ++i) sk_.addConstraint({ConstraintType::Equal, {}, {lines[0], lines[i]}});
+      if (lockD) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {circle}, d});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::Slot: {
+      if (steps_.empty()) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick c1 = steps_.front();
+      const double len = std::hypot(x - c1.x, y - c1.y);
+      if (len < tolerance() / 2) return;
+      const bool lockL = hudLocked(0), lockW = hudLocked(1);
+      const double width = lockW ? hudValue(1) : len / 3;
+      const double r = width / 2;
+      const double ux = (x - c1.x) / len, uy = (y - c1.y) / len, nx = -uy, ny = ux;
+      checkpoint();
+      const int pc1 = materialize(c1);
+      const double x1 = sk_.points[pc1].x, y1 = sk_.points[pc1].y;
+      const int pc2 = sk_.addPoint(x1 + ux * len, y1 + uy * len);
+      const double x2 = sk_.points[pc2].x, y2 = sk_.points[pc2].y;
+      const int a1 = sk_.addPoint(x1 + nx * r, y1 + ny * r), a2 = sk_.addPoint(x2 + nx * r, y2 + ny * r);
+      const int b1 = sk_.addPoint(x1 - nx * r, y1 - ny * r), b2 = sk_.addPoint(x2 - nx * r, y2 - ny * r);
+      const int la = sk_.addLine(a1, a2, construction_), lb = sk_.addLine(b2, b1, construction_);
+      const int arc2 = sk_.addArc(pc2, b2, a2, construction_), arc1 = sk_.addArc(pc1, a1, b1, construction_);
+      const int axis = sk_.addLine(pc1, pc2, true);
+      for (int l : {la, lb})
+        for (int arc : {arc1, arc2}) sk_.addConstraint({ConstraintType::Tangent, {}, {l, arc}});
+      sk_.addConstraint({ConstraintType::Equal, {}, {arc1, arc2}});
+      autoHorizontalVertical(axis);
+      if (lockL) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {axis}, hudValue(0)});
+      if (lockW) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Radius, {}, {arc1}, r});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::Trim:
+      trimAt(x, y);
+      return;
     case Tool::Circle: {
       if (steps_.empty()) {
         steps_.push_back(pickPoint(x, y));
@@ -445,8 +564,10 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       const Pick c = steps_.front();
       const double r = std::hypot(x - c.x, y - c.y);
       if (r < tolerance() / 2) return;
+      const bool lockD = hudLocked(0);
       checkpoint();
-      sk_.addCircleAt(materialize(c), r, construction_);
+      const int circle = sk_.addCircleAt(materialize(c), r, construction_);
+      if (lockD) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {circle}, hudValue(0)});
       resetSteps();
       solveAndShow();
       return;
@@ -592,6 +713,7 @@ void SketchEditor::autoHorizontalVertical(int line) {
 
 void SketchEditor::constraintPick(double x, double y) {
   const bool wantsEntity = tool_ == Tool::Parallel || tool_ == Tool::Perpendicular || tool_ == Tool::Equal ||
+                           tool_ == Tool::Collinear || (tool_ == Tool::Symmetry && picks_.size() == 2) ||
                            tool_ == Tool::Tangent || tool_ == Tool::Concentric || tool_ == Tool::HorizontalVertical ||
                            (tool_ == Tool::Midpoint && !picks_.empty());
   Hit h = wantsEntity ? hitEntity(x, y) : hitTest(x, y);
@@ -682,6 +804,19 @@ void SketchEditor::constraintPick(double x, double y) {
     case Tool::Concentric:
       if (!isRound(a) || !isRound(b) || a.index == b.index) return fail(tr("Pick two circles/arcs."));
       return done({{ConstraintType::Concentric, {}, {a.index, b.index}}});
+    case Tool::Collinear:
+      if (!isLine(a) || !isLine(b) || a.index == b.index) return fail(tr("Pick two different lines."));
+      return done({{ConstraintType::Collinear, {}, {a.index, b.index}}});
+    case Tool::Symmetry: {
+      if (picks_.size() < 3) {
+        if (a.kind != Hit::Point || b.kind != Hit::Point) return fail(tr("Pick two points first, then the line."));
+        emit message(tr("Now pick the line of symmetry."));
+        return;
+      }
+      const Hit l = picks_[2].hit;
+      if (!isLine(l)) return fail(tr("The third pick must be a line."));
+      return done({{ConstraintType::Symmetry, {a.index, b.index}, {l.index}}});
+    }
     case Tool::Midpoint:
       if (a.kind != Hit::Point || !isLine(b)) return fail(tr("Pick a point, then a line."));
       return done({{ConstraintType::Midpoint, {a.index}, {b.index}}});
@@ -823,103 +958,446 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
   });
 }
 
-bool SketchEditor::keyPress(QKeyEvent* e) {
-  const QString t = e->text();
-  if (steps_.empty() || t.isEmpty() || valueBox_) return false;
-  if (!(t[0].isDigit() || t[0] == QLatin1Char('.') || t[0] == QLatin1Char('-'))) return false;
-  if (tool_ != Tool::Line && tool_ != Tool::Circle && tool_ != Tool::Rectangle) return false;
-  openTypedBox(t);
+// ---------------------------------------------------------------------------
+// On-canvas size boxes
+
+bool SketchEditor::hudTool() const {
+  switch (tool_) {
+    case Tool::Line:
+    case Tool::Rectangle:
+    case Tool::CenterRectangle:
+    case Tool::Circle:
+    case Tool::Polygon:
+    case Tool::Slot:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SketchEditor::hudAnyLocked() const {
+  for (size_t i = 0; i < hud_.size(); ++i)
+    if (hud_[i].locked && hud_[i].kind != HudField::Count) return true;
+  return false;
+}
+
+int SketchEditor::polygonSides() const {
+  if (tool_ == Tool::Polygon && hud_.size() > 1 && hud_[1].locked) return std::clamp(static_cast<int>(hud_[1].value), 3, 64);
+  return 6;
+}
+
+void SketchEditor::clearHud() {
+  for (auto& f : hud_)
+    if (f.edit) {
+      f.edit->removeEventFilter(this);
+      f.edit->deleteLater();
+    }
+  hud_.clear();
+  if (view_) view_->setFocus();
+}
+
+void SketchEditor::ensureHud() {
+  if (!view_ || !hudTool() || steps_.empty()) {
+    if (!hud_.empty()) clearHud();
+    return;
+  }
+  if (!hud_.empty()) return;
+  std::vector<std::pair<HudField::Kind, QString>> fields;
+  switch (tool_) {
+    case Tool::Line: fields = {{HudField::Length, tr("Length")}, {HudField::Angle, tr("Angle")}}; break;
+    case Tool::Rectangle:
+    case Tool::CenterRectangle: fields = {{HudField::Length, tr("Width")}, {HudField::Length, tr("Height")}}; break;
+    case Tool::Circle: fields = {{HudField::Length, tr("Diameter")}}; break;
+    case Tool::Polygon: fields = {{HudField::Length, tr("Diameter")}, {HudField::Count, tr("Sides")}}; break;
+    case Tool::Slot: fields = {{HudField::Length, tr("Length")}, {HudField::Length, tr("Width")}}; break;
+    default: return;
+  }
+  for (const auto& [kind, name] : fields) {
+    HudField f;
+    f.kind = kind;
+    auto* e = new QLineEdit(view_);
+    e->setObjectName(QStringLiteral("hud") + name);
+    e->setToolTip(tr("%1: type a value, Tab for the next box, Enter to create").arg(name));
+    e->setAlignment(Qt::AlignCenter);
+    e->setFixedWidth(kind == HudField::Count ? 60 : 110);
+    e->setStyleSheet(QStringLiteral("QLineEdit { background: rgba(30,34,40,215); color: #f0f2f5; border: 1px solid #5b6472;"
+                                    " border-radius: 3px; padding: 2px; }"
+                                    "QLineEdit[locked=\"true\"] { border: 2px solid #3d8ee8; font-weight: bold; }"));
+    e->installEventFilter(this);
+    const size_t index = hud_.size();
+    connect(e, &QLineEdit::textEdited, this, [this, index] {
+      if (index < hud_.size()) hud_[index].editing = true;
+    });
+    e->show();
+    f.edit = e;
+    hud_.push_back(f);
+  }
+}
+
+bool SketchEditor::lockField(size_t i) {
+  if (i >= hud_.size() || !hud_[i].edit || !hud_[i].editing) return i < hud_.size() && hud_[i].locked;
+  HudField& f = hud_[i];
+  const std::string text = f.edit->text().trimmed().toStdString();
+  std::optional<double> v;
+  if (f.kind == HudField::Count) {
+    try {
+      v = static_cast<double>(std::stoi(text));
+    } catch (...) {
+    }
+  } else {
+    v = parseQuantity(text, f.kind == HudField::Angle ? Unit::Degree : unit_);
+  }
+  f.editing = false;
+  if (!v || (f.kind != HudField::Angle && *v <= 0)) {
+    emit message(tr("'%1' is not a valid value.").arg(f.edit->text()));
+    f.locked = false;
+    f.edit->setProperty("locked", false);
+    return false;
+  }
+  f.value = *v;
+  f.locked = true;
+  f.edit->setProperty("locked", true);
+  f.edit->style()->unpolish(f.edit);
+  f.edit->style()->polish(f.edit);
   return true;
 }
 
-void SketchEditor::openTypedBox(const QString& initial) {
-  auto* box = new QLineEdit(view_);
-  valueBox_ = box;
-  box->setObjectName(QStringLiteral("typedValue"));
-  box->setFixedWidth(150);
-  box->setPlaceholderText(tool_ == Tool::Rectangle ? tr("width x height") : QString());
-  box->move(view_->mapFromGlobal(QCursor::pos()) + QPoint(16, 8));
-  box->setText(initial);
-  box->show();
-  box->setFocus();
-  connect(box, &QLineEdit::returnPressed, this, [this, box] {
-    const QString text = box->text();
-    valueBox_ = nullptr;
-    box->deleteLater();
-    typeValue(text);
-  });
-  connect(box, &QLineEdit::editingFinished, this, [this, box] {
-    if (valueBox_ == box) valueBox_ = nullptr;
-    box->deleteLater();
-  });
+std::pair<double, double> SketchEditor::hudTarget(double x, double y) const {
+  if (steps_.empty()) return {x, y};
+  const Pick& a = steps_.back();
+  double dx = x - a.x, dy = y - a.y;
+  const double dist = std::hypot(dx, dy);
+  const double ux = dist > 1e-12 ? dx / dist : 1, uy = dist > 1e-12 ? dy / dist : 0;
+  switch (tool_) {
+    case Tool::Line: {
+      const double len = hudLocked(0) ? hudValue(0) : dist;
+      double ang = std::atan2(uy, ux);
+      if (hudLocked(1)) ang = hudValue(1);
+      return {a.x + len * std::cos(ang), a.y + len * std::sin(ang)};
+    }
+    case Tool::Rectangle:
+    case Tool::CenterRectangle: {
+      const double scale = tool_ == Tool::CenterRectangle ? 0.5 : 1.0;
+      const double sx = dx < 0 ? -1 : 1, sy = dy < 0 ? -1 : 1;
+      const double w = hudLocked(0) ? hudValue(0) * scale : std::abs(dx);
+      const double h = hudLocked(1) ? hudValue(1) * scale : std::abs(dy);
+      return {a.x + sx * w, a.y + sy * h};
+    }
+    case Tool::Circle:
+    case Tool::Polygon: {
+      const double r = hudLocked(0) ? hudValue(0) / 2 : dist;
+      return {a.x + ux * r, a.y + uy * r};
+    }
+    case Tool::Slot: {
+      const double len = hudLocked(0) ? hudValue(0) : dist;
+      return {a.x + ux * len, a.y + uy * len};
+    }
+    default:
+      return {x, y};
+  }
+}
+
+void SketchEditor::updateHud(double x, double y) {
+  if (hud_.empty() || steps_.empty() || !view_) return;
+  const Pick& a = steps_.back();
+  const double dx = x - a.x, dy = y - a.y;
+  const double dist = std::hypot(dx, dy);
+  // Live values and where each box sits (sketch coordinates).
+  std::vector<std::pair<double, std::pair<double, double>>> live;
+  const double off = view_->modelPerPixel() * 22;
+  switch (tool_) {
+    case Tool::Line:
+      live = {{dist, {(a.x + x) / 2, (a.y + y) / 2 + off}}, {std::atan2(dy, dx), {a.x + off * 2, a.y - off}}};
+      break;
+    case Tool::Rectangle:
+      live = {{std::abs(dx), {(a.x + x) / 2, std::max(a.y, y) + off}}, {std::abs(dy), {std::max(a.x, x) + off * 3, (a.y + y) / 2}}};
+      break;
+    case Tool::CenterRectangle:
+      live = {{2 * std::abs(dx), {a.x, a.y + std::abs(dy) + off}}, {2 * std::abs(dy), {a.x + std::abs(dx) + off * 3, a.y}}};
+      break;
+    case Tool::Circle:
+      live = {{2 * dist, {a.x + dist * 0.7071 + off, a.y + dist * 0.7071 + off}}};
+      break;
+    case Tool::Polygon:
+      live = {{2 * dist, {a.x + dist + off * 3, a.y}}, {static_cast<double>(polygonSides()), {a.x, a.y - off * 1.5}}};
+      break;
+    case Tool::Slot:
+      live = {{dist, {(a.x + x) / 2, (a.y + y) / 2 + off * 2}},
+              {hudLocked(1) ? hudValue(1) : dist / 3, {x + off * 3, y}}};
+      break;
+    default:
+      return;
+  }
+  for (size_t i = 0; i < hud_.size() && i < live.size(); ++i) {
+    HudField& f = hud_[i];
+    if (!f.edit) continue;
+    if (!f.locked && !f.editing) {
+      if (f.kind == HudField::Angle)
+        f.edit->setText(QStringLiteral("%1 deg").arg(live[i].first * 180.0 / kPi, 0, 'f', 1));
+      else if (f.kind == HudField::Count)
+        f.edit->setText(QString::number(static_cast<int>(live[i].first)));
+      else
+        f.edit->setText(lengthText(live[i].first));
+    }
+    const QPointF w = view_->toWidget(sketch::toWorld(frame_, live[i].second.first, live[i].second.second));
+    f.edit->move(QPoint(static_cast<int>(w.x() - f.edit->width() / 2), static_cast<int>(w.y() - f.edit->height() / 2)));
+    f.edit->raise();
+  }
+}
+
+void SketchEditor::commitHud() {
+  for (size_t i = 0; i < hud_.size(); ++i) lockField(i);
+  const QPointF centre = view_ ? QPointF(view_->width() / 2.0, view_->height() / 2.0) : QPointF(60, 60);
+  press(cursorX_, cursorY_, Qt::NoModifier, centre);
+}
+
+bool SketchEditor::eventFilter(QObject* watched, QEvent* e) {
+  if (e->type() != QEvent::KeyPress) return QObject::eventFilter(watched, e);
+  size_t i = 0;
+  while (i < hud_.size() && hud_[i].edit != watched) ++i;
+  if (i == hud_.size()) return QObject::eventFilter(watched, e);
+  auto* k = static_cast<QKeyEvent*>(e);
+  switch (k->key()) {
+    case Qt::Key_Tab:
+    case Qt::Key_Backtab: {
+      lockField(i);
+      const size_t next = k->key() == Qt::Key_Tab ? (i + 1) % hud_.size() : (i + hud_.size() - 1) % hud_.size();
+      if (hud_[next].edit) {
+        hud_[next].edit->setFocus();
+        hud_[next].edit->selectAll();
+      }
+      updatePreview(cursorX_, cursorY_);
+      return true;
+    }
+    case Qt::Key_Return:
+    case Qt::Key_Enter:
+      commitHud();
+      return true;
+    case Qt::Key_Escape:
+      escape();
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SketchEditor::keyPress(QKeyEvent* e) {
+  // Typing while drawing goes into the first size box (like the on-canvas input).
+  if (!hudTool() || steps_.empty()) return false;
+  ensureHud();
+  if (hud_.empty() || !hud_[0].edit) return false;
+  if (e->key() == Qt::Key_Tab) {
+    hud_[0].edit->setFocus();
+    hud_[0].edit->selectAll();
+    return true;
+  }
+  const QString t = e->text();
+  if (t.isEmpty() || !(t[0].isDigit() || t[0] == QLatin1Char('.') || t[0] == QLatin1Char('-'))) return false;
+  hud_[0].edit->setFocus();
+  hud_[0].edit->setText(t);
+  hud_[0].editing = true;
+  return true;
 }
 
 bool SketchEditor::typeValue(const QString& text) {
-  if (steps_.empty()) return false;
-  auto parse = [this](const QString& s) { return parseQuantity(s.trimmed().toStdString(), unit_); };
-  const Pick a = steps_.back();
-  if (tool_ == Tool::Line) {
-    const auto len = parse(text);
-    if (!len || *len <= 0) {
-      emit message(tr("'%1' is not a length.").arg(text));
-      return false;
-    }
-    double dx = cursorX_ - a.x, dy = cursorY_ - a.y;
-    const double n = std::hypot(dx, dy);
-    if (n < 1e-12) dx = 1, dy = 0;
-    else dx /= n, dy /= n;
-    checkpoint();
-    const int pa = materialize(a);
-    const int pb = sk_.addPoint(sk_.points[pa].x + dx * *len, sk_.points[pa].y + dy * *len);
-    if (chainStart_ < 0) chainStart_ = pa;
-    const int l = sk_.addLine(pa, pb, construction_);
-    autoHorizontalVertical(l);
-    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l}, *len});
-    steps_ = {Pick{{Hit::Point, pb}, sk_.points[pb].x, sk_.points[pb].y}};
-    solveAndShow();
-    return true;
+  if (steps_.empty() || !hudTool()) return false;
+  ensureHud();
+  const QStringList parts = text.split(QRegularExpression(QStringLiteral("[xX*,]")), Qt::SkipEmptyParts);
+  if (parts.isEmpty()) return false;
+  for (int i = 0; i < parts.size() && i < static_cast<int>(hud_.size()); ++i) {
+    if (!hud_[i].edit) continue;
+    hud_[i].edit->setText(parts[i].trimmed());
+    hud_[i].editing = true;
+    if (!lockField(i)) return false;
   }
-  if (tool_ == Tool::Circle) {
-    const auto dia = parse(text);
-    if (!dia || *dia <= 0) {
-      emit message(tr("'%1' is not a diameter.").arg(text));
-      return false;
-    }
-    checkpoint();
-    const int c = sk_.addCircleAt(materialize(steps_.front()), *dia / 2, construction_);
-    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {c}, *dia});
-    resetSteps();
-    solveAndShow();
-    return true;
+  // A single value for a rectangle means a square.
+  if ((tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle) && parts.size() == 1 && hud_.size() > 1) {
+    hud_[1].value = hud_[0].value;
+    hud_[1].locked = true;
   }
-  if (tool_ == Tool::Rectangle) {
-    QStringList parts = text.split(QRegularExpression(QStringLiteral("[xX*,]")), Qt::SkipEmptyParts);
-    if (parts.size() == 1) parts << parts[0];
-    const auto w = parts.size() == 2 ? parse(parts[0]) : std::nullopt;
-    const auto h = parts.size() == 2 ? parse(parts[1]) : std::nullopt;
-    if (!w || !h || *w <= 0 || *h <= 0) {
-      emit message(tr("Type the size as width x height, e.g. 40 x 20."));
-      return false;
+  const size_t before = sk_.entities.size();
+  commitHud();
+  return sk_.entities.size() > before;
+}
+
+// ---------------------------------------------------------------------------
+// Trim
+
+void SketchEditor::trimAt(double x, double y) {
+  const Hit h = hitEntity(x, y);
+  if (h.kind != Hit::Entity) return;
+  const int ei = h.index;
+  const auto& P = sk_.points;
+  const Entity target = sk_.entities[ei];
+
+  // Intersections of the picked curve with every other curve, as parameters
+  // along it: t in [0,1] for lines, angle for circles/arcs.
+  std::vector<double> cuts;
+  auto lineCircle = [&](double ax, double ay, double bx, double by, double cx, double cy, double r,
+                        std::vector<std::pair<double, double>>& out) {
+    const double dx = bx - ax, dy = by - ay;
+    const double fx = ax - cx, fy = ay - cy;
+    const double A = dx * dx + dy * dy, B = 2 * (fx * dx + fy * dy), Cc = fx * fx + fy * fy - r * r;
+    const double disc = B * B - 4 * A * Cc;
+    if (A < 1e-18 || disc < 0) return;
+    for (double sgn : {-1.0, 1.0}) {
+      const double t = (-B + sgn * std::sqrt(disc)) / (2 * A);
+      out.emplace_back(t, std::atan2(ay + t * dy - cy, ax + t * dx - cx));
     }
-    const Pick c0 = steps_.front();
-    const double sx = cursorX_ >= c0.x ? 1 : -1, sy = cursorY_ >= c0.y ? 1 : -1;
-    checkpoint();
-    const int p0 = materialize(c0);
-    const double x0 = sk_.points[p0].x, y0 = sk_.points[p0].y;
-    const int p1 = sk_.addPoint(x0 + sx * *w, y0);
-    const int p2 = sk_.addPoint(x0 + sx * *w, y0 + sy * *h);
-    const int p3 = sk_.addPoint(x0, y0 + sy * *h);
-    const int l0 = sk_.addLine(p0, p1, construction_), l1 = sk_.addLine(p1, p2, construction_);
-    const int l2 = sk_.addLine(p2, p3, construction_), l3 = sk_.addLine(p3, p0, construction_);
-    for (int l : {l0, l2}) sk_.addConstraint({ConstraintType::Horizontal, {}, {l}});
-    for (int l : {l1, l3}) sk_.addConstraint({ConstraintType::Vertical, {}, {l}});
-    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l0}, *w});
-    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l1}, *h});
-    resetSteps();
-    solveAndShow();
-    return true;
+  };
+  auto onArc = [&](const Entity& e, double ang) {
+    if (e.type != EntityType::Arc) return true;
+    const auto& c = P[e.center];
+    return angleInArc(ang, std::atan2(P[e.a].y - c.y, P[e.a].x - c.x), std::atan2(P[e.b].y - c.y, P[e.b].x - c.x));
+  };
+  for (int j = 0; j < static_cast<int>(sk_.entities.size()); ++j) {
+    if (j == ei) continue;
+    const Entity& o = sk_.entities[j];
+    if (target.type == EntityType::Line) {
+      const auto &a = P[target.a], &b = P[target.b];
+      if (o.type == EntityType::Line) {
+        const auto &c = P[o.a], &d = P[o.b];
+        const double den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+        if (std::abs(den) < 1e-14) continue;
+        const double t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den;
+        const double u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / den;
+        if (u >= -1e-9 && u <= 1 + 1e-9) cuts.push_back(t);
+      } else {
+        std::vector<std::pair<double, double>> hits;
+        lineCircle(a.x, a.y, b.x, b.y, P[o.center].x, P[o.center].y, o.radius, hits);
+        for (const auto& [t, ang] : hits)
+          if (onArc(o, ang)) cuts.push_back(t);
+      }
+    } else {
+      const auto& c = P[target.center];
+      if (o.type == EntityType::Line) {
+        std::vector<std::pair<double, double>> hits;
+        lineCircle(P[o.a].x, P[o.a].y, P[o.b].x, P[o.b].y, c.x, c.y, target.radius, hits);
+        for (const auto& [t, ang] : hits)
+          if (t >= -1e-9 && t <= 1 + 1e-9) cuts.push_back(ang);
+      } else {
+        const auto& c2 = P[o.center];
+        const double d = std::hypot(c2.x - c.x, c2.y - c.y);
+        if (d < 1e-12 || d > target.radius + o.radius || d < std::abs(target.radius - o.radius)) continue;
+        const double base = std::atan2(c2.y - c.y, c2.x - c.x);
+        const double half = std::acos(std::clamp((target.radius * target.radius + d * d - o.radius * o.radius) /
+                                                     (2 * target.radius * d), -1.0, 1.0));
+        for (double ang : {base - half, base + half}) {
+          const double px = c.x + target.radius * std::cos(ang), py = c.y + target.radius * std::sin(ang);
+          if (onArc(o, std::atan2(py - c2.y, px - c2.x))) cuts.push_back(ang);
+        }
+      }
+    }
   }
-  return false;
+
+  checkpoint();
+  auto detachPoint = [&](int pt) {
+    // Remove a point that no curve uses any more.
+    for (const auto& e : sk_.entities)
+      if (e.a == pt || e.b == pt || e.center == pt) return;
+    if (pt > 0) sk_.removePoints({pt});
+  };
+  // Constraints that only hold for the whole curve are dropped.
+  auto dropDimensions = [&](int entity) {
+    for (int k = static_cast<int>(sk_.constraints.size()) - 1; k >= 0; --k) {
+      const auto& c = sk_.constraints[k];
+      const bool refs = std::find(c.entities.begin(), c.entities.end(), entity) != c.entities.end();
+      const bool keep = c.type == ConstraintType::Horizontal || c.type == ConstraintType::Vertical ||
+                        c.type == ConstraintType::Parallel || c.type == ConstraintType::Perpendicular ||
+                        c.type == ConstraintType::Collinear || c.type == ConstraintType::Concentric ||
+                        c.type == ConstraintType::Radius || c.type == ConstraintType::Diameter;
+      if (refs && !keep) sk_.removeConstraint(k);
+    }
+  };
+
+  if (target.type == EntityType::Line) {
+    const auto a = P[target.a], b = P[target.b];
+    const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    const double t0 = l2 > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / l2 : 0;
+    double lo = -1, hi = 2;
+    for (double t : cuts) {
+      if (t > 1e-6 && t < t0 && t > lo) lo = t;
+      if (t < 1 - 1e-6 && t > t0 && t < hi) hi = t;
+    }
+    const bool hasLo = lo > 0, hasHi = hi < 1;
+    if (!hasLo && !hasHi) {
+      sk_.removeEntities({ei});
+    } else {
+      dropDimensions(ei);
+      const int oldA = target.a, oldB = target.b;
+      if (hasLo && hasHi) {
+        const int pl = sk_.addPoint(a.x + dx * lo, a.y + dy * lo);
+        const int ph = sk_.addPoint(a.x + dx * hi, a.y + dy * hi);
+        sk_.entities[ei].b = pl;
+        sk_.addLine(ph, oldB, target.construction);
+      } else if (hasLo) {
+        sk_.entities[ei].b = sk_.addPoint(a.x + dx * lo, a.y + dy * lo);
+        detachPoint(oldB);
+      } else {
+        sk_.entities[ei].a = sk_.addPoint(a.x + dx * hi, a.y + dy * hi);
+        detachPoint(oldA);
+      }
+    }
+  } else {
+    const auto c = P[target.center];
+    const double r = target.radius;
+    const double clickAng = std::atan2(y - c.y, x - c.x);
+    auto norm = [](double v) {
+      while (v < 0) v += 2 * kPi;
+      while (v >= 2 * kPi) v -= 2 * kPi;
+      return v;
+    };
+    if (target.type == EntityType::Circle) {
+      if (cuts.size() < 2) {
+        sk_.removeEntities({ei});
+      } else {
+        // Keep the arc from the first crossing after the click round to the last one before it.
+        double after = 1e9, before = 1e9, angAfter = 0, angBefore = 0;
+        for (double ang : cuts) {
+          const double da = norm(ang - clickAng), db = norm(clickAng - ang);
+          if (da > 1e-9 && da < after) after = da, angAfter = ang;
+          if (db > 1e-9 && db < before) before = db, angBefore = ang;
+        }
+        dropDimensions(ei);
+        Entity& e = sk_.entities[ei];
+        e.type = EntityType::Arc;
+        e.a = sk_.addPoint(c.x + r * std::cos(angAfter), c.y + r * std::sin(angAfter));
+        e.b = sk_.addPoint(c.x + r * std::cos(angBefore), c.y + r * std::sin(angBefore));
+      }
+    } else {
+      const double start = std::atan2(P[target.a].y - c.y, P[target.a].x - c.x);
+      const double span = norm(std::atan2(P[target.b].y - c.y, P[target.b].x - c.x) - start);
+      const double u0 = norm(clickAng - start);
+      double lo = -1, hi = 1e9;
+      for (double ang : cuts) {
+        const double u = norm(ang - start);
+        if (u <= 1e-6 || u >= span - 1e-6) continue;
+        if (u < u0 && u > lo) lo = u;
+        if (u > u0 && u < hi) hi = u;
+      }
+      const bool hasLo = lo > 0, hasHi = hi < 1e8;
+      if (!hasLo && !hasHi) {
+        sk_.removeEntities({ei});
+      } else {
+        dropDimensions(ei);
+        const int oldA = target.a, oldB = target.b, centre = target.center;
+        auto at = [&](double u) { return sk_.addPoint(c.x + r * std::cos(start + u), c.y + r * std::sin(start + u)); };
+        if (hasLo && hasHi) {
+          const int pl = at(lo), ph = at(hi);
+          sk_.entities[ei].b = pl;
+          sk_.addArc(centre, ph, oldB, target.construction);
+        } else if (hasLo) {
+          sk_.entities[ei].b = at(lo);
+          detachPoint(oldB);
+        } else {
+          sk_.entities[ei].a = at(hi);
+          detachPoint(oldA);
+        }
+      }
+    }
+  }
+  selection_.clear();
+  solveAndShow();
 }
 
 bool SketchEditor::submitValue(const QString& text) {
@@ -1131,12 +1609,58 @@ void SketchEditor::updatePreview(double x, double y) {
     if (view_) view_->redraw();
     return;
   }
-  const Pick snap = pickPoint(x, y);
-  x = snap.x;
-  y = snap.y;
+  if (hudTool()) {
+    ensureHud();
+    std::tie(x, y) = hudTarget(x, y);
+    if (!hudAnyLocked()) {
+      const Pick snap = pickPoint(x, y);
+      x = snap.x;
+      y = snap.y;
+    }
+    updateHud(x, y);
+  } else {
+    const Pick snap = pickPoint(x, y);
+    x = snap.x;
+    y = snap.y;
+  }
   sketch::Sketch tmp;
   const auto& a = steps_.front();
   switch (tool_) {
+    case Tool::CenterRectangle: {
+      const double hx = std::abs(x - a.x), hy = std::abs(y - a.y);
+      if (hx > 1e-9 && hy > 1e-9) {
+        tmp.addLine(a.x - hx, a.y - hy, a.x + hx, a.y - hy);
+        tmp.addLine(a.x + hx, a.y - hy, a.x + hx, a.y + hy);
+        tmp.addLine(a.x + hx, a.y + hy, a.x - hx, a.y + hy);
+        tmp.addLine(a.x - hx, a.y + hy, a.x - hx, a.y - hy);
+      }
+      break;
+    }
+    case Tool::Polygon: {
+      const double r = std::hypot(x - a.x, y - a.y);
+      const int n = polygonSides();
+      const double a0 = std::atan2(y - a.y, x - a.x);
+      if (r > 1e-9)
+        for (int i = 0; i < n; ++i) {
+          const double t0 = a0 + 2 * kPi * i / n, t1 = a0 + 2 * kPi * (i + 1) / n;
+          tmp.addLine(a.x + r * std::cos(t0), a.y + r * std::sin(t0), a.x + r * std::cos(t1), a.y + r * std::sin(t1));
+        }
+      break;
+    }
+    case Tool::Slot: {
+      const double len = std::hypot(x - a.x, y - a.y);
+      if (len > 1e-9) {
+        const double r = (hudLocked(1) ? hudValue(1) : len / 3) / 2;
+        const double ux = (x - a.x) / len, uy = (y - a.y) / len, nx = -uy, ny = ux;
+        tmp.addLine(a.x + nx * r, a.y + ny * r, x + nx * r, y + ny * r);
+        tmp.addLine(a.x - nx * r, a.y - ny * r, x - nx * r, y - ny * r);
+        const int c2 = tmp.addPoint(x, y), s2 = tmp.addPoint(x - nx * r, y - ny * r), e2 = tmp.addPoint(x + nx * r, y + ny * r);
+        tmp.addArc(c2, s2, e2);
+        const int c1 = tmp.addPoint(a.x, a.y), s1 = tmp.addPoint(a.x + nx * r, a.y + ny * r), e1 = tmp.addPoint(a.x - nx * r, a.y - ny * r);
+        tmp.addArc(c1, s1, e1);
+      }
+      break;
+    }
     case Tool::Line: {
       const auto& b = steps_.back();
       if (std::hypot(x - b.x, y - b.y) > 1e-9) tmp.addLine(b.x, b.y, x, y);
@@ -1178,7 +1702,7 @@ void SketchEditor::updatePreview(double x, double y) {
     ctx->Display(w, AIS_WireFrame, -1, false);
     ctx->SetZLayer(w, Graphic3d_ZLayerId_Topmost);
     preview_.push_back(w);
-    // Live size of what is being drawn; type a number to set it exactly.
+    // Tools with size boxes show their sizes there; the rest get a label.
     QString text;
     double lx = x, ly = y;
     switch (tool_) {
@@ -1205,6 +1729,7 @@ void SketchEditor::updatePreview(double x, double y) {
       default:
         break;
     }
+    if (hudTool()) text.clear();   // sizes are shown in the boxes
     if (!text.isEmpty()) {
       Handle(AIS_TextLabel) t = new AIS_TextLabel();
       t->SetText(ext(text));

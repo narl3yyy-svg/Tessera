@@ -65,6 +65,14 @@ bool Viewport::planePoint(const QPointF& pos, const gp_Ax3& frame, gp_Pnt& out) 
   return true;
 }
 
+QPointF Viewport::toWidget(const gp_Pnt& p) const {
+  if (view_.IsNull()) return QPointF(width() / 2.0, height() / 2.0);
+  Standard_Integer x = 0, y = 0;
+  view_->Convert(p.X(), p.Y(), p.Z(), x, y);
+  const qreal r = devicePixelRatioF();
+  return QPointF(x / r, y / r);
+}
+
 double Viewport::modelPerPixel() const {
   if (view_.IsNull()) return 0.01;
   return view_->Convert(100) / 100.0 * devicePixelRatioF();

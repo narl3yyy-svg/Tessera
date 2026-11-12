@@ -29,7 +29,7 @@ icons, file formats that are not publicly documented, or product names.
 
 Tracked against the menus people know. Done = usable today.
 
-**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Sweep · Loft · Rib · Web · Emboss · Hole · Thread · Coil · Pipe · Pattern (rectangular/circular/path) · Thicken · Boundary Fill · Create Form (T-splines, later)
+**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Hole ✅ (simple, counterbore, countersink) · Rectangular Pattern ✅ · Circular Pattern ✅ · Sweep · Loft · Rib · Web · Emboss · Thread · Coil · Pipe · Path Pattern · Thicken · Boundary Fill · Create Form (T-splines, later)
 
 **Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull · Draft · Offset Face · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) · Compute All
 
@@ -43,8 +43,8 @@ Tracked against the menus people know. Done = usable today.
 
 **Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
 
-**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · typed sizes while drawing ✅ · Midpoint Line · Center Rectangle · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Polygon · Ellipse · Slot · Spline · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet · Chamfer · Offset · Trim · Extend · Break · Sketch Scale · Move/Copy
+**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Ellipse · Spline · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet · Chamfer · Offset · Extend · Break · Sketch Scale · Move/Copy
 
-**Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear · Symmetry · Curvature · Polygon; Sketch Palette options (grid, snap, slice, show profiles/points/dimensions/constraints)
+**Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear ✅ · Symmetry ✅ · Curvature · Polygon; Sketch Palette options (grid, snap, slice, show profiles/points/dimensions/constraints)
 
 **File and settings**: Document units ✅ · Export (STEP, IGES, STL, 3MF, OBJ, BREP) ✅ · 3D Print ✅ · Capture Image ✅ · Preferences: navigation presets, zoom direction, orbit type, camera ✅ · Grid settings and snap ✅ · Named Views · Incremental Move · Design history import/export
