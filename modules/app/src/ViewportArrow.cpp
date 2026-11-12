@@ -14,6 +14,7 @@
 #include <TopoDS_Compound.hxx>
 #include <gp_Ax2.hxx>
 
+#include <QLabel>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QTimer>
@@ -181,6 +182,7 @@ bool Viewport::arrowMousePress(QMouseEvent* e) {
   if (!t) return false;
   arrowDragging_ = true;
   arrowGrab_ = arrow_->value - *t;
+  if (pickHint_) pickHint_->hide();   // the value box says it all while dragging
   if (arrowBox_) arrowBox_->clearFocus();
   setCursor(Qt::ClosedHandCursor);
   rebuildArrow();

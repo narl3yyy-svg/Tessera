@@ -97,7 +97,21 @@ void MainWindow::updateDragArrow() {
     arrowInput_.clear();
     viewport_->clearDragArrow();
   };
+  // The instruction beside the cursor, as in the familiar tools.
+  QString hint;
+  if (active_) {
+    const QString cid = active_->commandId();
+    if (cid == QLatin1String(doc::kCmdExtrude))
+      hint = active_->waitingForSelection() ? tr("Select sketch profiles or planar faces to extrude")
+                                            : tr("Specify distance and taper angle");
+    else if (cid == QLatin1String(doc::kCmdFillet) || cid == QLatin1String(doc::kCmdChamfer))
+      hint = active_->currentEdges().isEmpty() ? tr("Select edges") : tr("Specify size, or select more edges");
+    else if (cid == QLatin1String(doc::kCmdPressPull))
+      hint = active_->currentFaces().isEmpty() ? tr("Select faces to push or pull") : tr("Specify distance");
+  }
+  viewport_->setCursorHint(hint);
   if (!active_) return off();
+  if (active_->waitingForSelection()) return off();
   const QString id = active_->commandId();
   const auto& doc = session_.document();
   std::optional<ArrowPlacement> place;

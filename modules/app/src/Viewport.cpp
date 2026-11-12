@@ -426,6 +426,17 @@ void Viewport::mouseDoubleClickEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseDoubleClickEvent(e);
 }
 
+void Viewport::setCursorHint(const QString& text) {
+  cursorHint_ = text;
+  if (!pickHint_ || planePicking_) return;
+  if (text.isEmpty()) {
+    pickHint_->hide();
+  } else if (pickHint_->isVisible() && pickHint_->text() != text) {
+    pickHint_->setText(text);   // change it in place; it moves with the next mouse move
+    pickHint_->adjustSize();
+  }
+}
+
 bool Viewport::focusNextPrevChild(bool next) {
   if (interactor_) return false;   // keyPressEvent then gets the Tab
   return QOpenGLWidget::focusNextPrevChild(next);
@@ -463,8 +474,10 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
   if (arrowMouseMove(e)) return;
   if (!interactor_ && !pickTypes_.empty()) updateHoverHighlight(e->position());
   if (pickHint_) {
-    pickHint_->setVisible(planePicking_);
-    if (planePicking_) {
+    const QString hint = planePicking_ ? tr("Select a plane or planar face") : cursorHint_;
+    if (pickHint_->text() != hint) pickHint_->setText(hint);
+    pickHint_->setVisible(!hint.isEmpty());
+    if (!hint.isEmpty()) {
       pickHint_->adjustSize();
       pickHint_->move(e->position().toPoint() + QPoint(18, 14));
       pickHint_->raise();

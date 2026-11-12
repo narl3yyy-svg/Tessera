@@ -380,9 +380,27 @@ void CommandDialog::updateVisibility() {
   adjustAfterResize();
 }
 
+void CommandDialog::setRequireSelection(bool on) {
+  requireSelection_ = on;
+  refreshPreview();
+}
+
+bool CommandDialog::waitingForSelection() const {
+  return requireSelection_ && currentProfiles().isEmpty() && currentFaces().isEmpty();
+}
+
 void CommandDialog::refreshPreview() {
   updateVisibility();
   updateProfilesLabel();
+  if (waitingForSelection()) {
+    cmd_->clearPreview();
+    emit inputsChanged();
+    error_->setText(tr("Select sketch profiles or planar faces to extrude."));
+    error_->setVisible(true);
+    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+    session_.notifyChanged();
+    return;
+  }
   emit inputsChanged();
   showError(cmd_->preview());
   session_.notifyChanged();
@@ -540,7 +558,9 @@ void CommandDialog::updateProfilesLabel() {
   if (!profilesLabel_) return;
   const QString p = currentProfiles();
   const int n = p.isEmpty() ? 0 : p.count(QLatin1Char(';')) + 1;
-  profilesLabel_->setText(n == 0 ? tr("All (click profiles to choose)") : tr("%n selected", nullptr, n));
+  profilesLabel_->setText(n > 0              ? tr("%n selected", nullptr, n)
+                          : requireSelection_ ? tr("None (click profiles)")
+                                              : tr("All (click profiles to choose)"));
 }
 
 bool CommandDialog::pickBody(const QString& name) {

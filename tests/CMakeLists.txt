@@ -98,10 +98,13 @@ if(TSR_WITH_QT)
     add_test(NAME live_to_object
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/to_object.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_to_object.py ${CMAKE_CURRENT_SOURCE_DIR}/live/to_object_check.py)
+    add_test(NAME live_face_extrude
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/face_extrude.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_face_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/face_extrude_check.py)
     add_test(NAME live_assembly
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/assembly.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_assembly.py ${CMAKE_CURRENT_SOURCE_DIR}/live/assembly_check.py)
-    set_tests_properties(live_line_tool live_extrude_section live_sketch_modify live_to_object live_assembly PROPERTIES
+    set_tests_properties(live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()

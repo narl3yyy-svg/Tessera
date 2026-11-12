@@ -68,6 +68,10 @@ public:
   // Sets a Real input (internal units) as dragging would: field and preview.
   void setRealInput(const QString& id, double value);
   bool isEditingFeature() const;
+  // Started from the ribbon: no preview (and no OK) until profiles or faces
+  // are picked, as in the familiar tool. Scripts keep "empty = all".
+  void setRequireSelection(bool on);
+  bool waitingForSelection() const;
 
   // A plane clicked in the canvas fills the first plane input.
   bool hasPlaneInput() const;
@@ -111,6 +115,7 @@ private:
   std::vector<std::pair<QWidget*, std::string>> conditional_;
   void updateProfilesLabel();
   std::map<std::string, Value> lastSent_;   // last value each numeric field sent
+  bool requireSelection_ = false;
 };
 
 } // namespace tsr::app

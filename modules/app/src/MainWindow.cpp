@@ -765,6 +765,22 @@ CommandDialog* MainWindow::editFeature(int featureId) {
 }
 
 CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
+  // Decided before the panel previews (a preview would count as using the sketch).
+  std::pair<QString, QString> autoProfile;
+  if (cmd->def().id == doc::kCmdExtrude) {
+    const auto& d = session_.document();
+    const auto sketches = d.sketches();
+    if (!sketches.empty() && sketchVisible(sketches.back().name)) {
+      try {
+        const auto& rec = sketches.back();
+        const gp_Ax3 frame = d.planeFrame(rec.plane, rec.offset);
+        const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec.data), frame);
+        if (profiles.size() == 1)
+          autoProfile = {qs(rec.name), QStringLiteral("%1,%2").arg(profiles[0].x, 0, 'g', 12).arg(profiles[0].y, 0, 'g', 12)};
+      } catch (const std::exception&) {
+      }
+    }
+  }
   bodiesBeforeCommand_.clear();
   for (const auto& b : session_.document().bodies()) bodiesBeforeCommand_.push_back(b.name);
   auto* dlg = new CommandDialog(session_, std::move(cmd), this);
@@ -791,6 +807,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     viewport_->setSubShapePicking({});
     viewport_->setPlanePicking(false);
     viewport_->clearDragArrow();
+    viewport_->setCursorHint(QString());
     arrowInput_.clear();
     pickedEdges_.clear();
     refresh();
@@ -815,6 +832,12 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     }
   }
   updateEdgePicking();
+  // Started fresh (not editing): Extrude waits for a pick, except that the
+  // single profile of a just-finished sketch is taken at once.
+  if (dlg->commandId() == QLatin1String(doc::kCmdExtrude) && !dlg->isEditingFeature()) {
+    if (!autoProfile.second.isEmpty()) dlg->setProfiles(autoProfile.first, autoProfile.second);
+    dlg->setRequireSelection(true);   // satisfied while something is picked
+  }
   updateDragArrow();
   return dlg;
 }

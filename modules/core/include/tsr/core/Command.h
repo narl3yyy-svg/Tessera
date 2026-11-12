@@ -173,6 +173,8 @@ public:
   std::string execute();
   void cancel();
   bool finished() const { return finished_; }
+  // Removes the preview from the document; the session stays open.
+  void clearPreview() { dropPreview(); }
 
 private:
   void dropPreview();

@@ -316,7 +316,7 @@ void Viewport::updateHoverHighlight(const QPointF& pos) {
   Handle(AIS_Shape) a = new AIS_Shape(s);
   const Quantity_Color c = rgb(255, 196, 64);   // warm, distinct from the blue of picked items
   if (s.ShapeType() == TopAbs_FACE) {
-    faceStyle(a, c, 0.55);
+    faceStyle(a, rgb(90, 150, 230), 0.45);
     context_->Display(a, AIS_Shaded, -1, false);
   } else {
     lineStyle(a, c, 5.0, Aspect_TOL_SOLID);

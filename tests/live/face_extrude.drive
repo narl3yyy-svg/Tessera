@@ -1,0 +1,17 @@
+# Live: Extrude (E), hover then click the box's +X side face, drag the arrow
+# out along that face's normal, OK -- as in the familiar tool.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.1 0.9          # focus the window (empty canvas)
+key e
+waitfor panelOk
+wait 400
+expectnot arrowValue
+wclick 40 15 10        # the +X side face, centre
+wait 600
+shot /tmp/live_face_pick.png
+adrag 120 60
+wait 400
+shot /tmp/live_face_drag.png
+click panelOk
+wait 500

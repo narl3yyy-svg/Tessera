@@ -185,6 +185,9 @@ public:
   void dragArrowForTest(double value);
   // Where to grab the arrow (widget coordinates), when there is one.
   std::optional<QPointF> dragArrowHandle() const;
+  // A short instruction that follows the cursor ("Select sketch profiles or
+  // planar faces to extrude"); empty hides it.
+  void setCursorHint(const QString& text);
 
 signals:
   void profileClicked(const QString& sketch, int index);
@@ -319,6 +322,7 @@ private:
   bool arrowMouseMove(QMouseEvent* e);
   bool arrowMouseRelease(QMouseEvent* e);
   QLabel* pickHint_ = nullptr;   // "Select a plane or planar face" beside the cursor
+  QString cursorHint_;
   // While picking edges/faces/vertices: a bold highlight of the one under the cursor.
   Handle(AIS_InteractiveObject) hoverObject_;
   TopoDS_Shape hoverShape_;
