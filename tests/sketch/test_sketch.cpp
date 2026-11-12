@@ -1,6 +1,7 @@
 #include "TestFramework.h"
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
+#include "tsr/sketch/SketchOps.h"
 
 #include <cmath>
 
@@ -225,4 +226,69 @@ TEST(sketch_collinear_and_symmetry) {
   CHECK(solve(t).ok);
   CHECK_NEAR(t.points[p].x + t.points[q].x, 2 * t.points[t.entities[axis].a].x, 1e-8);
   CHECK_NEAR(t.points[p].y, t.points[q].y, 1e-8);
+}
+
+// ---------------------------------------------------------------------------
+// Spline, Fillet, Offset
+
+TEST(sketch_spline_round_trip_and_profile) {
+  Sketch s;
+  std::vector<int> fit;
+  for (auto [x, y] : {std::pair{0.0, 0.0}, {2.0, -0.5}, {3.0, 1.5}, {1.0, 2.5}}) fit.push_back(s.addPoint(x, y));
+  fit.push_back(fit.front());   // closed
+  const int sp = s.addSpline(fit);
+  const Sketch back = Sketch::fromJson(s.toJson());
+  CHECK(back.entities[sp].type == EntityType::Spline);
+  CHECK_EQ(back.entities[sp].fit.size(), size_t(5));
+  CHECK(solve(s).ok);
+  const gp_Ax3 xy = planeFrame("XY");
+  CHECK(!curve(s, xy, sp).IsNull());
+  const auto ps = profiles(s, xy);
+  CHECK_EQ(ps.size(), size_t(1));
+  CHECK(ps[0].area > 3.0);
+  // Dragging a fit point moves the curve; constraints on the spline itself are refused.
+  CHECK(!addConstraintChecked(s, C(ConstraintType::Horizontal, {}, {sp})).empty());
+}
+
+TEST(sketch_fillet_corner) {
+  Sketch s;
+  const Rect r = rect(s, 0, 0, 4, 3);
+  s.addConstraint(C(ConstraintType::Distance, {}, {r.l[0]}, 4));
+  CHECK(solve(s).ok);
+  int arc = -1;
+  CHECK_EQ(filletCorner(s, r.l[0], r.l[1], 0.5, &arc), std::string());
+  CHECK(arc >= 0 && s.entities[arc].type == EntityType::Arc);
+  CHECK_NEAR(s.entities[arc].radius, 0.5, 1e-6);
+  const auto ps = profiles(s, planeFrame("XY"));
+  CHECK_EQ(ps.size(), size_t(1));
+  CHECK_NEAR(ps[0].area, 12 - (1 - kPi / 4) * 0.25, 1e-4);
+  // Too large a radius leaves the sketch unchanged.
+  const size_t before = s.entities.size();
+  CHECK(!filletCorner(s, r.l[2], r.l[3], 5.0).empty());
+  CHECK_EQ(s.entities.size(), before);
+  // A corner found from its point.
+  const auto corner = cornerAt(s, s.entities[r.l[2]].b);
+  CHECK(corner.has_value());
+}
+
+TEST(sketch_offset_chain) {
+  Sketch s;
+  const Rect r = rect(s, 0, 0, 4, 3);
+  CHECK(solve(s).ok);
+  bool closed = false;
+  CHECK_EQ(chainOf(s, r.l[1], &closed).size(), size_t(4));
+  CHECK(closed);
+  std::vector<int> made;
+  CHECK_EQ(offsetChain(s, r.l[2], 1.0, &made), std::string());   // outward
+  CHECK_EQ(made.size(), size_t(4));
+  const auto ps = profiles(s, planeFrame("XY"));
+  CHECK_EQ(ps.size(), size_t(2));   // the ring and the inner rectangle
+  CHECK_NEAR(ps[0].area + ps[1].area, 6 * 5, 1e-6);
+  CHECK_EQ(offsetChain(s, r.l[0], -1.0, &made), std::string());   // inward
+  // A circle grows concentrically.
+  Sketch c;
+  const int circle = c.addCircle(1, 1, 2);
+  CHECK_EQ(offsetChain(c, circle, 0.5, &made), std::string());
+  CHECK_NEAR(c.entities[made[0]].radius, 2.5, 1e-9);
+  CHECK(!offsetChain(c, circle, -3, &made).empty());
 }

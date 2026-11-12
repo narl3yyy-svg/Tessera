@@ -41,7 +41,7 @@ Layout makeLayout(const Sketch& s, const std::set<int>& locked) {
       L.py[i] = L.n++;
     }
   for (size_t i = 0; i < s.entities.size(); ++i)
-    if (s.entities[i].type != EntityType::Line) L.rad[i] = L.n++;
+    if (isRound(s.entities[i].type)) L.rad[i] = L.n++;
   return L;
 }
 
@@ -117,7 +117,7 @@ private:
     const Point& a = P(E(line).a);
     return (dx * (P(p).y - a.y) - dy * (P(p).x - a.x)) / l;
   }
-  bool isRound(int e) const { return E(e).type != EntityType::Line; }
+  bool isRound(int e) const { return sketch::isRound(E(e).type); }
 
   // Two points from a constraint: explicit points, or a line's ends.
   bool pointPair(const Constraint& c, int& a, int& b) const {
@@ -138,6 +138,10 @@ private:
     const auto& p = c.points;
     const auto& e = c.entities;
     auto bad = [&] { throw SketchError(std::string("malformed '") + typeName(c.type) + "' constraint"); };
+    // Splines follow their fit points; constraints act on those points only.
+    for (int i : e)
+      if (E(i).type == EntityType::Spline)
+        throw SketchError(std::string("'") + typeName(c.type) + "' cannot apply to a spline; constrain its points");
     switch (c.type) {
       case ConstraintType::Coincident:
         if (p.size() != 2) bad();

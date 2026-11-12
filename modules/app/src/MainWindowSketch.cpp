@@ -258,6 +258,7 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
   toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
+  toolButton(create, T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), QStringLiteral("P"));
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
@@ -273,7 +274,9 @@ QWidget* MainWindow::buildSketchTab() {
   constructionButton_ = construction;
 
   QHBoxLayout* modify = panel(tr("MODIFY"));
+  toolButton(modify, T::Fillet, QStringLiteral("sketch-fillet"), tr("Fillet"), {});
   toolButton(modify, T::Trim, QStringLiteral("trim"), tr("Trim"), QStringLiteral("T"));
+  toolButton(modify, T::Offset, QStringLiteral("offset"), tr("Offset"), QStringLiteral("O"));
 
   QHBoxLayout* constraints = panel(tr("CONSTRAINTS"));
   toolButton(constraints, T::Dimension, QStringLiteral("dimension"), tr("Sketch Dimension"), QStringLiteral("D"));

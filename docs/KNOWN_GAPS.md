@@ -24,7 +24,10 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P1-7 | Right click opens a plain context menu, not a radial marking menu | P1 scope | R2 |
 | P2-1 | A sketch on a body face copies the face's plane when created; it does not follow the face if the body changes | Associative references need topological naming | P3 |
 | P2-2 | Extrude remembers each picked profile by a point inside it; a large sketch edit can make it pick a different or no region (reported as an error) | No persistent profile identity yet | P3 |
-| P2-3 | Sketch tools: no trim/extend, offset, fillet, spline, polygon, slot, mirror/pattern, text, or projecting body edges | P2 scope | P3/P4 |
+| P2-3 | Sketch tools: ~~trim, offset, fillet, spline, polygon, slot~~ done; still no extend, chamfer, mirror/pattern, text, or projecting body edges | P2 scope | P8 |
+| P9-1 | Spline: fit-point splines only (no control-point splines, tangency handles or curvature constraints); constraints act on its points, not the curve; Trim and Offset skip splines | P9 scope | later |
+| P9-2 | Sketch Fillet: line-line corners only (not line-arc or arc-arc); the two lines' length dimensions are removed because the corner they measured is gone | P9 scope | later |
+| P9-3 | Sketch Offset: the copy of a line chain gets parallel constraints and one offset dimension (not Fusion's offset constraint that keeps every curve at the distance); offset arcs share their originals' centres; the side is chosen by where the cursor is | P9 scope | later |
 | P2-4 | ~~Dimension values are numbers only~~ Closed: sketch dimensions and size boxes take expressions; a dimension keeps its expression and follows parameter changes (size boxes use the value once) | | closed (P5) |
 | P2-5 | Extrude extents: distance only (one side / symmetric); no To Object, All, taper or thin | P2 scope | P3 |
 | P2-6 | Dimensions show as value labels without arrows/extension lines; constraint glyphs are letters | P2 scope | R2 |

@@ -41,6 +41,7 @@ const char* entityTypeName(EntityType t) {
     case EntityType::Line: return "line";
     case EntityType::Circle: return "circle";
     case EntityType::Arc: return "arc";
+    case EntityType::Spline: return "spline";
   }
   return "?";
 }
@@ -117,6 +118,18 @@ int Sketch::addArc(int center, int start, int end, bool construction) {
   return static_cast<int>(entities.size()) - 1;
 }
 
+int Sketch::addSpline(const std::vector<int>& fitPoints, bool construction) {
+  if (fitPoints.size() < 2) throw SketchError("a spline needs at least two points");
+  Entity e;
+  e.type = EntityType::Spline;
+  e.fit = fitPoints;
+  e.a = fitPoints.front();
+  e.b = fitPoints.back();
+  e.construction = construction;
+  entities.push_back(e);
+  return static_cast<int>(entities.size()) - 1;
+}
+
 int Sketch::addConstraint(Constraint c) {
   constraints.push_back(std::move(c));
   return static_cast<int>(constraints.size()) - 1;
@@ -128,6 +141,7 @@ std::vector<int> Sketch::entityPoints(int id) const {
     case EntityType::Line: return {e.a, e.b};
     case EntityType::Circle: return {e.center};
     case EntityType::Arc: return {e.center, e.a, e.b};
+    case EntityType::Spline: return e.fit;
   }
   return {};
 }
@@ -167,9 +181,11 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
     }
   }
   std::set<int> used = {0};
-  for (const auto& e : keptE)
+  for (const auto& e : keptE) {
     for (int p : {e.a, e.b, e.center})
       if (p >= 0) used.insert(p);
+    for (int p : e.fit) used.insert(p);
+  }
   std::set<int> dropP;
   for (int p : candidates)
     if (!used.count(p)) dropP.insert(p);
@@ -189,9 +205,11 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
       pointMap[i] = static_cast<int>(keptP.size());
       keptP.push_back(points[i]);
     }
-  for (auto& e : keptE)
+  for (auto& e : keptE) {
     for (int* p : {&e.a, &e.b, &e.center})
       if (*p >= 0) *p = pointMap.at(*p);
+    for (int& p : e.fit) p = pointMap.at(p);
+  }
   for (auto& c : keptC) {
     for (int& p : c.points) p = pointMap.at(p);
     for (int& e : c.entities) e = entityMap.at(e);
@@ -214,6 +232,10 @@ void Sketch::checkIndices() const {
       case EntityType::Line: pt(e.a, true); pt(e.b, true); if (e.a == e.b) throw SketchError("line with one point"); break;
       case EntityType::Circle: pt(e.center, true); break;
       case EntityType::Arc: pt(e.center, true); pt(e.a, true); pt(e.b, true); break;
+      case EntityType::Spline:
+        if (e.fit.size() < 2) throw SketchError("spline with fewer than two points");
+        for (int p : e.fit) pt(p, true);
+        break;
     }
   }
   for (const auto& c : constraints) {
@@ -231,6 +253,12 @@ std::string Sketch::toJson() const {
   for (const auto& e : entities) {
     nlohmann::json je;
     je["type"] = entityTypeName(e.type);
+    if (e.type == EntityType::Spline) {
+      je["fit"] = e.fit;
+      if (e.construction) je["construction"] = true;
+      ents.push_back(je);
+      continue;
+    }
     if (e.type != EntityType::Circle) je["p"] = {e.a, e.b};
     if (e.type != EntityType::Line) {
       je["c"] = e.center;
@@ -269,6 +297,13 @@ Sketch Sketch::fromJson(const std::string& text) {
       if (t == "line") e.type = EntityType::Line;
       else if (t == "circle") e.type = EntityType::Circle;
       else if (t == "arc") e.type = EntityType::Arc;
+      else if (t == "spline") {
+        e.type = EntityType::Spline;
+        e.fit = je.at("fit").get<std::vector<int>>();
+        if (e.fit.size() < 2) throw SketchError("spline with fewer than two points");
+        e.a = e.fit.front();
+        e.b = e.fit.back();
+      }
       else throw SketchError("unknown sketch entity type '" + t + "'");
       if (je.contains("p")) {
         e.a = je["p"].at(0).get<int>();

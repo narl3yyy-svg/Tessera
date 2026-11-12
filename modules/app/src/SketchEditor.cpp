@@ -5,6 +5,12 @@
 #include "tsr/core/Units.h"
 #include "tsr/doc/DocCommands.h"
 
+#include "tsr/sketch/SketchOps.h"
+
+#include <BRepAdaptor_Curve.hxx>
+#include <BRep_Builder.hxx>
+#include <TopoDS.hxx>
+#include <TopoDS_Compound.hxx>
 #include <AIS_Point.hxx>
 #include <AIS_Shape.hxx>
 #include <AIS_TextLabel.hxx>
@@ -101,7 +107,7 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
       x0 = std::min(x0, p.x), y0 = std::min(y0, p.y), x1 = std::max(x1, p.x), y1 = std::max(y1, p.y);
     }
     for (const auto& e : sk_.entities)
-      if (e.type != EntityType::Line) {
+      if (sketch::isRound(e.type)) {
         const auto& c = sk_.points[e.center];
         x0 = std::min(x0, c.x - e.radius), y0 = std::min(y0, c.y - e.radius);
         x1 = std::max(x1, c.x + e.radius), y1 = std::max(y1, c.y + e.radius);
@@ -143,6 +149,9 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Circle: emit message(tr("Circle: click the centre; type the diameter and press Enter (or click).")); break;
     case Tool::Arc: emit message(tr("Arc: click the centre, the start, then the end (counter-clockwise).")); break;
     case Tool::Point: emit message(tr("Point: click to place points.")); break;
+    case Tool::Spline: emit message(tr("Spline: click the points the curve passes through; Enter, double-click or Esc finishes, clicking the first point closes it.")); break;
+    case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
+    case Tool::Offset: emit message(tr("Offset: click a curve; its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
     case Tool::Dimension: emit message(tr("Dimension: click a line, circle or arc; or two points/lines. Type the value, Enter.")); break;
     case Tool::Coincident: emit message(tr("Coincident: click two points, or a point and a curve.")); break;
     case Tool::HorizontalVertical: emit message(tr("Horizontal/Vertical: click a line.")); break;
@@ -168,6 +177,9 @@ void SketchEditor::resetSteps() {
   steps_.clear();
   picks_.clear();
   chainStart_ = -1;
+  filletLines_ = {-1, -1};
+  firstFilletLine_ = -1;
+  offsetEntity_ = -1;
   clearPreview();
 }
 
@@ -175,6 +187,10 @@ void SketchEditor::escape() {
   if (valueBox_) {
     valueBox_->deleteLater();
     valueBox_ = nullptr;
+    return;
+  }
+  if (tool_ == Tool::Spline && steps_.size() >= 2) {
+    finishSpline(false);
     return;
   }
   if (!steps_.empty() || !picks_.empty()) {
@@ -317,6 +333,8 @@ SketchEditor::Hit SketchEditor::hitEntity(double x, double y) const {
       const auto& a = sk_.points[e.a];
       const auto& b = sk_.points[e.b];
       d = segDistance(x, y, a.x, a.y, b.x, b.y);
+    } else if (e.type == EntityType::Spline) {
+      d = entityDistance(i, x, y);
     } else {
       const auto& c = sk_.points[e.center];
       d = std::abs(std::hypot(x - c.x, y - c.y) - e.radius);
@@ -564,6 +582,91 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::Trim:
       trimAt(x, y);
       return;
+    case Tool::Spline: {
+      const Pick p = pickPoint(x, y);
+      // Clicking the first point again closes the curve.
+      if (steps_.size() >= 3 && std::hypot(p.x - steps_.front().x, p.y - steps_.front().y) < tolerance()) {
+        finishSpline(true);
+        return;
+      }
+      if (!steps_.empty() && std::hypot(p.x - steps_.back().x, p.y - steps_.back().y) < tolerance() / 4) return;
+      steps_.push_back(p);
+      updatePreview(x, y);
+      return;
+    }
+    case Tool::Fillet: {
+      if (steps_.empty()) {
+        const Hit h = hitTest(x, y);
+        std::optional<std::pair<int, int>> corner;
+        if (h.kind == Hit::Point) {
+          corner = sketch::cornerAt(sk_, h.index);
+        } else if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Line) {
+          if (firstFilletLine_ < 0 || firstFilletLine_ == h.index) {
+            firstFilletLine_ = h.index;
+            emit message(tr("Fillet: click the second line."));
+            return;
+          }
+          corner = std::make_pair(firstFilletLine_, h.index);
+        }
+        if (!corner) {
+          emit message(tr("Fillet: click a corner where two lines meet, or two lines."));
+          return;
+        }
+        // The corner point, for the live radius and the box.
+        const auto& la = sk_.entities[corner->first];
+        const auto& lb = sk_.entities[corner->second];
+        int cp = -1;
+        for (int pa : {la.a, la.b})
+          for (int pb : {lb.a, lb.b})
+            if (cp < 0 && std::hypot(sk_.points[pa].x - sk_.points[pb].x, sk_.points[pa].y - sk_.points[pb].y) < 1e-6) cp = pa;
+        if (cp < 0) {
+          firstFilletLine_ = -1;
+          emit message(tr("Fillet: those lines do not meet at a corner."));
+          return;
+        }
+        filletLines_ = *corner;
+        steps_.push_back(Pick{{Hit::Point, cp}, sk_.points[cp].x, sk_.points[cp].y});
+        updatePreview(x, y);
+        return;
+      }
+      const double r = hudLocked(0) ? hudValue(0) : filletRadiusAt(x, y);
+      checkpoint();
+      const std::string err = sketch::filletCorner(sk_, filletLines_.first, filletLines_.second, r);
+      resetSteps();
+      if (!err.empty()) {
+        undo_.pop_back();
+        emit message(QString::fromStdString(err));
+        rebuild();
+        return;
+      }
+      solveAndShow();
+      return;
+    }
+    case Tool::Offset: {
+      if (steps_.empty()) {
+        const Hit h = hitEntity(x, y);
+        if (h.kind != Hit::Entity || sketch::chainOf(sk_, h.index).empty()) {
+          emit message(tr("Offset: click a line, arc or circle."));
+          return;
+        }
+        offsetEntity_ = h.index;
+        steps_.push_back(Pick{h, x, y});
+        updatePreview(x, y);
+        return;
+      }
+      const double d = offsetAt(x, y, hudLocked(0) ? hudValue(0) : 0);
+      checkpoint();
+      const std::string err = sketch::offsetChain(sk_, offsetEntity_, d);
+      resetSteps();
+      if (!err.empty()) {
+        undo_.pop_back();
+        emit message(QString::fromStdString(err));
+        rebuild();
+        return;
+      }
+      solveAndShow();
+      return;
+    }
     case Tool::Circle: {
       if (steps_.empty()) {
         steps_.push_back(pickPoint(x, y));
@@ -701,6 +804,10 @@ void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
     rebuild();
     return;
   }
+  if (tool_ == Tool::Spline) {
+    if (steps_.size() >= 2) finishSpline(false);
+    return;
+  }
   const Hit h = hitTest(x, y);
   if (h.kind == Hit::Label && sketch::isDimension(sk_.constraints[h.index].type))
     askValue(sk_.constraints[h.index], e->position(), h.index);
@@ -730,7 +837,7 @@ void SketchEditor::constraintPick(double x, double y) {
   rebuild();
 
   auto isLine = [&](const Hit& p) { return p.kind == Hit::Entity && sk_.entities[p.index].type == EntityType::Line; };
-  auto isRound = [&](const Hit& p) { return p.kind == Hit::Entity && sk_.entities[p.index].type != EntityType::Line; };
+  auto isRound = [&](const Hit& p) { return p.kind == Hit::Entity && sketch::isRound(sk_.entities[p.index].type); };
   auto done = [&](std::vector<Constraint> cs) {
     picks_.clear();
     if (cs.size() == 1) {
@@ -841,6 +948,10 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
     if (h.kind == Hit::None) return;
     if (h.kind == Hit::Label) {
       if (sketch::isDimension(sk_.constraints[h.index].type)) askValue(sk_.constraints[h.index], widgetPos, h.index);
+      return;
+    }
+    if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Spline) {
+      emit message(tr("Splines follow their points: dimension the points instead."));
       return;
     }
     if (h.kind == Hit::Entity && !isLine(h)) {
@@ -988,6 +1099,8 @@ bool SketchEditor::hudTool() const {
     case Tool::Circle:
     case Tool::Polygon:
     case Tool::Slot:
+    case Tool::Fillet:
+    case Tool::Offset:
       return true;
     default:
       return false;
@@ -1029,6 +1142,8 @@ void SketchEditor::ensureHud() {
     case Tool::Circle: fields = {{HudField::Length, tr("Diameter")}}; break;
     case Tool::Polygon: fields = {{HudField::Length, tr("Diameter")}, {HudField::Count, tr("Sides")}}; break;
     case Tool::Slot: fields = {{HudField::Length, tr("Length")}, {HudField::Length, tr("Width")}}; break;
+    case Tool::Fillet: fields = {{HudField::Length, tr("Radius")}}; break;
+    case Tool::Offset: fields = {{HudField::Length, tr("Offset")}}; break;
     default: return;
   }
   for (const auto& [kind, name] : fields) {
@@ -1156,6 +1271,12 @@ void SketchEditor::updateHud(double x, double y) {
       live = {{dist, {(a.x + x) / 2, (a.y + y) / 2 + off * 2}},
               {hudLocked(1) ? hudValue(1) : dist / 3, {x + off * 3, y}}};
       break;
+    case Tool::Fillet:
+      live = {{filletRadiusAt(x, y), {x + off * 3, y - off}}};
+      break;
+    case Tool::Offset:
+      live = {{std::abs(offsetAt(x, y, 0)), {x + off * 3, y - off}}};
+      break;
     default:
       return;
   }
@@ -1215,6 +1336,10 @@ bool SketchEditor::eventFilter(QObject* watched, QEvent* e) {
 }
 
 bool SketchEditor::keyPress(QKeyEvent* e) {
+  if (tool_ == Tool::Spline && steps_.size() >= 2 && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+    finishSpline(false);
+    return true;
+  }
   // Typing while drawing goes into the first size box (like the on-canvas input).
   if (!hudTool() || steps_.empty()) return false;
   ensureHud();
@@ -1262,6 +1387,10 @@ void SketchEditor::trimAt(double x, double y) {
   const int ei = h.index;
   const auto& P = sk_.points;
   const Entity target = sk_.entities[ei];
+  if (target.type == EntityType::Spline) {
+    emit message(tr("Trim does not work on splines yet."));
+    return;
+  }
 
   // Intersections of the picked curve with every other curve, as parameters
   // along it: t in [0,1] for lines, angle for circles/arcs.
@@ -1286,6 +1415,7 @@ void SketchEditor::trimAt(double x, double y) {
   for (int j = 0; j < static_cast<int>(sk_.entities.size()); ++j) {
     if (j == ei) continue;
     const Entity& o = sk_.entities[j];
+    if (o.type == EntityType::Spline) continue;   // no crossings with splines yet
     if (target.type == EntityType::Line) {
       const auto &a = P[target.a], &b = P[target.b];
       if (o.type == EntityType::Line) {
@@ -1326,8 +1456,11 @@ void SketchEditor::trimAt(double x, double y) {
   checkpoint();
   auto detachPoint = [&](int pt) {
     // Remove a point that no curve uses any more.
-    for (const auto& e : sk_.entities)
+    for (const auto& e : sk_.entities) {
       if (e.a == pt || e.b == pt || e.center == pt) return;
+      for (int f : e.fit)
+        if (f == pt) return;
+    }
     if (pt > 0) sk_.removePoints({pt});
   };
   // Constraints that only hold for the whole curve are dropped.
@@ -1657,6 +1790,92 @@ void SketchEditor::rebuild() {
   view_->redraw();
 }
 
+void SketchEditor::finishSpline(bool closed) {
+  if (steps_.size() < 2) return;
+  checkpoint();
+  std::vector<int> fit;
+  for (const auto& p : steps_) {
+    const int i = materialize(p);
+    if (fit.empty() || fit.back() != i) fit.push_back(i);
+  }
+  if (closed && fit.size() >= 3) fit.push_back(fit.front());
+  if (fit.size() < 2) {
+    undo_.pop_back();
+    resetSteps();
+    return;
+  }
+  sk_.addSpline(fit, construction_);
+  resetSteps();
+  solveAndShow();
+}
+
+std::vector<std::pair<double, double>> SketchEditor::curveSamples(int entity) const {
+  std::vector<std::pair<double, double>> out;
+  const TopoDS_Shape s = sketch::curve(sk_, frame_, entity);
+  if (s.IsNull()) return out;
+  BRepAdaptor_Curve c(TopoDS::Edge(s));
+  const int n = 64;
+  for (int i = 0; i <= n; ++i) {
+    const gp_Pnt p = c.Value(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * i / n);
+    double x, y;
+    sketch::toSketch(frame_, p, x, y);
+    out.emplace_back(x, y);
+  }
+  return out;
+}
+
+double SketchEditor::entityDistance(int entity, double x, double y) const {
+  if (entity < 0 || entity >= static_cast<int>(sk_.entities.size())) return 1e300;
+  const auto& e = sk_.entities[entity];
+  if (e.type == EntityType::Line) {
+    const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
+    return segDistance(x, y, a.x, a.y, b.x, b.y);
+  }
+  if (sketch::isRound(e.type)) {
+    const auto& c = sk_.points[e.center];
+    return std::abs(std::hypot(x - c.x, y - c.y) - e.radius);
+  }
+  const auto pts = curveSamples(entity);
+  double best = 1e300;
+  for (size_t i = 1; i < pts.size(); ++i)
+    best = std::min(best, segDistance(x, y, pts[i - 1].first, pts[i - 1].second, pts[i].first, pts[i].second));
+  return best;
+}
+
+double SketchEditor::filletRadiusAt(double x, double y) const {
+  if (steps_.empty()) return 0;
+  // Half the cursor's distance from the corner: a natural feel when dragging out.
+  return std::max(std::hypot(x - steps_.front().x, y - steps_.front().y) * 0.5, tolerance() / 4);
+}
+
+double SketchEditor::offsetAt(double x, double y, double magnitude) const {
+  if (offsetEntity_ < 0) return 0;
+  const double m = magnitude > 0 ? magnitude : std::max(entityDistance(offsetEntity_, x, y), tolerance() / 4);
+  // Whichever side's copy passes nearer the cursor.
+  double best = m, bestD = 1e300;
+  for (double d : {m, -m}) {
+    sketch::Sketch trial = sk_;
+    std::vector<int> made;
+    if (!sketch::offsetChain(trial, offsetEntity_, d, &made).empty()) continue;
+    double dist = 1e300;
+    for (int e : made) {
+      const auto& en = trial.entities[e];
+      if (en.type == EntityType::Line) {
+        const auto &a = trial.points[en.a], &b = trial.points[en.b];
+        dist = std::min(dist, segDistance(x, y, a.x, a.y, b.x, b.y));
+      } else {
+        const auto& c = trial.points[en.center];
+        dist = std::min(dist, std::abs(std::hypot(x - c.x, y - c.y) - en.radius));
+      }
+    }
+    if (dist < bestD) {
+      bestD = dist;
+      best = d;
+    }
+  }
+  return best;
+}
+
 void SketchEditor::clearPreview() {
   if (!view_) return;
   const auto& ctx = view_->aisContext();
@@ -1674,7 +1893,7 @@ void SketchEditor::updatePreview(double x, double y) {
   if (hudTool()) {
     ensureHud();
     std::tie(x, y) = hudTarget(x, y);
-    if (!hudAnyLocked()) {
+    if (!hudAnyLocked() && tool_ != Tool::Fillet && tool_ != Tool::Offset) {
       const Pick snap = pickPoint(x, y);
       x = snap.x;
       y = snap.y;
@@ -1687,7 +1906,39 @@ void SketchEditor::updatePreview(double x, double y) {
   }
   sketch::Sketch tmp;
   const auto& a = steps_.front();
+  TopoDS_Shape special;   // preview made from a trial copy of the sketch
+  auto trialCurves = [&](const sketch::Sketch& trial, const std::vector<int>& ents) {
+    TopoDS_Compound c;
+    BRep_Builder bb;
+    bb.MakeCompound(c);
+    for (int e : ents)
+      if (const TopoDS_Shape sh = sketch::curve(trial, frame_, e); !sh.IsNull()) bb.Add(c, sh);
+    special = c;
+  };
   switch (tool_) {
+    case Tool::Spline: {
+      std::vector<int> fit;
+      for (const auto& p : steps_) fit.push_back(tmp.addPoint(p.x, p.y));
+      if (std::hypot(x - steps_.back().x, y - steps_.back().y) > 1e-9) fit.push_back(tmp.addPoint(x, y));
+      if (fit.size() >= 2) tmp.addSpline(fit);
+      break;
+    }
+    case Tool::Fillet: {
+      sketch::Sketch trial = sk_;
+      int arc = -1;
+      const double r = hudLocked(0) ? hudValue(0) : filletRadiusAt(x, y);
+      if (filletLines_.first >= 0 && sketch::filletCorner(trial, filletLines_.first, filletLines_.second, r, &arc).empty())
+        trialCurves(trial, {arc, filletLines_.first, filletLines_.second});
+      break;
+    }
+    case Tool::Offset: {
+      sketch::Sketch trial = sk_;
+      std::vector<int> made;
+      const double d = offsetAt(x, y, hudLocked(0) ? hudValue(0) : 0);
+      if (offsetEntity_ >= 0 && std::abs(d) > 1e-9 && sketch::offsetChain(trial, offsetEntity_, d, &made).empty())
+        trialCurves(trial, made);
+      break;
+    }
     case Tool::CenterRectangle: {
       const double hx = std::abs(x - a.x), hy = std::abs(y - a.y);
       if (hx > 1e-9 && hy > 1e-9) {
@@ -1757,7 +2008,7 @@ void SketchEditor::updatePreview(double x, double y) {
     default:
       break;
   }
-  const TopoDS_Shape s = sketch::curves(tmp, frame_, false);
+  const TopoDS_Shape s = special.IsNull() ? sketch::curves(tmp, frame_, false) : special;
   const auto& ctx = view_->aisContext();
   if (!s.IsNull() && !ctx.IsNull()) {
     Handle(AIS_Shape) w = wire(s, kPreview, 1.5, Aspect_TOL_DASH);

@@ -321,6 +321,36 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   paletteButton("palette.finish")->click();
   QApplication::processEvents();
   if (w.sketchEditor() || w.sketchPalette() || s.document().sketches().size() != 1) return fail("palette Finish Sketch");
+
+  // Sketch Fillet, Offset and Spline through the tools and size boxes.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Rectangle);
+  ed->clickAt(0, 0);
+  ed->clickAt(4, 3);
+  ed->setTool(Tool::Fillet);
+  ed->clickAt(4, 3);   // the corner
+  ed->hoverAt(4.5, 3.5);
+  if (!ed->typeValue(QStringLiteral("5"))) return fail("fillet radius box");
+  {
+    int arcs = 0;
+    for (const auto& e : ed->sketch().entities) arcs += e.type == tsr::sketch::EntityType::Arc;
+    if (arcs != 1 || !ed->status().ok) return fail("fillet did not round the corner");
+  }
+  const size_t beforeOffset = ed->sketch().entities.size();
+  ed->setTool(Tool::Offset);
+  ed->clickAt(2, 0);   // bottom edge: the whole outline is offset
+  ed->hoverAt(2, -1);  // outside
+  if (!ed->typeValue(QStringLiteral("10"))) return fail("offset box");
+  if (ed->sketch().entities.size() != beforeOffset + 5 || !ed->status().ok) return fail("offset of the outline");
+  ed->setTool(Tool::Spline);
+  ed->clickAt(10, 0);
+  ed->clickAt(12, 3);
+  ed->clickAt(11, 6);
+  ed->escape();
+  if (ed->sketch().entities.back().type != tsr::sketch::EntityType::Spline || ed->sketch().entities.back().fit.size() != 3)
+    return fail("spline");
+  if (!w.finishSketch()) return fail("finish sketch with fillet/offset/spline");
   std::puts("smoke: OK");
   return 0;
 }

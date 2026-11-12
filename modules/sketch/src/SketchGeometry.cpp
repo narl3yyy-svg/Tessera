@@ -9,6 +9,8 @@
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GC_MakeArcOfCircle.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
 #include <GProp_GProps.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
@@ -92,6 +94,25 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         GC_MakeArcOfCircle arc(c, P(e.a), P(e.b), true);
         if (!arc.IsDone()) return {};
         return BRepBuilderAPI_MakeEdge(arc.Value()).Edge();
+      }
+      case EntityType::Spline: {
+        // Fit points, without repeats; a closed spline is periodic.
+        const bool closed = e.fit.size() > 2 && e.fit.front() == e.fit.back();
+        std::vector<gp_Pnt> pts;
+        for (size_t i = 0; i < e.fit.size() - (closed ? 1 : 0); ++i) {
+          const gp_Pnt p = P(e.fit[i]);
+          if (pts.empty() || pts.back().Distance(p) > 1e-7) pts.push_back(p);
+        }
+        if (closed && pts.size() > 1 && pts.back().Distance(pts.front()) < 1e-7) pts.pop_back();
+        if (pts.size() < 2) return {};
+        if (pts.size() == 2 && !closed) return BRepBuilderAPI_MakeEdge(pts[0], pts[1]).Edge();
+        if (closed && pts.size() < 3) return {};
+        Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, static_cast<int>(pts.size()));
+        for (size_t i = 0; i < pts.size(); ++i) arr->SetValue(static_cast<int>(i) + 1, pts[i]);
+        GeomAPI_Interpolate interp(arr, closed, 1e-7);
+        interp.Perform();
+        if (!interp.IsDone()) return {};
+        return BRepBuilderAPI_MakeEdge(interp.Curve()).Edge();
       }
     }
   } catch (const Standard_Failure&) {

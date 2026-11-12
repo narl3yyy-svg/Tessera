@@ -12,7 +12,7 @@ Each phase ends with something usable; nothing below is promised by date.
 | P1 | 3D viewport, ViewCube, navigation, primitives with booleans, parametric timeline (edit/suppress/delete) | done |
 | P2 | **Sketching + Extrude**: sketch on a plane or face; line, rectangle, circle, arc, point, construction; constraints and dimensions with our own solver; fully-constrained colouring; Extrude with profile picking | **done (this release)** |
 | P3a | **Revolve, Fillet, Chamfer** with edge picking that survives edits | **done (this release)** |
-| P3b | **More features**: Shell, Hole, Sweep, Loft, Draft; extrude To Object/All/taper; trim/offset/spline/fillet in sketches; in-canvas drag arrows ✅ (Extrude, Press Pull, Fillet, Chamfer); topological naming | next |
+| P3b | **More features**: Shell, Hole, Sweep, Loft, Draft; extrude To Object/All/taper; trim/offset/spline/fillet in sketches ✅; in-canvas drag arrows ✅ (Extrude, Press Pull, Fillet, Chamfer); topological naming | next |
 | P4 | **Construction and patterns**: offset/angle/midplane planes, axes, points; rectangular/circular/path patterns; mirror; Combine, Split Body, Move/Copy, Press Pull | |
 | P5 | **Parameters and expressions**: `d1 = width/2 + 3 mm`, parameter table, every input accepts expressions | **done** (model parameter names `d1` still to come) |
 | P6 | **Components and assemblies**: components, joints (rigid, revolute, slider, ...), motion, interference | |
@@ -43,7 +43,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
 
-**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Ellipse · Spline · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet · Chamfer · Offset · Extend · Break · Sketch Scale · Move/Copy
+**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Ellipse · Spline ✅ (fit point) · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet ✅ · Chamfer · Offset ✅ · Extend · Break · Sketch Scale · Move/Copy
 
 **Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear ✅ · Symmetry ✅ · Curvature · Polygon; Sketch Palette ✅ (feature options, linetype, Look At, grid, snap, slice, show profiles/points/dimensions/constraints/construction)
 

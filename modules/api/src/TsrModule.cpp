@@ -5,6 +5,7 @@
 #include "tsr/api/PythonHost.h"
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Io.h"
+#include "tsr/sketch/SketchOps.h"
 
 #include <TopoDS_Shape.hxx>
 
@@ -151,6 +152,20 @@ void bindTsr(py::module_& m) {
     }
   }, py::arg("expression"), py::arg("unit") = "mm",
      "Evaluate an expression as an input in `unit` would (internal units out; lengths use the document unit).");
+
+  // Sketch editing operations on sketch JSON (as passed to tsr.sketch.create).
+  m.def("sketch_fillet", [](const std::string& data, int lineA, int lineB, double radius) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::filletCorner(s, lineA, lineB, radius); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("line_a"), py::arg("line_b"), py::arg("radius"),
+     "Round the corner between two lines (cm); returns the new sketch JSON.");
+  m.def("sketch_offset", [](const std::string& data, int entity, double distance) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::offsetChain(s, entity, distance); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entity"), py::arg("distance"),
+     "Offset the chain through an entity (cm; closed chains: positive is outward); returns the new sketch JSON.");
 
   m.def("export", [](const std::string& path, int refinement) {
     const auto format = kernel::formatForPath(path);

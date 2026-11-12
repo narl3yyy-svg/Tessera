@@ -33,6 +33,7 @@ public:
     Select, Line, Rectangle, Circle, Arc, Point, Dimension,
     Coincident, HorizontalVertical, Parallel, Perpendicular, Equal, Tangent, Fix, Midpoint, Concentric,
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
+    Spline, Fillet, Offset,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -165,6 +166,15 @@ private:
   void trimAt(double x, double y);
 
   void snapToGrid(double& x, double& y) const;
+  // Spline / Fillet / Offset
+  void finishSpline(bool closed);
+  std::vector<std::pair<double, double>> curveSamples(int entity) const;   // sketch coordinates
+  double entityDistance(int entity, double x, double y) const;
+  double filletRadiusAt(double x, double y) const;
+  double offsetAt(double x, double y, double magnitude) const;   // signed: the side of the cursor
+  std::pair<int, int> filletLines_{-1, -1};
+  int firstFilletLine_ = -1;
+  int offsetEntity_ = -1;
   QString lengthText(double cm) const;
 
   doc::Session& session_;

@@ -703,6 +703,37 @@ void trimIcon(QPainter& p) {
   p.drawLine(QPointF(34, 20), QPointF(22, 34));
 }
 
+void splineIcon(QPainter& p) {
+  stroke(p);
+  QPainterPath c;
+  c.moveTo(6, 48);
+  c.cubicTo(18, 4, 34, 60, 58, 14);
+  p.setBrush(Qt::NoBrush);
+  p.drawPath(c);
+  p.setPen(QPen(kLine, 1.5));
+  p.setBrush(kAccent);
+  for (QPointF q : {QPointF(6, 48), QPointF(23, 30), QPointF(40, 34), QPointF(58, 14)}) p.drawEllipse(q, 4, 4);
+}
+
+void sketchFilletIcon(QPainter& p) {
+  stroke(p);
+  p.setBrush(Qt::NoBrush);
+  p.drawLine(QPointF(10, 56), QPointF(10, 30));
+  p.drawLine(QPointF(30, 10), QPointF(56, 10));
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.drawArc(QRectF(10, 10, 40, 40), 90 * 16, 90 * 16);
+  p.setPen(QPen(kLine, 1.5, Qt::DashLine));
+  p.drawLine(QPointF(10, 10), QPointF(24, 24));
+}
+
+void offsetIcon(QPainter& p) {
+  stroke(p);
+  p.setBrush(Qt::NoBrush);
+  p.drawRoundedRect(QRectF(20, 20, 24, 24), 3, 3);
+  p.setPen(QPen(kAccent, 3, Qt::DashLine));
+  p.drawRoundedRect(QRectF(8, 8, 48, 48), 8, 8);
+}
+
 void holeIcon(QPainter& p) {
   cube(p, 6, 10, 52, kTop, kLeft, kRight);
   p.setBrush(kLine);
@@ -808,6 +839,9 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("polygon")) polygonIcon(p);
   else if (name == QLatin1String("slot")) slotIcon(p);
   else if (name == QLatin1String("trim")) trimIcon(p);
+  else if (name == QLatin1String("spline")) splineIcon(p);
+  else if (name == QLatin1String("sketch-fillet")) sketchFilletIcon(p);
+  else if (name == QLatin1String("offset")) offsetIcon(p);
   else if (name == QLatin1String("hole")) holeIcon(p);
   else if (name == QLatin1String("pattern-rect")) patternIcon(p, false);
   else if (name == QLatin1String("pattern-circ")) patternIcon(p, true);
