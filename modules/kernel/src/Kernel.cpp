@@ -60,6 +60,17 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
+#include <BRepAdaptor_CompCurve.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
+#include <BRepLib.hxx>
+#include <Geom2d_Line.hxx>
+#include <Geom_ConicalSurface.hxx>
+#include <Geom_CylindricalSurface.hxx>
+#include <gp_Ax3.hxx>
+#include <gp_Circ.hxx>
+#include <gp_Vec2d.hxx>
 #include <sstream>
 
 #include <memory>
@@ -979,6 +990,117 @@ TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<Top
     if (!isValid(s)) throw KernelError("Sweep: the result is not a valid solid (is the profile at the start of the path?)");
     result = result.IsNull() ? s : boolean(BooleanOp::Join, result, s);
   }
+  return result;
+}
+
+namespace {
+// A closed section wire centred at p, in the plane normal to t; `u` (in that
+// plane) is where a square's side faces and a triangle's tip points.
+TopoDS_Wire sectionWire(Section section, double size, const gp_Pnt& p, const gp_Dir& t, const gp_Dir& u) {
+  const gp_Dir v = t.Crossed(u);
+  if (section == Section::Circular)
+    return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(gp_Circ(gp_Ax2(p, t, u), size / 2)).Edge()).Wire();
+  BRepBuilderAPI_MakePolygon poly;
+  if (section == Section::Square) {
+    const double h = size / 2;
+    for (auto [a, b] : {std::pair{h, h}, {-h, h}, {-h, -h}, {h, -h}})
+      poly.Add(p.Translated(gp_Vec(u) * a + gp_Vec(v) * b));
+  } else {
+    // Equilateral triangle of side `size`, tip along u.
+    const double r = size / std::sqrt(3.0);
+    for (int k = 0; k < 3; ++k) {
+      const double ang = 2 * 3.14159265358979323846 * k / 3;
+      poly.Add(p.Translated(gp_Vec(u) * (r * std::cos(ang)) + gp_Vec(v) * (r * std::sin(ang))));
+    }
+  }
+  poly.Close();
+  return poly.Wire();
+}
+
+gp_Dir anyPerpendicular(const gp_Dir& t) {
+  const gp_Vec a = std::abs(t.Z()) < 0.9 ? gp_Vec(0, 0, 1) : gp_Vec(1, 0, 0);
+  return gp_Dir(gp_Vec(t).Crossed(a));
+}
+
+TopoDS_Shape solidSweep(const TopoDS_Wire& path, const TopoDS_Wire& profile, const gp_Dir* binormal) {
+  BRepOffsetAPI_MakePipeShell pipe(path);
+  if (binormal) pipe.SetMode(*binormal);   // helices: keep the section's orientation about the axis
+  else pipe.SetMode(false);
+  pipe.SetTransitionMode(BRepBuilderAPI_RoundCorner);
+  pipe.Add(profile, false, false);
+  pipe.Build();
+  if (!pipe.IsDone() || !pipe.MakeSolid()) return {};
+  return pipe.Shape();
+}
+} // namespace
+
+TopoDS_Shape pipe(const std::vector<TopoDS_Shape>& pathEdges, Section section, double size, double wall) {
+  if (pathEdges.empty()) throw KernelError("Pipe: the path has no curves");
+  if (!(size > 0)) throw KernelError("Pipe: the section size must be greater than zero");
+  if (wall > 0 && 2 * wall >= size) throw KernelError("Pipe: the wall is too thick for the section size");
+  Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
+  for (const auto& e : pathEdges) edges->Append(e);
+  Handle(TopTools_HSequenceOfShape) wires;
+  ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+  if (wires.IsNull() || wires->Length() != 1) throw KernelError("Pipe: the path must be one connected chain of curves");
+  const TopoDS_Wire path = TopoDS::Wire(wires->Value(1));
+  TopoDS_Shape result = guarded("Pipe", [&]() -> TopoDS_Shape {
+    BRepAdaptor_CompCurve c(path);
+    gp_Pnt p;
+    gp_Vec t;
+    c.D1(c.FirstParameter(), p, t);
+    if (t.Magnitude() < 1e-12) return {};
+    const gp_Dir td(t);
+    const gp_Dir u = anyPerpendicular(td);
+    TopoDS_Shape solid = solidSweep(path, sectionWire(section, size, p, td, u), nullptr);
+    if (solid.IsNull() || wall <= 0) return solid;
+    const TopoDS_Shape inner = solidSweep(path, sectionWire(section, size - 2 * wall, p, td, u), nullptr);
+    return inner.IsNull() ? TopoDS_Shape() : boolean(BooleanOp::Cut, solid, inner);
+  });
+  if (!isValid(result)) throw KernelError("Pipe: could not build a valid solid (is the section too big for the path's bends?)");
+  return result;
+}
+
+TopoDS_Shape coil(Vec3 origin, Vec3 axis, Vec3 xdir, double diameter, double turns, double height, double taper,
+                  Section section, double size, int position) {
+  if (!(diameter > 0) || !(turns > 0) || !(size > 0)) throw KernelError("Coil: diameter, revolutions and section size must be greater than zero");
+  if (!(std::abs(height) > 1e-9)) throw KernelError("Coil: the height must not be zero");
+  if (std::abs(taper) >= 1.5) throw KernelError("Coil: the angle must be between -85 and 85 degrees");
+  const double pitch = std::abs(height) / turns;
+  if (pitch < size * (section == Section::Triangular ? 0.866 : 1.0) * 1.0001)
+    throw KernelError("Coil: the turns would overlap; make the pitch larger than the section size");
+  double r = diameter / 2 + (position == 1 ? -size / 2 : position == 2 ? size / 2 : 0.0);
+  if (r <= size / 2) throw KernelError("Coil: the diameter is too small for the section");
+  TopoDS_Shape result = guarded("Coil", [&]() -> TopoDS_Shape {
+    const gp_Dir z(axis.x, axis.y, axis.z);
+    gp_Vec xv(xdir.x, xdir.y, xdir.z);
+    xv -= gp_Vec(z) * xv.Dot(gp_Vec(z));
+    const gp_Ax3 frame(gp_Pnt(origin.x, origin.y, origin.z), z, gp_Dir(xv));
+    // The helix as a straight 2D line on a cylinder (or cone, when tapered).
+    Handle(Geom_Surface) surf;
+    double vLen = height;
+    if (std::abs(taper) > 1e-9) {
+      surf = new Geom_ConicalSurface(frame, taper, r);
+      vLen = height / std::cos(taper);
+    } else {
+      surf = new Geom_CylindricalSurface(frame, r);
+    }
+    const gp_Vec2d d(2 * 3.14159265358979323846 * turns, vLen);
+    Handle(Geom2d_Line) line = new Geom2d_Line(gp_Pnt2d(0, 0), gp_Dir2d(d));
+    TopoDS_Edge helix = BRepBuilderAPI_MakeEdge(line, surf, 0.0, d.Magnitude()).Edge();
+    BRepLib::BuildCurves3d(helix);
+    const TopoDS_Wire path = BRepBuilderAPI_MakeWire(helix).Wire();
+    BRepAdaptor_Curve c(helix);
+    gp_Pnt p;
+    gp_Vec t;
+    c.D1(c.FirstParameter(), p, t);
+    gp_Vec radial(frame.Location(), p);
+    radial -= gp_Vec(z) * radial.Dot(gp_Vec(z));
+    gp_Vec u = radial - t.Normalized() * radial.Dot(t.Normalized());
+    if (u.Magnitude() < 1e-12) u = gp_Vec(anyPerpendicular(gp_Dir(t)));
+    return solidSweep(path, sectionWire(section, size, p, gp_Dir(t), gp_Dir(u)), &z);
+  });
+  if (!isValid(result)) throw KernelError("Coil: could not build a valid solid from these values");
   return result;
 }
 

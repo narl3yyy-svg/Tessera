@@ -126,6 +126,22 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
 TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<TopoDS_Shape>& pathEdges);
 // Lofts through closed sections (faces or wires), in order.
 TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled);
+
+// Pipe / Coil sections.
+enum class Section { Circular, Square, Triangular };
+
+// Pipe: a section of `size` (diameter, or side) swept along a connected chain
+// of path edges, starting at its first end. wall > 0 makes it hollow with
+// that wall thickness. Throws KernelError.
+TopoDS_Shape pipe(const std::vector<TopoDS_Shape>& pathEdges, Section section, double size, double wall);
+
+// Coil: a section swept along a helix about the axis through `origin` along
+// `axis` (`xdir` is where the helix starts). `diameter` is the helix
+// diameter, `height` its length along the axis, `taper` widens it (rad).
+// Section position: 0 on the helix, 1 inside it, 2 outside it.
+// Throws KernelError (e.g. coils that would overlap).
+TopoDS_Shape coil(Vec3 origin, Vec3 axis, Vec3 xdir, double diameter, double turns, double height, double taper,
+                  Section section, double size, int position);
 // Press Pull: moves planar faces of a body along their outward normal by
 // `distance` (positive adds material, negative removes it).
 TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);

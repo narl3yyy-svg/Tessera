@@ -703,6 +703,31 @@ void trimIcon(QPainter& p) {
   p.drawLine(QPointF(34, 20), QPointF(22, 34));
 }
 
+void pipeIcon(QPainter& p) {
+  QPainterPath path;
+  path.moveTo(8, 50);
+  path.cubicTo(8, 20, 28, 14, 56, 14);
+  p.setBrush(Qt::NoBrush);
+  p.setPen(QPen(kLine, 14, Qt::SolidLine, Qt::FlatCap));
+  p.drawPath(path);
+  p.setPen(QPen(kLeft, 10, Qt::SolidLine, Qt::FlatCap));
+  p.drawPath(path);
+  p.setPen(QPen(kLine, 2));
+  p.setBrush(kTop);
+  p.drawEllipse(QPointF(8, 52), 6, 3);
+}
+
+void coilIcon(QPainter& p) {
+  p.setBrush(Qt::NoBrush);
+  for (int i = 0; i < 4; ++i) {
+    const double y = 12 + i * 11;
+    p.setPen(QPen(kLine, 6, Qt::SolidLine, Qt::RoundCap));
+    p.drawArc(QRectF(12, y, 40, 12), 0, 180 * 16);
+    p.setPen(QPen(kLeft, 4, Qt::SolidLine, Qt::RoundCap));
+    p.drawArc(QRectF(12, y, 40, 12), 180 * 16, 180 * 16);
+  }
+}
+
 void splineIcon(QPainter& p) {
   stroke(p);
   QPainterPath c;
@@ -840,6 +865,8 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("slot")) slotIcon(p);
   else if (name == QLatin1String("trim")) trimIcon(p);
   else if (name == QLatin1String("spline")) splineIcon(p);
+  else if (name == QLatin1String("pipe")) pipeIcon(p);
+  else if (name == QLatin1String("coil")) coilIcon(p);
   else if (name == QLatin1String("sketch-fillet")) sketchFilletIcon(p);
   else if (name == QLatin1String("offset")) offsetIcon(p);
   else if (name == QLatin1String("hole")) holeIcon(p);

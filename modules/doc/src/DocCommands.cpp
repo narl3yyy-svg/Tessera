@@ -1782,6 +1782,137 @@ private:
   CommandDef def_;
 };
 
+// ---------------------------------------------------------------------------
+// Pipe and Coil.
+
+kernel::Section sectionOf(const std::string& s) {
+  return s == "Square" ? kernel::Section::Square : s == "Triangular" ? kernel::Section::Triangular : kernel::Section::Circular;
+}
+
+class Pipe final : public Command {
+public:
+  Pipe() {
+    commonDef(def_, kCmdPipe, "Pipe", "A round, square or triangular section along the curves of a sketch.", "pipe", "Create");
+    def_.inputs = {
+        {.id = "path", .label = "Path", .tooltip = "Sketch whose curves form the path. Empty: the latest sketch.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+        choice("section", "Section", {"Circular", "Square", "Triangular"}, "Shape of the section."),
+        {.id = "size", .label = "Section Size", .tooltip = "Diameter, or side length.", .type = InputType::Real,
+         .defaultValue = 0.5, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true},
+        choice("hollow", "Hollow", {"No", "Yes"}, "Yes: a tube with the given wall thickness."),
+        {.id = "thickness", .label = "Section Thickness", .tooltip = "Wall thickness of the tube.", .type = InputType::Real,
+         .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true, .visibleWhen = "hollow=Yes"},
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (!sketchFor(doc, getString(in, "path"))) return "Path: draw the path as a sketch first";
+    return validateOperation(in, doc);
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    if (getString(in, "path").empty())
+      if (auto rec = sketchFor(docOf(ctx), "")) in["path"] = rec->name;
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto path = sketchFor(doc, getString(in, "path"));
+    if (!path) throw CommandError("Path: '" + getString(in, "path") + "' does not exist");
+    try {
+      const gp_Ax3 pf = doc.planeFrame(path->plane, path->offset);
+      const TopoDS_Shape curves = sketch::curves(sketch::Sketch::fromJson(path->data), pf, false);
+      std::vector<TopoDS_Shape> edges;
+      for (TopExp_Explorer it(curves, TopAbs_EDGE); it.More(); it.Next()) edges.push_back(it.Current());
+      const double wall = getString(in, "hollow") == "Yes" ? getReal(in, "thickness") : 0.0;
+      applyOperation(doc, in, kernel::pipe(edges, sectionOf(getString(in, "section")), getReal(in, "size"), wall), "Pipe");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    } catch (const DocumentError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class Coil final : public Command {
+public:
+  Coil() {
+    commonDef(def_, kCmdCoil, "Coil", "A helix-swept section: springs, coils and spirals.", "coil", "Create");
+    def_.inputs = {
+        planeChoice("Plane the coil starts on (its axis is the plane's normal)."),
+        {.id = "x", .label = "Center X", .tooltip = "Centre on the plane (plane X).", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter},
+        {.id = "y", .label = "Center Y", .tooltip = "Centre on the plane (plane Y).", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter},
+        {.id = "diameter", .label = "Diameter", .tooltip = "Diameter of the coil.", .type = InputType::Real,
+         .defaultValue = 2.0, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true},
+        choice("type", "Type", {"Revolution and Height", "Revolution and Pitch", "Height and Pitch"}, "Which two values define the coil."),
+        {.id = "revolutions", .label = "Revolutions", .tooltip = "Number of turns.", .type = InputType::Real,
+         .defaultValue = 5.0, .unit = Unit::None, .min = 0.0, .minExclusive = true,
+         .visibleWhen = "type=Revolution and Height|Revolution and Pitch"},
+        {.id = "height", .label = "Height", .tooltip = "Length along the axis; negative goes the other way.",
+         .type = InputType::Real, .defaultValue = 3.0, .unit = Unit::Millimeter,
+         .visibleWhen = "type=Revolution and Height|Height and Pitch"},
+        {.id = "pitch", .label = "Pitch", .tooltip = "Distance between turns.", .type = InputType::Real,
+         .defaultValue = 0.6, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true,
+         .visibleWhen = "type=Revolution and Pitch|Height and Pitch"},
+        {.id = "angle", .label = "Angle", .tooltip = "Taper: positive widens the coil as it rises.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree, .min = -1.48, .max = 1.48},
+        choice("section", "Section", {"Circular", "Square", "Triangular"}, "Shape of the wire."),
+        choice("position", "Section Position", {"On Center", "Inside", "Outside"}, "Where the section sits relative to the diameter."),
+        {.id = "size", .label = "Section Size", .tooltip = "Wire diameter, or side length.", .type = InputType::Real,
+         .defaultValue = 0.3, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true},
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    try {
+      (void)planeOf(docOf(ctx), in, "plane", "-");
+      (void)turnsAndHeight(in);
+    } catch (const std::exception& e) {
+      return e.what();
+    }
+    return validateOperation(in, docOf(ctx));
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const gp_Ax3 f = planeOf(doc, in, "plane", "-");
+    const gp_Pnt o = f.Location().Translated(gp_Vec(f.XDirection()) * getReal(in, "x") + gp_Vec(f.YDirection()) * getReal(in, "y"));
+    const auto [turns, height] = turnsAndHeight(in);
+    const std::string pos = getString(in, "position");
+    try {
+      const TopoDS_Shape s = kernel::coil({o.X(), o.Y(), o.Z()}, {f.Direction().X(), f.Direction().Y(), f.Direction().Z()},
+                                          {f.XDirection().X(), f.XDirection().Y(), f.XDirection().Z()},
+                                          getReal(in, "diameter"), turns, height, getReal(in, "angle"),
+                                          sectionOf(getString(in, "section")), getReal(in, "size"),
+                                          pos == "Inside" ? 1 : pos == "Outside" ? 2 : 0);
+      applyOperation(doc, in, s, "Coil");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  static std::pair<double, double> turnsAndHeight(const Inputs& in) {
+    const std::string t = getString(in, "type");
+    if (t == "Revolution and Pitch") return {getReal(in, "revolutions"), getReal(in, "revolutions") * getReal(in, "pitch")};
+    if (t == "Height and Pitch") {
+      const double h = getReal(in, "height");
+      if (std::abs(h) < 1e-9) throw CommandError("Height: must not be zero");
+      return {std::abs(h) / getReal(in, "pitch"), h};
+    }
+    if (std::abs(getReal(in, "height")) < 1e-9) throw CommandError("Height: must not be zero");
+    return {getReal(in, "revolutions"), getReal(in, "height")};
+  }
+  CommandDef def_;
+};
+
 class Loft final : public Command {
 public:
   Loft() {
@@ -1899,6 +2030,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CircularPattern>());
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
+  registry.add(std::make_unique<Pipe>());
+  registry.add(std::make_unique<Coil>());
   using CAP = ConstructAxisPoint::Kind;
   for (CAP k : {CAP::AxisCylinder, CAP::AxisEdge, CAP::AxisTwoPoints, CAP::AxisTwoPlanes, CAP::PointVertex,
                 CAP::PointTwoEdges, CAP::PointThreePlanes, CAP::PointCenter, CAP::PointEdgePlane})
