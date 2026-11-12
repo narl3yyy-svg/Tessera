@@ -147,6 +147,7 @@ private:
   void updateEdgePicking();
   // In-canvas drag arrow for the open panel (MainWindowArrow.cpp).
   void updateDragArrow();
+  void attachArrowCompleters();
   void showBrowserMenu(const QPoint& pos);
   std::optional<gp_Pnt> patternCentre();
   std::map<QString, gp_Pnt> patternCentres_;   // per feature name, while a pattern is open

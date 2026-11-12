@@ -18,13 +18,13 @@ behaviours found there that Tessera does not match yet. Each finding moves to `d
 | 8 | https://www.youtube.com/watch?v=o5rcAv7xVUo || transcript |
 | 9 | https://www.youtube.com/watch?v=2YaMulL4dZY || transcript |
 | 10 | https://www.youtube.com/watch?v=BUH3WiUjMXw || transcript |
-| 11 | https://www.youtube.com/watch?v=pa6VWGFoZ2Q | |
-| 12 | https://www.youtube.com/watch?v=J3rPwne4lWY | |
-| 13 | https://www.youtube.com/watch?v=zLL6foqTdJg | |
+| 11 | https://www.youtube.com/watch?v=pa6VWGFoZ2Q || transcript |
+| 12 | https://www.youtube.com/watch?v=J3rPwne4lWY || transcript |
+| 13 | https://www.youtube.com/watch?v=zLL6foqTdJg || transcript |
 | 14 | https://www.youtube.com/watch?v=xmAGzRBDccs || transcript |
-| 15 | https://www.youtube.com/watch?v=QnDJl9W5Uso | |
-| 16 | https://www.youtube.com/watch?v=vr_zPVEsyjs | |
-| 17 | https://www.youtube.com/watch?v=DJULiA1aTtM | |
+| 15 | https://www.youtube.com/watch?v=QnDJl9W5Uso || transcript |
+| 16 | https://www.youtube.com/watch?v=vr_zPVEsyjs || transcript |
+| 17 | https://www.youtube.com/watch?v=DJULiA1aTtM || transcript |
 | 18 | https://www.youtube.com/watch?v=fYDJLdOV_zE | |
 | 19 | https://www.youtube.com/watch?v=smbb4rJPBGg | |
 | 20 | https://www.youtube.com/watch?v=Q1Thdrt40MA | |
@@ -115,6 +115,12 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Capture Design History on an imported STEP file; Create Components from Bodies (Day 10).
 
 ### Interface
+- [x] Space repeats the last command; in a sketch, the last sketch tool after Esc (Day 11).
+- [x] Typing in a value box suggests matching parameter names; Enter takes one, Enter again applies (Day 17).
+- [ ] Hover a dimension to see its name (d1, d2 ...); click a constraint glyph to see its name in the status bar (Day 13).
+- [ ] Fillet selection sets: + adds another set of edges with its own radius (Days 8, 9, 11, 12).
+- [ ] Components: the activate radio button in the Browser; Copy / Paste New; Unground from Parent (Days 11, 12, 13, 15).
+- [ ] Hold Ctrl over a face to snap to points on it when placing joints (Day 17).
 - [x] Marking menu changes with what is under the cursor (Lesson 3).
 - [ ] Pin to Toolbar: the ⋮ beside a menu entry adds it to the ribbon (Lesson 3).
 - [ ] Rename a sketch or body in the Browser: click once to select, again to edit (Days 3, 6).

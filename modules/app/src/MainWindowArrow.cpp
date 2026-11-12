@@ -4,6 +4,7 @@
 // radius live, and the box beside it takes typed values and expressions.
 #include "CommandDialog.h"
 #include "MainWindow.h"
+#include "ParameterCompleter.h"
 #include "SketchEditor.h"
 #include "Viewport.h"
 
@@ -19,6 +20,7 @@
 #include <Bnd_Box.hxx>
 #include <GProp_GProps.hxx>
 #include <TopoDS.hxx>
+#include <QLineEdit>
 
 #include <algorithm>
 #include <cmath>
@@ -218,6 +220,7 @@ void MainWindow::updateDragArrow() {
     if (!v1) return off();
     arrowInput_ = QStringLiteral("distance1");
     viewport_->setDragArrow(*centre, d1, *v1, active_->displayText(arrowInput_));
+    attachArrowCompleters();
     if (v2 && active_->intInput(QStringLiteral("quantity2")).value_or(1) > 1) {
       arrowInput2_ = QStringLiteral("distance2");
       viewport_->setDragArrow(*centre, d2, *v2, active_->displayText(arrowInput2_), 1);
@@ -241,6 +244,7 @@ void MainWindow::updateDragArrow() {
   if (!place || !value) return off();
   arrowInput_ = input;
   viewport_->setDragArrow(place->base, place->dir, *value, active_->displayText(input));
+  attachArrowCompleters();
   // Two Sides: a second arrow pointing the other way sets side 2's distance.
   const auto value2 = id == QLatin1String(doc::kCmdExtrude) &&
                               active_->textInput(QStringLiteral("direction")) == QLatin1String("Two Sides")
@@ -253,6 +257,16 @@ void MainWindow::updateDragArrow() {
     arrowInput2_.clear();
     viewport_->clearSecondArrow();
   }
+}
+
+void MainWindow::attachArrowCompleters() {
+  for (int i = 0; i < 2; ++i)
+    if (QLineEdit* box = viewport_->dragArrowBox(i))
+      ParameterCompleter::attach(box, [this] {
+        QStringList n;
+        for (const auto& prm : session_.document().userParameters()) n << QString::fromStdString(prm.name);
+        return n;
+      });
 }
 
 void MainWindow::onDragArrow(double value) {

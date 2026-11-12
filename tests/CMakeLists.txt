@@ -121,7 +121,10 @@ if(TSR_WITH_QT)
     add_test(NAME live_browser_sketch
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/browser_sketch.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_empty.py ${CMAKE_CURRENT_SOURCE_DIR}/live/browser_sketch_check.py)
-    set_tests_properties(live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
+    add_test(NAME live_value_suggest
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/value_suggest.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_param_rect.py ${CMAKE_CURRENT_SOURCE_DIR}/live/value_suggest_check.py)
+    set_tests_properties(live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()

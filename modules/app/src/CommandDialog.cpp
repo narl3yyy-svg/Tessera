@@ -1,4 +1,5 @@
 #include "CommandDialog.h"
+#include "ParameterCompleter.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -53,6 +54,7 @@ public:
     lineEdit()->setText(textFromValue(value()));
   }
   QString typedText() const { return lineEdit()->text().trimmed(); }
+  QLineEdit* edit() const { return lineEdit(); }
   std::optional<double> evaluate(const QString& t) const { return eval_(t); }
   // Types text and finishes the edit, as a user pressing Enter would.
   void typeText(const QString& t) {
@@ -122,6 +124,7 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         if (const std::string e = inputExpression(cmd_->inputs(), id); !e.empty())
           sb->setExpression(QString::fromStdString(e));
         sb->setAccelerated(true);
+        ParameterCompleter::attach(sb->edit(), [this] { return parameterNames(); });
         // Sends the typed expression, or the number after stepping / typing a
         // plain value. Both signals can fire for one edit; send it once.
         auto commit = [this, id, sb, shown] {
@@ -467,6 +470,12 @@ void CommandDialog::pickPlane(const QString& spec, const QString& label) {
 bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
 bool CommandDialog::hasFacesInput() const { return !facesId_.empty(); }
 bool CommandDialog::hasBodiesInput() const { return !bodiesId_.empty(); }
+
+QStringList CommandDialog::parameterNames() const {
+  QStringList n;
+  for (const auto& prm : session_.document().userParameters()) n << QString::fromStdString(prm.name);
+  return n;
+}
 
 bool CommandDialog::wantsFeatures() const {
   if (featuresId_.empty()) return false;

@@ -54,6 +54,7 @@ public:
   QString currentVertices() const { return stringInput(verticesId_); }
   void setVertices(const QString& v);
   bool hasBodiesInput() const;
+  QStringList parameterNames() const;   // user parameters, for value suggestions
   // Pattern Type = Features: features are picked by clicking the timeline.
   bool wantsFeatures() const;
   QString currentFeatures() const;

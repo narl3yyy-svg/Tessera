@@ -1,4 +1,5 @@
 #include "SketchEditor.h"
+#include "ParameterCompleter.h"
 #include "Theme.h"
 
 #include "tsr/core/Expression.h"
@@ -155,6 +156,7 @@ void SketchEditor::setTool(Tool t) {
   const std::vector<Hit> preselected = isConstraintTool(t) ? selection_ : std::vector<Hit>{};
   resetSteps();
   tool_ = t;
+  if (t != Tool::Select) lastTool_ = t;
   selection_.clear();
   for (const auto& h : keep) picks_.push_back({h, 0, 0});
   if (!keep.empty()) mirrorLineStage_ = true;
@@ -1690,6 +1692,7 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
   auto* box = new QLineEdit(view_);
   valueBox_ = box;
   box->setObjectName(QStringLiteral("dimensionValue"));
+  ParameterCompleter::attach(box, [this] { return parameterNames(); });
   if (editIndex >= 0 && !c.expression.empty())
     box->setText(QString::fromStdString(c.expression));
   else
@@ -1813,6 +1816,7 @@ void SketchEditor::ensureHud() {
     f.kind = kind;
     auto* e = new QLineEdit(view_);
     e->setObjectName(QStringLiteral("hud") + name);
+    ParameterCompleter::attach(e, [this] { return parameterNames(); });
     e->setToolTip(tr("%1: type a value, Tab for the next box, Enter to create").arg(name));
     e->setAlignment(Qt::AlignCenter);
     e->setFixedWidth(kind == HudField::Count ? 60 : 110);
@@ -2268,6 +2272,12 @@ bool SketchEditor::submitValue(const QString& text) {
   valueBox_->setText(text);
   emit valueBox_->returnPressed();
   return true;
+}
+
+QStringList SketchEditor::parameterNames() const {
+  QStringList n;
+  for (const auto& prm : session_.document().userParameters()) n << QString::fromStdString(prm.name);
+  return n;
 }
 
 bool SketchEditor::toggleSelectedConstruction() {

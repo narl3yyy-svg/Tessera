@@ -1,0 +1,26 @@
+# Live: in the Extrude arrow's value box, type "wi": the parameter "width" is
+# suggested; pick it (Down, Enter) and apply it (Enter); OK. Then Space starts
+# Extrude again (repeat the last command); Esc closes it.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor arrowValue
+wait 400
+click arrowValue
+key ctrl+a
+type wi
+waitfor parameterSuggestions
+shot /tmp/live_value_suggest.png
+key Down
+key Return
+wait 200
+key Return
+wait 500
+click panelOk
+wait 500
+vclick 0.1 0.9
+key space
+waitfor panelOk
+wait 300
+click panelCancel
+wait 400

@@ -589,6 +589,10 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
     // The first visible one of a name wins (ribbon buttons before menu copies).
     if (!widgets.contains(x->objectName())) widgets[x->objectName()] = rect(x);
   }
+  // Popups (menus, value suggestions) are windows of their own.
+  for (QWidget* top : QApplication::topLevelWidgets())
+    if (top != &w && top->isVisible() && !top->objectName().isEmpty() && !widgets.contains(top->objectName()))
+      widgets[top->objectName()] = rect(top);
   o[QStringLiteral("widgets")] = widgets;
   {
     // Timeline items by feature name (centre, global coordinates).

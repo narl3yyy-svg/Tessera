@@ -686,6 +686,17 @@ void MainWindow::buildShortcuts() {
     } else if (active_) active_->reject();
     else viewport_->clearSelection();
   });
+  // Space: the last command again (in a sketch, the last sketch tool).
+  add(QKeySequence(Qt::Key_Space), [this] {
+    if (editor_) {
+      if (editor_->tool() == SketchEditor::Tool::Select) {
+        editor_->repeatLastTool();
+        syncSketchTools();
+      }
+    } else if (!active_ && !lastCommand_.isEmpty()) {
+      startCommand(lastCommand_);
+    }
+  });
   add(QKeySequence(Qt::Key_V), [this] {
     if (!editor_ && !active_) toggleSelectedVisibility();
   });

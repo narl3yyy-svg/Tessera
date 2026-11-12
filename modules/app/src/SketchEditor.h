@@ -48,6 +48,8 @@ public:
   const gp_Ax3& frame() const { return frame_; }
 
   void setTool(Tool t);
+  // Space: the last drawing tool again (after Esc went back to selecting).
+  void repeatLastTool() { setTool(lastTool_); }
   Tool tool() const { return tool_; }
   void setConstruction(bool on) {
     construction_ = on;
@@ -75,6 +77,7 @@ public:
   // X / Normal-Construction with curves selected: flips those curves between
   // normal and construction. False when no curve is selected.
   bool toggleSelectedConstruction();
+  QStringList parameterNames() const;   // user parameters, for value suggestions
   // Right-click: selects what is under the widget position if nothing
   // selected is there (so the menu acts on it). True if anything is selected.
   bool selectAt(const QPointF& widgetPos);
@@ -251,6 +254,7 @@ private:
   QString lengthText(double cm) const;
 
   doc::Session& session_;
+  Tool lastTool_ = Tool::Line;
   Unit unit_ = Unit::Millimeter;
   double cursorX_ = 0, cursorY_ = 0;
   QPointer<Viewport> view_;

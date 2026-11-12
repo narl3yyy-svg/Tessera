@@ -18,6 +18,8 @@ add_executable(tessera
   src/CommandDialog.h
   src/MarkingMenu.cpp
   src/MarkingMenu.h
+  src/ParameterCompleter.cpp
+  src/ParameterCompleter.h
   src/ParametersDialog.cpp
   src/ParametersDialog.h
   src/Icons.cpp
