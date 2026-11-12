@@ -262,7 +262,8 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
   toolButton(create, T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {});
   toolButton(create, T::Mirror, QStringLiteral("sketch-mirror"), tr("Mirror"), {});
-  toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), QStringLiteral("P"));
+  toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
+  toolButton(create, T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P"));
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
   setIcon(construction, QStringLiteral("construction"));

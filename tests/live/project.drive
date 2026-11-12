@@ -1,0 +1,22 @@
+# Live: sketch on XY under a box; P (Project), click the top face's left edge,
+# then inside the top face: its four edges are projected (the first reused).
+waitfor tsr.sketch.create
+wait 500
+bdclick Origin                # the XY plane is under the box: start from the Browser
+wait 300
+brclick XY
+wait 400
+key Down
+key Return
+waitfor sketch.line
+wait 600
+vclick 0.05 0.95
+key p
+wait 300
+wclick 0 15 20                # left edge of the top face
+wait 300
+wclick 20 15 20               # inside the top face
+wait 300
+shot /tmp/live_project.png
+click palette.finish
+wait 800

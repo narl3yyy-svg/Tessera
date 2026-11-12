@@ -207,6 +207,19 @@ void sketchLockedIcon(QPainter& p) {
   p.drawRoundedRect(QRectF(37, 40, 22, 18), 3, 3);
 }
 
+// Project: an edge above, dashed down onto the sketch plane.
+void projectIcon(QPainter& p) {
+  face(p, {QPointF(4, 44), QPointF(32, 30), QPointF(60, 44), QPointF(32, 58)}, QColor(225, 235, 248));
+  stroke(p, 4, kAccent);
+  p.drawLine(QPointF(14, 18), QPointF(44, 8));
+  QPen dash(QColor(150, 90, 200), 3, Qt::DashLine);
+  p.setPen(dash);
+  p.drawLine(QPointF(14, 18), QPointF(14, 44));
+  p.drawLine(QPointF(44, 8), QPointF(44, 36));
+  p.setPen(QPen(QColor(150, 90, 200), 4));
+  p.drawLine(QPointF(14, 44), QPointF(44, 36));
+}
+
 void extrudeIcon(QPainter& p) {
   face(p, {QPointF(8, 44), QPointF(32, 32), QPointF(56, 44), QPointF(32, 56)}, kTop);
   face(p, {QPointF(8, 44), QPointF(8, 22), QPointF(32, 10), QPointF(32, 32)}, kLeft);
@@ -911,6 +924,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("fit")) fit(p);
   else if (name == QLatin1String("sketch")) sketchIcon(p);
   else if (name == QLatin1String("sketch-locked")) sketchLockedIcon(p);
+  else if (name == QLatin1String("project")) projectIcon(p);
   else if (name == QLatin1String("extrude")) extrudeIcon(p);
   else if (name == QLatin1String("line")) lineIcon(p);
   else if (name == QLatin1String("rectangle")) rectIcon(p);

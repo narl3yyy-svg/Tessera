@@ -713,7 +713,7 @@ void MainWindow::buildShortcuts() {
   const std::pair<Qt::Key, SketchEditor::Tool> keys[] = {
       {Qt::Key_L, SketchEditor::Tool::Line},      {Qt::Key_R, SketchEditor::Tool::Rectangle},
       {Qt::Key_C, SketchEditor::Tool::Circle},    {Qt::Key_A, SketchEditor::Tool::Arc},
-      {Qt::Key_P, SketchEditor::Tool::Point},     {Qt::Key_D, SketchEditor::Tool::Dimension},
+      {Qt::Key_P, SketchEditor::Tool::Project},     {Qt::Key_D, SketchEditor::Tool::Dimension},
       {Qt::Key_Q, SketchEditor::Tool::Select},    {Qt::Key_T, SketchEditor::Tool::Trim},
       {Qt::Key_O, SketchEditor::Tool::Offset}};
   for (const auto& [key, tool] : keys) {

@@ -24,7 +24,7 @@ scope.
 | Area | What you get |
 |---|---|
 | **Interface** | Ribbon in the familiar order (CREATE · MODIFY · ASSEMBLE · CONFIGURE · CONSTRUCT · INSPECT · INSERT · SELECT), browser, timeline, ViewCube, navigation bar, command panels inside the canvas, right-click marking menu, **Space** repeats the last command, value boxes suggest parameter names, dark and light themes |
-| **Sketch** | Line, 2-Point / Center Rectangle, Circle, Arc, Polygon, Slot, Fit Point Spline, Point, construction lines, Mirror, Fillet, Chamfer, Trim, Extend, Offset (O), Sketch Dimension; Sketch Palette (feature options, linetype, Look At, grid, snap, slice, show/hide profiles, points, dimensions, constraints, construction); on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and an adaptive grid (hold **Ctrl** to draw without snapping or automatic constraints); select curves then a constraint; right-click Delete; **X** makes the selection construction |
+| **Sketch** | Line, 2-Point / Center Rectangle, Circle, Arc, Polygon, Slot, Fit Point Spline, Point, construction lines, Mirror, Fillet, Chamfer, Trim, Extend, Offset (O), Project (P), Sketch Dimension; Sketch Palette (feature options, linetype, Look At, grid, snap, slice, show/hide profiles, points, dimensions, constraints, construction); on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and an adaptive grid (hold **Ctrl** to draw without snapping or automatic constraints); select curves then a constraint; right-click Delete; **X** makes the selection construction |
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
 | **Create** | Extrude of sketch profiles or body faces with drag arrows in the canvas (one side / two sides with an arrow per side / symmetric, distance, through all or to an object, start offset, taper), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (modeled ISO metric, shaft or hole), Hole (simple / counterbore / countersink), Rectangular and Circular Pattern of features (picked in the timeline) or bodies, with Extent / Spacing and drag arrows, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer, Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
@@ -89,7 +89,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | Area | Planned |
 |---|---|
 | **Parameters** | Model parameter names (`d1`) usable in other expressions, favourites and filtering in the table |
-| **Sketch** | control-point Spline, Ellipse, Conic, Text, Mirror and patterns, Project / Include, 3-point shapes, Tangent Arc |
+| **Sketch** | control-point Spline, Ellipse, Conic, Text, sketch patterns, Include / Intersect, 3-point shapes, Tangent Arc |
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, face patterns |
 | **Modify** | Replace Face, Split Face, Align, Appearance, Physical Material |
 | **Extrude** | To curved faces, thin walls; drag arrows for Shell, Hole and Move |

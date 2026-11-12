@@ -84,7 +84,9 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] X turns the selected curves into construction (or back); with nothing selected it switches the drawing mode (Days 1, 14).
 - [x] The grid adapts to the zoom and snapping follows it (Snap is on by default).
 - [x] Double-click ends a line chain but keeps the Line tool (Day 14).
-- [ ] P is Project / Include in the sketch (Tessera: Point); A is Appearance (Tessera: Arc in the sketch). Project picks body edges and points into the sketch (Days 6, 7, 10).
+- [x] P is Project: click a body edge to copy it into the sketch (seen along the sketch normal), or inside a face for all its edges (Days 6, 7, 10, 15, 20). Point has no key, as in the familiar tool.
+- [ ] Project: other curve types (splines, tilted circles); Projection Link that follows body changes; points.
+- [ ] A is Appearance (Tessera: Arc in the sketch).
 - [ ] Intersect (Project / Include menu) puts body edges that cross the sketch plane into it (Days 4, 7).
 - [ ] Dragging a circle centre onto a line midpoint (triangle glyph) adds the midpoint constraint on release (Day 14).
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).

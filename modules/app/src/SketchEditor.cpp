@@ -169,6 +169,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Circle: emit message(tr("Circle: click the centre; type the diameter and press Enter (or click).")); break;
     case Tool::Arc: emit message(tr("Arc: click the centre, the start, then the end (counter-clockwise).")); break;
     case Tool::Point: emit message(tr("Point: click to place points.")); break;
+    case Tool::Project: emit message(tr("Project: click body edges to copy them into the sketch, or inside a face for all its edges.")); break;
     case Tool::Spline: emit message(tr("Spline: click the points the curve passes through; Enter, double-click or Esc finishes, clicking the first point closes it.")); break;
     case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
     case Tool::Offset: emit message(tr("Offset: click a curve; its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
@@ -351,6 +352,155 @@ SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) cons
   return p;
 }
 
+// A body edge copied into the sketch: a fixed purple line (reused if it is
+// already there).
+int SketchEditor::projectSegment(const std::array<double, 4>& g) {
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    const auto& e = sk_.entities[i];
+    if (!e.projected || e.type != EntityType::Line) continue;
+    const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
+    if ((std::hypot(a.x - g[0], a.y - g[1]) < 1e-7 && std::hypot(b.x - g[2], b.y - g[3]) < 1e-7) ||
+        (std::hypot(a.x - g[2], a.y - g[3]) < 1e-7 && std::hypot(b.x - g[0], b.y - g[1]) < 1e-7))
+      return i;
+  }
+  const int line = sk_.addLine(g[0], g[1], g[2], g[3]);
+  sk_.entities[line].projected = true;
+  for (int q : {sk_.entities[line].a, sk_.entities[line].b})
+    sk_.addConstraint({ConstraintType::Fix, {q}, {}, sk_.points[q].x, sk_.points[q].y});
+  return line;
+}
+
+// A round body edge copied into the sketch: a fixed circle or arc.
+int SketchEditor::projectArc(const std::array<double, 5>& g) {
+  const bool full = std::abs(std::abs(g[4]) - 2 * kPi) < 1e-9;
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    const auto& e = sk_.entities[i];
+    if (!e.projected || !sketch::isRound(e.type)) continue;
+    const auto& c = sk_.points[e.center];
+    if (std::hypot(c.x - g[0], c.y - g[1]) < 1e-7 && std::abs(e.radius - g[2]) < 1e-7) return i;
+  }
+  const int c = sk_.addPoint(g[0], g[1]);
+  sk_.addConstraint({ConstraintType::Fix, {c}, {}, g[0], g[1]});
+  int curve;
+  if (full) {
+    curve = sk_.addCircleAt(c, g[2]);
+  } else {
+    // Stored anticlockwise: start at the end the sweep leaves from.
+    const double a0 = g[4] > 0 ? g[3] : g[3] + g[4], a1 = g[4] > 0 ? g[3] + g[4] : g[3];
+    const int s0 = sk_.addPoint(g[0] + g[2] * std::cos(a0), g[1] + g[2] * std::sin(a0));
+    const int s1 = sk_.addPoint(g[0] + g[2] * std::cos(a1), g[1] + g[2] * std::sin(a1));
+    sk_.addConstraint({ConstraintType::Fix, {s0}, {}, sk_.points[s0].x, sk_.points[s0].y});
+    sk_.addConstraint({ConstraintType::Fix, {s1}, {}, sk_.points[s1].x, sk_.points[s1].y});
+    curve = sk_.addArc(c, s0, s1);
+  }
+  sk_.entities[curve].projected = true;
+  if (full) sk_.addConstraint({ConstraintType::Radius, {}, {curve}, g[2]});
+  return curve;
+}
+
+// Any body edge seen along the sketch normal: a straight edge becomes a
+// segment (or a point when it points straight at the plane), a circle or arc
+// facing the plane becomes one. False for other curves.
+bool SketchEditor::projectEdgeShape(const TopoDS_Edge& edge, PlaneEdges& out) const {
+  if (BRep_Tool::Degenerated(edge)) return false;
+  BRepAdaptor_Curve c(edge);
+  const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+  const gp_Pnt p0 = c.Value(t0), p1 = c.Value(t1), pm = c.Value((t0 + t1) / 2);
+  double x0, y0, x1, y1, xm, ym;
+  sketch::toSketch(frame_, p0, x0, y0);
+  sketch::toSketch(frame_, p1, x1, y1);
+  sketch::toSketch(frame_, pm, xm, ym);
+  if (c.GetType() == GeomAbs_Line) {
+    if (std::hypot(x1 - x0, y1 - y0) < 1e-7) {
+      out.vertices.emplace_back(x0, y0);
+      return true;
+    }
+    out.segments.push_back({x0, y0, x1, y1});
+    return true;
+  }
+  if (c.GetType() == GeomAbs_Circle) {
+    const gp_Circ circ = c.Circle();
+    if (std::abs(circ.Axis().Direction().Dot(frame_.Direction())) < 1 - 1e-9) return false;   // seen edge-on or tilted
+    double cx, cy;
+    sketch::toSketch(frame_, circ.Location(), cx, cy);
+    const bool full = p0.Distance(p1) < 1e-7;
+    const double a0 = std::atan2(y0 - cy, x0 - cx), am = std::atan2(ym - cy, xm - cx);
+    double sweep = 2 * kPi;
+    if (!full) {
+      const double a1 = std::atan2(y1 - cy, x1 - cx);
+      double s1 = a1 - a0, sm = am - a0;
+      while (s1 <= 0) s1 += 2 * kPi;
+      while (sm <= 0) sm += 2 * kPi;
+      sweep = sm < s1 ? s1 : s1 - 2 * kPi;
+    }
+    out.arcs.push_back({cx, cy, circ.Radius(), a0, sweep});
+    return true;
+  }
+  return false;
+}
+
+// Project (P): click a body edge to copy it into the sketch, seen along the
+// sketch normal; click inside a face to copy all of its edges.
+void SketchEditor::projectAt(const QPointF& widgetPos) {
+  if (!view_) return;
+  // The edge nearest the cursor on screen.
+  TopoDS_Edge best;
+  double bestD = 8.0;   // pixels
+  for (const auto& b : session_.document().bodies()) {
+    if (!view_->isBodyVisible(QString::fromStdString(b.name))) continue;
+    TopTools_IndexedMapOfShape edges;
+    TopExp::MapShapes(b.shape, TopAbs_EDGE, edges);
+    for (int i = 1; i <= edges.Extent(); ++i) {
+      const TopoDS_Edge e = TopoDS::Edge(edges(i));
+      if (BRep_Tool::Degenerated(e)) continue;
+      BRepAdaptor_Curve c(e);
+      const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+      QPointF prev;
+      for (int k = 0; k <= 24; ++k) {
+        const QPointF q = view_->toWidget(c.Value(t0 + (t1 - t0) * k / 24.0));
+        if (k > 0) {
+          const QPointF ab = q - prev;
+          const double l2 = ab.x() * ab.x() + ab.y() * ab.y();
+          double t = l2 > 0 ? ((widgetPos - prev).x() * ab.x() + (widgetPos - prev).y() * ab.y()) / l2 : 0;
+          t = std::clamp(t, 0.0, 1.0);
+          const QPointF on = prev + ab * t;
+          const double d = std::hypot(widgetPos.x() - on.x(), widgetPos.y() - on.y());
+          if (d < bestD) {
+            bestD = d;
+            best = e;
+          }
+        }
+        prev = q;
+      }
+    }
+  }
+  std::vector<TopoDS_Edge> picked;
+  if (!best.IsNull()) {
+    picked.push_back(best);
+  } else if (const TopoDS_Face f = view_->faceAt(widgetPos); !f.IsNull()) {
+    for (TopExp_Explorer x(f, TopAbs_EDGE); x.More(); x.Next()) picked.push_back(TopoDS::Edge(x.Current()));
+  }
+  if (picked.empty()) {
+    emit message(tr("Project: click a body edge, or inside a face to project all its edges."));
+    return;
+  }
+  PlaneEdges g;
+  for (const auto& e : picked) (void)projectEdgeShape(e, g);
+  if (g.segments.empty() && g.arcs.empty() && g.vertices.empty()) {
+    emit message(tr("That edge cannot be projected yet (only straight edges and circles facing the sketch)."));
+    return;
+  }
+  checkpoint();
+  for (const auto& s : g.segments) (void)projectSegment(s);
+  for (const auto& a : g.arcs) (void)projectArc(a);
+  for (const auto& [vx, vy] : g.vertices) {
+    const int p = sk_.addPoint(vx, vy);
+    sk_.addConstraint({ConstraintType::Fix, {p}, {}, vx, vy});
+  }
+  solveAndShow();
+  emit message(tr("Projected %n curve(s).", nullptr, static_cast<int>(g.segments.size() + g.arcs.size())));
+}
+
 int SketchEditor::materialize(const Pick& p) {
   if (p.hit.kind == Hit::Point && p.hit.index >= 0 && p.hit.index < static_cast<int>(sk_.points.size()))
     return p.hit.index;
@@ -365,51 +515,10 @@ int SketchEditor::materialize(const Pick& p) {
   // edges become fixed purple lines with the point on them; anything else
   // becomes a fixed point.
   if (p.bodySegment >= 0 && p.bodySegment < static_cast<int>(bodyEdges_.segments.size())) {
-    const auto& g = bodyEdges_.segments[p.bodySegment];
-    int line = -1;
-    for (int i = 0; i < static_cast<int>(sk_.entities.size()) && line < 0; ++i) {
-      const auto& e = sk_.entities[i];
-      if (!e.projected || e.type != EntityType::Line) continue;
-      const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
-      const bool same = (std::hypot(a.x - g[0], a.y - g[1]) < 1e-7 && std::hypot(b.x - g[2], b.y - g[3]) < 1e-7) ||
-                        (std::hypot(a.x - g[2], a.y - g[3]) < 1e-7 && std::hypot(b.x - g[0], b.y - g[1]) < 1e-7);
-      if (same) line = i;
-    }
-    if (line < 0) {
-      line = sk_.addLine(g[0], g[1], g[2], g[3]);
-      sk_.entities[line].projected = true;
-      for (int q : {sk_.entities[line].a, sk_.entities[line].b})
-        sk_.addConstraint({ConstraintType::Fix, {q}, {}, sk_.points[q].x, sk_.points[q].y});
-    }
+    const int line = projectSegment(bodyEdges_.segments[p.bodySegment]);
     (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {line}});
   } else if (p.bodyArc >= 0 && p.bodyArc < static_cast<int>(bodyEdges_.arcs.size())) {
-    const auto& g = bodyEdges_.arcs[p.bodyArc];
-    const bool full = std::abs(std::abs(g[4]) - 2 * kPi) < 1e-9;
-    // Already projected? (same centre and radius)
-    int curve = -1;
-    for (int i = 0; i < static_cast<int>(sk_.entities.size()) && curve < 0; ++i) {
-      const auto& e = sk_.entities[i];
-      if (!e.projected || !sketch::isRound(e.type)) continue;
-      const auto& c = sk_.points[e.center];
-      if (std::hypot(c.x - g[0], c.y - g[1]) < 1e-7 && std::abs(e.radius - g[2]) < 1e-7) curve = i;
-    }
-    if (curve < 0) {
-      const int c = sk_.addPoint(g[0], g[1]);
-      sk_.addConstraint({ConstraintType::Fix, {c}, {}, g[0], g[1]});
-      if (full) {
-        curve = sk_.addCircleAt(c, g[2]);
-      } else {
-        // Stored anticlockwise: start at the end the sweep leaves from.
-        const double a0 = g[4] > 0 ? g[3] : g[3] + g[4], a1 = g[4] > 0 ? g[3] + g[4] : g[3];
-        const int s0 = sk_.addPoint(g[0] + g[2] * std::cos(a0), g[1] + g[2] * std::sin(a0));
-        const int s1 = sk_.addPoint(g[0] + g[2] * std::cos(a1), g[1] + g[2] * std::sin(a1));
-        sk_.addConstraint({ConstraintType::Fix, {s0}, {}, sk_.points[s0].x, sk_.points[s0].y});
-        sk_.addConstraint({ConstraintType::Fix, {s1}, {}, sk_.points[s1].x, sk_.points[s1].y});
-        curve = sk_.addArc(c, s0, s1);
-      }
-      sk_.entities[curve].projected = true;
-      if (full) sk_.addConstraint({ConstraintType::Radius, {}, {curve}, g[2]});
-    }
+    const int curve = projectArc(bodyEdges_.arcs[p.bodyArc]);
     (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {curve}});
   } else if (p.bodyPoint) {
     sk_.addConstraint({ConstraintType::Fix, {pt}, {}, p.x, p.y});
@@ -1274,6 +1383,9 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       solveAndShow();
       return;
     }
+    case Tool::Project:
+      projectAt(widgetPos);
+      return;
     case Tool::Point: {
       const Pick p = pickPoint(x, y);
       if (p.hit.kind == Hit::Point) return;

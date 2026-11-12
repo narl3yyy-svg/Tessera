@@ -7,6 +7,8 @@
 // undo history.
 #include "Viewport.h"
 
+#include <TopoDS_Edge.hxx>
+
 #include "tsr/doc/Session.h"
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
@@ -34,7 +36,7 @@ public:
     Select, Line, Rectangle, Circle, Arc, Point, Dimension,
     Coincident, HorizontalVertical, Parallel, Perpendicular, Equal, Tangent, Fix, Midpoint, Concentric,
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
-    Spline, Fillet, Offset, Chamfer, Extend, Mirror,
+    Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -163,6 +165,7 @@ private:
     std::vector<std::array<double, 4>> segments;          // x1, y1, x2, y2
     std::vector<std::array<double, 5>> arcs;              // cx, cy, r, a0, sweep (full circle: sweep 2*pi)
   } bodyEdges_;
+  bool projectEdgeShape(const TopoDS_Edge& edge, PlaneEdges& out) const;
   void collectBodyEdges();
   // Constraint labels that belong to projected geometry are not shown.
   bool onlyProjected(const sketch::Constraint& c) const;
@@ -196,6 +199,9 @@ private:
   Pick pickPoint(double x, double y, int exclude = -1) const;
   void press(double x, double y, Qt::KeyboardModifiers mods, const QPointF& widgetPos);
   void constraintPick(double x, double y);
+  int projectSegment(const std::array<double, 4>& g);
+  int projectArc(const std::array<double, 5>& g);
+  void projectAt(const QPointF& widgetPos);
   void evaluateConstraintPicks();
   void applyToSelection(const std::vector<Hit>& selected);
   static bool isConstraintTool(Tool t);
