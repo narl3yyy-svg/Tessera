@@ -13,6 +13,14 @@
 #include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
 #include <LocOpe_DPrism.hxx>
+#include <BRepOffsetAPI_MakePipe.hxx>
+#include <BRepOffsetAPI_MakePipeShell.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
+#include <BRepTools.hxx>
+#include <ShapeAnalysis_FreeBounds.hxx>
+#include <TopTools_HSequenceOfShape.hxx>
+#include <TopoDS_Wire.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -858,6 +866,93 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
     });
     if (!isValid(solid)) throw KernelError("Extrude: the taper angle is too steep for this profile and distance");
     result = result.IsNull() ? solid : boolean(BooleanOp::Join, result, solid);
+  }
+  return result;
+}
+
+namespace {
+// One closed wire swept along the path into a solid (rounded at sharp corners).
+TopoDS_Shape sweepWire(const TopoDS_Wire& path, const TopoDS_Wire& profile) {
+  BRepOffsetAPI_MakePipeShell pipe(path);
+  pipe.SetMode(false);   // corrected Frenet
+  pipe.SetTransitionMode(BRepBuilderAPI_RoundCorner);
+  pipe.Add(profile, false, false);
+  pipe.Build();
+  if (!pipe.IsDone() || !pipe.MakeSolid()) return {};
+  return pipe.Shape();
+}
+} // namespace
+
+TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<TopoDS_Shape>& pathEdges) {
+  if (faces.empty()) throw KernelError("Sweep: no profile selected");
+  if (pathEdges.empty()) throw KernelError("Sweep: the path has no curves");
+  Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
+  for (const auto& e : pathEdges) edges->Append(e);
+  Handle(TopTools_HSequenceOfShape) wires;
+  ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+  if (wires.IsNull() || wires->Length() != 1) throw KernelError("Sweep: the path must be one connected chain of curves");
+  TopoDS_Wire path = TopoDS::Wire(wires->Value(1));
+  // Start the path at the end nearest the first profile.
+  {
+    TopoDS_Vertex v1, v2;
+    TopExp::Vertices(path, v1, v2);
+    if (!v1.IsNull() && !v2.IsNull()) {
+      GProp_GProps g;
+      BRepGProp::SurfaceProperties(faces.front(), g);
+      const gp_Pnt c = g.CentreOfMass();
+      if (c.Distance(BRep_Tool::Pnt(v2)) < c.Distance(BRep_Tool::Pnt(v1))) path = TopoDS::Wire(path.Reversed());
+    }
+  }
+  TopoDS_Shape result;
+  for (const auto& fs : faces) {
+    const TopoDS_Face& f = TopoDS::Face(fs);
+    TopoDS_Shape s = guarded("Sweep", [&]() -> TopoDS_Shape {
+      const TopoDS_Wire outer = BRepTools::OuterWire(f);
+      TopoDS_Shape solid = sweepWire(path, outer);
+      if (solid.IsNull()) return solid;
+      // Holes in the profile are swept too and taken away.
+      for (TopExp_Explorer w(f, TopAbs_WIRE); w.More(); w.Next()) {
+        const TopoDS_Wire inner = TopoDS::Wire(w.Current());
+        if (inner.IsSame(outer)) continue;
+        const TopoDS_Shape hole = sweepWire(path, inner);
+        if (!hole.IsNull()) solid = boolean(BooleanOp::Cut, solid, hole);
+      }
+      return solid;
+    });
+    if (!isValid(s)) throw KernelError("Sweep: the result is not a valid solid (is the profile at the start of the path?)");
+    result = result.IsNull() ? s : boolean(BooleanOp::Join, result, s);
+  }
+  return result;
+}
+
+TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
+  if (sections.size() < 2) throw KernelError("Loft: pick at least two profiles");
+  TopoDS_Shape r = guarded("Loft", [&]() -> TopoDS_Shape {
+    BRepOffsetAPI_ThruSections ts(true, ruled, 1e-6);
+    ts.CheckCompatibility(true);   // match up sections with different numbers of edges
+    for (const auto& s : sections) {
+      const TopoDS_Wire w = s.ShapeType() == TopAbs_FACE ? BRepTools::OuterWire(TopoDS::Face(s)) : TopoDS::Wire(s);
+      ts.AddWire(w);
+    }
+    ts.Build();
+    return ts.IsDone() ? ts.Shape() : TopoDS_Shape();
+  });
+  if (!isValid(r)) throw KernelError("Loft: the profiles could not be joined into a valid solid");
+  return r;
+}
+
+TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance) {
+  if (faces.empty()) throw KernelError("Press Pull: select a face");
+  if (std::abs(distance) < 1e-9) throw KernelError("Press Pull: the distance must not be zero");
+  TopoDS_Shape result = body;
+  for (const auto& fs : faces) {
+    const TopoDS_Face& f = TopoDS::Face(fs);
+    BRepAdaptor_Surface surf(f);
+    if (surf.GetType() != GeomAbs_Plane) throw KernelError("Press Pull: only flat faces can be pushed or pulled");
+    gp_Dir n = surf.Plane().Axis().Direction();
+    if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+    const TopoDS_Shape prism = guarded("Press Pull", [&] { return BRepPrimAPI_MakePrism(f, gp_Vec(n) * distance).Shape(); });
+    result = boolean(distance > 0 ? BooleanOp::Join : BooleanOp::Cut, result, prism);
   }
   return result;
 }

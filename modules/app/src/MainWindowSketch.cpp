@@ -37,8 +37,13 @@ bool MainWindow::sketchVisible(const std::string& name) const {
   // Default: hidden once a later feature uses it (the profile became solid).
   for (const auto& f : session_.document().features()) {
     if (!f.error.empty() || f.suppressed) continue;
-    if (auto it = f.inputs.find("sketch"); it != f.inputs.end())
-      if (auto s = std::get_if<std::string>(&it->second); s && *s == name) return false;
+    for (const char* key : {"sketch", "path"})
+      if (auto it = f.inputs.find(key); it != f.inputs.end())
+        if (auto s = std::get_if<std::string>(&it->second); s && *s == name) return false;
+    if (auto it = f.inputs.find("sections"); it != f.inputs.end())
+      if (auto s = std::get_if<std::string>(&it->second))
+        for (const auto& part : QString::fromStdString(*s).split(QLatin1Char(';')))
+          if (part.toStdString() == name) return false;
   }
   return true;
 }

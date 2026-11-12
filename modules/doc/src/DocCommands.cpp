@@ -1331,12 +1331,187 @@ private:
   Kind kind_;
   CommandDef def_;
 };
+
+// ---------------------------------------------------------------------------
+// Sweep, Loft, Press Pull.
+
+class Sweep final : public Command {
+public:
+  Sweep() {
+    commonDef(def_, kCmdSweep, "Sweep", "Moves profiles along a path drawn in another sketch.", "sweep", "Create");
+    def_.inputs = {
+        {.id = "sketch", .label = "Profile sketch", .tooltip = "Sketch with the profile. Empty: the second latest sketch.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+        {.id = "profiles", .label = "Profiles", .tooltip = "Click regions. None picked: all of them.",
+         .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
+        {.id = "path", .label = "Path sketch", .tooltip = "Sketch whose curves form the path. Empty: the latest sketch.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+
+  // Defaults: path = latest sketch, profile = the one before it.
+  static std::pair<std::string, std::string> names(const Document& doc, const Inputs& in) {
+    std::string profile = getString(in, "sketch"), path = getString(in, "path");
+    const auto all = doc.sketches();
+    if (path.empty() && !all.empty()) path = all.back().name;
+    if (profile.empty())
+      for (auto it = all.rbegin(); it != all.rend(); ++it)
+        if (it->name != path) {
+          profile = it->name;
+          break;
+        }
+    return {profile, path};
+  }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const auto [profile, path] = names(doc, in);
+    if (!doc.sketch(profile)) return "Profile sketch: there is no profile sketch (Sweep needs two sketches)";
+    if (!doc.sketch(path)) return "Path sketch: there is no path sketch";
+    if (profile == path) return "Path sketch: must be a different sketch from the profile";
+    return validateOperation(in, doc);
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const auto [profile, path] = names(docOf(ctx), in);
+    in["sketch"] = profile;
+    in["path"] = path;
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto [profileName, pathName] = names(doc, in);
+    const auto prof = doc.sketch(profileName);
+    const auto path = doc.sketch(pathName);
+    if (!prof || !path) throw CommandError("Sweep: missing sketch");
+    try {
+      const SketchProfiles sp = profilesOf(doc, *prof);
+      if (sp.profiles.empty()) throw CommandError(prof->name + " has no closed profile");
+      const auto faces = pickedFaces(sp, getString(in, "profiles"), prof->name);
+      const gp_Ax3 pf = doc.planeFrame(path->plane, path->offset);
+      const TopoDS_Shape curves = sketch::curves(sketch::Sketch::fromJson(path->data), pf, false);
+      std::vector<TopoDS_Shape> edges;
+      for (TopExp_Explorer it(curves, TopAbs_EDGE); it.More(); it.Next()) edges.push_back(it.Current());
+      applyOperation(doc, in, kernel::sweep(faces, edges), "Sweep");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    } catch (const DocumentError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class Loft final : public Command {
+public:
+  Loft() {
+    commonDef(def_, kCmdLoft, "Loft", "Blends between profiles in two or more sketches.", "loft", "Create");
+    def_.inputs = {
+        {.id = "sections", .label = "Profiles (sketches)",
+         .tooltip = "Sketch names in order, separated by ';' (each sketch's largest profile). Empty: every sketch.",
+         .type = InputType::String, .defaultValue = std::string{}, .optional = true},
+        choice("transition", "Transition", {"Smooth", "Ruled"}, "Ruled: straight sides between profiles."),
+    };
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+  static std::vector<std::string> sectionNames(const Document& doc, const Inputs& in) {
+    auto names = splitNames(getString(in, "sections"));
+    if (names.empty())
+      for (const auto& s : doc.sketches()) names.push_back(s.name);
+    return names;
+  }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const auto names = sectionNames(doc, in);
+    if (names.size() < 2) return "Profiles: a loft needs at least two sketches";
+    for (const auto& n : names)
+      if (!doc.sketch(n)) return "Profiles: '" + n + "' is not a sketch";
+    return validateOperation(in, doc);
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    std::string joined;
+    for (const auto& n : sectionNames(docOf(ctx), in)) joined += (joined.empty() ? "" : ";") + n;
+    in["sections"] = joined;
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::vector<TopoDS_Shape> sections;
+    try {
+      for (const auto& n : sectionNames(doc, in)) {
+        const auto rec = doc.sketch(n);
+        if (!rec) throw CommandError("Profiles: '" + n + "' is not a sketch");
+        const SketchProfiles sp = profilesOf(doc, *rec);
+        if (sp.profiles.empty()) throw CommandError(n + " has no closed profile");
+        sections.push_back(sp.profiles.front().face);   // the largest region
+      }
+      applyOperation(doc, in, kernel::loft(sections, getString(in, "transition") == "Ruled"), "Loft");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class PressPull final : public Command {
+public:
+  PressPull() {
+    commonDef(def_, kCmdPressPull, "Press Pull", "Pushes or pulls flat faces of a body: positive adds, negative removes.", "presspull");
+    def_.shortcut = "Q";
+    def_.inputs = {
+        bodyInput(),
+        {.id = "faces", .label = "Faces", .tooltip = "Click the flat faces to move.", .type = InputType::Faces,
+         .defaultValue = std::string{}},
+        {.id = "distance", .label = "Distance", .tooltip = "Along the face's outward normal; negative pushes in.",
+         .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (std::abs(getReal(in, "distance")) < 1e-9) return "Distance: must not be zero";
+    return checkBody(in, docOf(ctx));
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Faces: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const auto body = doc.body(name);
+    try {
+      const auto faces = kernel::resolveFaces(body->shape, getString(in, "faces"));
+      doc.replaceBody(name, kernel::pressPull(body->shape, faces, getReal(in, "distance")));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CreateSketch>());
   registry.add(std::make_unique<Extrude>());
   registry.add(std::make_unique<Revolve>());
+  registry.add(std::make_unique<Sweep>());
+  registry.add(std::make_unique<Loft>());
   registry.add(makeBox());
   registry.add(makeCylinder());
   registry.add(makeSphere());
@@ -1346,6 +1521,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<RectangularPattern>());
   registry.add(std::make_unique<CircularPattern>());
   registry.add(std::make_unique<Mirror>());
+  registry.add(std::make_unique<PressPull>());
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));
   registry.add(std::make_unique<Shell>());

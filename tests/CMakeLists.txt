@@ -43,6 +43,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_hole_pattern.py)
   add_test(NAME api_construct
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_construct.py)
+  add_test(NAME api_sweep_loft_presspull
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sweep_loft_presspull.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()
@@ -55,7 +57,7 @@ if(TSR_WITH_QT)
   if(XVFB_RUN)
     add_test(NAME gui_render
              COMMAND ${XVFB_RUN} -a -s "-screen 0 1600x1000x24"
-                     $<TARGET_FILE:tessera> --script ${CMAKE_CURRENT_SOURCE_DIR}/gui/demo_model.py
+                     $<TARGET_FILE:tessera> --script ${PROJECT_SOURCE_DIR}/examples/demo_model.py
                                             --screenshot ${CMAKE_CURRENT_BINARY_DIR}/gui_render.png)
     set_tests_properties(gui_render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=xcb;LIBGL_ALWAYS_SOFTWARE=1")
   endif()

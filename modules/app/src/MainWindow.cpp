@@ -402,7 +402,7 @@ void MainWindow::buildRibbon() {
       btn->setIconSize(QSize(30, 30));
       btn->setAutoRaise(true);
       btn->setEnabled(false);
-      btn->setToolTip(tr("Planned: see ROADMAP.md."));
+      btn->setToolTip(tr("Planned: see docs/ROADMAP.md."));
       buttons->addWidget(btn);
     }
     col->addLayout(buttons);
@@ -428,7 +428,7 @@ void MainWindow::buildRibbon() {
   for (const char* t : {"SURFACE", "MESH", "SHEET METAL", "PLASTIC", "MANAGE", "UTILITIES"}) {
     const int i = ribbon_->addTab(new QWidget, QString::fromLatin1(t));
     ribbon_->setTabEnabled(i, false);
-    ribbon_->setTabToolTip(i, tr("Planned: see ROADMAP.md."));
+    ribbon_->setTabToolTip(i, tr("Planned: see docs/ROADMAP.md."));
   }
 
   auto* bar = new QToolBar(tr("Ribbon"));

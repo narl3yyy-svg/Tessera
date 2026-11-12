@@ -714,6 +714,38 @@ void patternIcon(QPainter& p, bool circular) {
   }
 }
 
+void sweepIcon(QPainter& p) {
+  QPainterPath path;
+  path.moveTo(10, 54);
+  path.cubicTo(10, 20, 30, 10, 56, 12);
+  p.setPen(QPen(kLeft, 14, Qt::SolidLine, Qt::RoundCap));
+  p.setBrush(Qt::NoBrush);
+  p.drawPath(path);
+  p.setPen(QPen(kAccent, 2, Qt::DashLine));
+  p.drawPath(path);
+  p.setPen(QPen(kLine, 2));
+  p.setBrush(kTop);
+  p.drawEllipse(QRectF(2, 48, 16, 12));
+}
+
+void loftIcon(QPainter& p) {
+  face(p, {QPointF(14, 54), QPointF(24, 12), QPointF(40, 12), QPointF(50, 54)}, kLeft);
+  p.setBrush(kTop);
+  p.drawEllipse(QRectF(22, 6, 20, 10));
+  p.setPen(QPen(kAccent, 2.5));
+  p.setBrush(Qt::NoBrush);
+  p.drawRect(QRectF(10, 50, 44, 8));
+}
+
+void pressPullIcon(QPainter& p) {
+  cube(p, 6, 18, 52, kTop, kLeft, kRight);
+  face(p, {QPointF(32, 18), QPointF(58, 31), QPointF(32, 44), QPointF(6, 31)}, kAccent.lighter(140));
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.drawLine(QPointF(32, 30), QPointF(32, 4));
+  p.drawLine(QPointF(32, 4), QPointF(25, 11));
+  p.drawLine(QPointF(32, 4), QPointF(39, 11));
+}
+
 void fallback(QPainter& p, const QString& name) {
   p.setBrush(kTop);
   p.drawRoundedRect(QRectF(6, 6, 52, 52), 8, 8);
@@ -757,6 +789,9 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("construction")) constructionIcon(p);
   else if (name.startsWith(QLatin1String("c-"))) constraintIcon(p, name.mid(2));
   else if (name == QLatin1String("shell")) shellIcon(p);
+  else if (name == QLatin1String("sweep")) sweepIcon(p);
+  else if (name == QLatin1String("loft")) loftIcon(p);
+  else if (name == QLatin1String("presspull")) pressPullIcon(p);
   else if (name == QLatin1String("center-rectangle")) centerRectIcon(p);
   else if (name == QLatin1String("polygon")) polygonIcon(p);
   else if (name == QLatin1String("slot")) slotIcon(p);

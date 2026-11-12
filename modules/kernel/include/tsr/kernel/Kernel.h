@@ -116,6 +116,14 @@ Measurement measure(const std::vector<TopoDS_Shape>& picks);
 TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
                        double startOffset);
 
+// Sweeps planar faces along a path (connected edges, in any order).
+TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<TopoDS_Shape>& pathEdges);
+// Lofts through closed sections (faces or wires), in order.
+TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled);
+// Press Pull: moves planar faces of a body along their outward normal by
+// `distance` (positive adds material, negative removes it).
+TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);
+
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError
 // if OCCT fails or the result is empty (e.g. a cut that removes everything).

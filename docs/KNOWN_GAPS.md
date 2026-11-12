@@ -1,6 +1,7 @@
-# Known divergences
+# Known gaps
 
-Every gap between Tessera and the plan or the reference behaviour goes here (plan §9).
+Every known difference between Tessera and the behaviour it aims for. One row per item; closed items are struck
+through and kept for history.
 One line per item: id, what differs, why, and the phase that closes it.
 
 | Id | Divergence | Reason | Closes in |
@@ -44,3 +45,6 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P5-4 | Size boxes exist for Line (length, angle), Rectangle, Center Rectangle (width, height), Circle (diameter), Polygon (diameter, sides) and Slot (length, width); not yet for arcs | P5 scope | P6 |
 | P5-5 | Construction planes are built from origin or other construction planes (offset, angle about the plane's X/Y axis, midplane of two parallel planes); not yet tangent to faces or through points/edges | P5 scope | P6 |
 | P5-6 | A plane picked from a body face is copied when picked (not associative to the face) | Needs topological naming | P6 |
+| P6-1 | Sweep: the path is all curves of one sketch (one connected chain); no guide rails, twist or scaling; the profile must sit at the start of the path | P6 scope | later |
+| P6-2 | Loft: one profile per sketch (its largest region), no rails or centre line, no point sections | P6 scope | later |
+| P6-3 | Press Pull moves flat faces only (offset of curved faces is planned with Offset Face) | P6 scope | P7 |

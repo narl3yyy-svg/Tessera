@@ -1,7 +1,6 @@
-# Evidence ledger
+# Lab notes
 
-Append-only. One row per claim: timestamp (UTC), phase, claim, source, confidence.
-Raw artifacts live under `EVIDENCE/<phase>/` or `/srv/tessera/evidence/` on the lab.
+Facts about the build/test machine, one row each: date, phase, fact, how it was checked, confidence.
 
 | Timestamp | Phase | Claim | Source | Confidence |
 |---|---|---|---|---|

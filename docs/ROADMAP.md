@@ -29,9 +29,9 @@ icons, file formats that are not publicly documented, or product names.
 
 Tracked against the menus people know. Done = usable today.
 
-**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Hole ✅ (simple, counterbore, countersink) · Rectangular Pattern ✅ · Circular Pattern ✅ · Sweep · Loft · Rib · Web · Emboss · Thread · Coil · Pipe · Path Pattern · Thicken · Boundary Fill · Create Form (T-splines, later)
+**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Hole ✅ (simple, counterbore, countersink) · Rectangular Pattern ✅ · Circular Pattern ✅ · Sweep ✅ · Loft ✅ · Rib · Web · Emboss · Thread · Coil · Pipe · Path Pattern · Thicken · Boundary Fill · Create Form (T-splines, later)
 
-**Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull · Draft · Offset Face · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) · Compute All
+**Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull ✅ · Draft · Offset Face · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) · Compute All
 
 **Assemble**: New Component · Joint · As-Built Joint · Joint Origin · Rigid Group · Drive Joints · Motion Link · Motion Study · Contact Sets
 

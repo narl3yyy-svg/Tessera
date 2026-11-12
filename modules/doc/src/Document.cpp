@@ -26,7 +26,7 @@ constexpr int kFeaturesTag = 3;
 constexpr int kSketchesTag = 4;
 constexpr int kPlanesTag = 5;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
-// unbounded for practical purposes and is recorded in SPEC/DIVERGENCES.md.
+// unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
 
 TCollection_ExtendedString ext(const std::string& s) {

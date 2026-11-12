@@ -74,7 +74,7 @@ void MainWindow::buildUiCommands() {
     uiCommands_.push_back({"Solid", panel, id, name, tip, icon, shortcut, static_cast<bool>(run), std::move(run)});
   };
   auto planned = [&](const char* panel, const char* id, const char* name, const char* icon, const char* shortcut = "") {
-    add(panel, id, name, icon, "Planned: see ROADMAP.md.", shortcut, nullptr);
+    add(panel, id, name, icon, "Planned: see docs/ROADMAP.md.", shortcut, nullptr);
   };
   planned("Assemble", "ui.newComponent", "New Component", "component");
   planned("Assemble", "ui.joint", "Joint", "joint", "J");
