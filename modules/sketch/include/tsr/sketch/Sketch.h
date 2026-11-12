@@ -36,6 +36,7 @@ struct Entity {
   int center = -1;        // circle, arc
   double radius = 0;      // circle, arc
   bool construction = false;
+  bool projected = false;   // copied from a body edge (drawn purple, its points fixed)
   std::vector<int> fit;   // spline fit points
 };
 

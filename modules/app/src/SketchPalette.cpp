@@ -114,9 +114,9 @@ SketchPalette::SketchPalette(SketchEditor* editor, QWidget* parent) : QDialog(pa
   points_ = option(QStringLiteral("palette.points"), tr("Points"), true);
   dimensions_ = option(QStringLiteral("palette.dimensions"), tr("Dimensions"), true);
   constraints_ = option(QStringLiteral("palette.constraints"), tr("Constraints"), true);
-  auto* projected = option(QStringLiteral("palette.projected"), tr("Projected Geometries"), true);
-  projected->setEnabled(false);
-  projected->setToolTip(tr("Planned: Project / Include (see docs/ROADMAP.md)"));
+  projected_ = option(QStringLiteral("palette.projected"), tr("Projected Geometries"), true);
+  projected_->setToolTip(tr("Body edges and corners copied into the sketch when you snap to them (purple)"));
+  QCheckBox* projected = projected_;
   construction_ = option(QStringLiteral("palette.construction"), tr("Construction Geometries"), true);
   auto* sketch3d = option(QStringLiteral("palette.3d"), tr("3D Sketch"), false);
   sketch3d->setEnabled(false);
@@ -127,7 +127,7 @@ SketchPalette::SketchPalette(SketchEditor* editor, QWidget* parent) : QDialog(pa
   connect(grid_, &QCheckBox::toggled, this, &SketchPalette::gridToggled);
   connect(snap_, &QCheckBox::toggled, this, &SketchPalette::snapToggled);
   connect(slice_, &QCheckBox::toggled, this, &SketchPalette::sliceToggled);
-  for (QCheckBox* c : {profiles_, points_, dimensions_, constraints_, construction_})
+  for (QCheckBox* c : {profiles_, points_, dimensions_, constraints_, construction_, projected_})
     connect(c, &QCheckBox::toggled, this, [this] { applyDisplay(); });
 
   bodyLayout->addWidget(sectionHeader(tr("Options"), options));
@@ -199,6 +199,7 @@ void SketchPalette::applyDisplay() {
   d.dimensions = dimensions_->isChecked();
   d.constraints = constraints_->isChecked();
   d.construction = construction_->isChecked();
+  d.projected = projected_->isChecked();
   editor_->setDisplay(d);
 }
 

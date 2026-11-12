@@ -118,6 +118,14 @@ private:
     return (dx * (P(p).y - a.y) - dy * (P(p).x - a.x)) / l;
   }
   bool isRound(int e) const { return sketch::isRound(E(e).type); }
+  // An end point two lines/arcs have in common, or -1.
+  int sharedEnd(int e0, int e1) const {
+    const Entity &a = E(e0), &b = E(e1);
+    if (a.type == EntityType::Circle || b.type == EntityType::Circle) return -1;
+    for (int p : {a.a, a.b})
+      if (p >= 0 && (p == b.a || p == b.b)) return p;
+    return -1;
+  }
 
   // Two points from a constraint: explicit points, or a line's ends.
   bool pointPair(const Constraint& c, int& a, int& b) const {
@@ -174,6 +182,29 @@ private:
       case ConstraintType::Tangent: {
         if (e.size() != 2) bad();
         const bool r0 = isRound(e[0]), r1 = isRound(e[1]);
+        // Curves that share an end point: at that point the radius is
+        // perpendicular to the line (or both centres lie on one line through
+        // it). The distance form below is redundant at first order there, so
+        // the solver would not see the constraint at all.
+        if (const int sp = sharedEnd(e[0], e[1]); sp >= 0) {
+          const Point& q = P(sp);
+          if (r0 != r1) {
+            const int line = r0 ? e[1] : e[0];
+            const Point& c0 = P(E(r0 ? e[0] : e[1]).center);
+            double dx, dy;
+            dir(line, dx, dy);
+            const double l = std::max(std::hypot(dx, dy), 1e-12);
+            r.push_back(((c0.x - q.x) * dx + (c0.y - q.y) * dy) / l);
+            return;
+          }
+          if (r0 && r1) {
+            const Point& c0 = P(E(e[0]).center);
+            const Point& c1 = P(E(e[1]).center);
+            const double l = std::max(std::max(E(e[0]).radius, E(e[1]).radius), 1e-12);
+            r.push_back(((c0.x - q.x) * (c1.y - q.y) - (c0.y - q.y) * (c1.x - q.x)) / l);
+            return;
+          }
+        }
         if (r0 && r1) {
           const double d = dist(E(e[0]).center, E(e[1]).center);
           r.push_back(c.value != 0 ? d - std::abs(E(e[0]).radius - E(e[1]).radius) : d - (E(e[0]).radius + E(e[1]).radius));

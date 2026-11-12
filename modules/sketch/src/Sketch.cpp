@@ -253,6 +253,7 @@ std::string Sketch::toJson() const {
   for (const auto& e : entities) {
     nlohmann::json je;
     je["type"] = entityTypeName(e.type);
+    if (e.projected) je["projected"] = true;
     if (e.type == EntityType::Spline) {
       je["fit"] = e.fit;
       if (e.construction) je["construction"] = true;
@@ -312,6 +313,7 @@ Sketch Sketch::fromJson(const std::string& text) {
       e.center = je.value("c", -1);
       e.radius = je.value("r", 0.0);
       e.construction = je.value("construction", false);
+      e.projected = je.value("projected", false);
       s.entities.push_back(e);
     }
     for (const auto& jc : j.value("constraints", nlohmann::json::array())) {

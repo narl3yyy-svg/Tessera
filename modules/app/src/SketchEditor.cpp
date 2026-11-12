@@ -319,6 +319,13 @@ SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) cons
   if (s.kind == Snap::Point) p.hit = {Hit::Point, s.point};
   if (s.kind == Snap::OnCurve) p.onEntity = s.entity;
   if (s.kind == Snap::Midpoint) p.midpointOf = s.entity;
+  if (s.perpendicular) p.perpendicularTo = s.reference;
+  if (s.tangent) p.tangentTo = s.reference;
+  if (s.kind == Snap::BodyVertex) p.bodyPoint = true;
+  if (s.kind == Snap::BodyEdge) {
+    p.bodyPoint = s.bodySegment < 0;
+    p.bodySegment = s.bodySegment;
+  }
   return p;
 }
 
@@ -332,7 +339,119 @@ int SketchEditor::materialize(const Pick& p) {
     (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {p.onEntity}});
   if (p.midpointOf >= 0 && p.midpointOf < static_cast<int>(sk_.entities.size()))
     (void)sketch::addConstraintChecked(sk_, {ConstraintType::Midpoint, {pt}, {p.midpointOf}});
+  // On body geometry: project it, as the familiar sketcher does. Straight
+  // edges become fixed purple lines with the point on them; anything else
+  // becomes a fixed point.
+  if (p.bodySegment >= 0 && p.bodySegment < static_cast<int>(bodyEdges_.segments.size())) {
+    const auto& g = bodyEdges_.segments[p.bodySegment];
+    int line = -1;
+    for (int i = 0; i < static_cast<int>(sk_.entities.size()) && line < 0; ++i) {
+      const auto& e = sk_.entities[i];
+      if (!e.projected || e.type != EntityType::Line) continue;
+      const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
+      const bool same = (std::hypot(a.x - g[0], a.y - g[1]) < 1e-7 && std::hypot(b.x - g[2], b.y - g[3]) < 1e-7) ||
+                        (std::hypot(a.x - g[2], a.y - g[3]) < 1e-7 && std::hypot(b.x - g[0], b.y - g[1]) < 1e-7);
+      if (same) line = i;
+    }
+    if (line < 0) {
+      line = sk_.addLine(g[0], g[1], g[2], g[3]);
+      sk_.entities[line].projected = true;
+      for (int q : {sk_.entities[line].a, sk_.entities[line].b})
+        sk_.addConstraint({ConstraintType::Fix, {q}, {}, sk_.points[q].x, sk_.points[q].y});
+    }
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {line}});
+  } else if (p.bodyPoint) {
+    sk_.addConstraint({ConstraintType::Fix, {pt}, {}, p.x, p.y});
+  }
   return pt;
+}
+
+int SketchEditor::curveEndingAt(int point, int exclude) const {
+  int found = -1;
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    if (i == exclude) continue;
+    const auto& e = sk_.entities[i];
+    if ((e.type != EntityType::Line && e.type != EntityType::Arc) || e.construction) continue;
+    if (e.a == point || e.b == point) {
+      if (found >= 0) return -1;   // a corner of two curves: no single direction
+      found = i;
+    }
+  }
+  return found;
+}
+
+std::optional<std::pair<double, double>> SketchEditor::leavingDirection(int entity, int point) const {
+  if (entity < 0 || entity >= static_cast<int>(sk_.entities.size())) return std::nullopt;
+  const auto& e = sk_.entities[entity];
+  const auto& p = sk_.points[point];
+  if (e.type == EntityType::Line) {
+    const auto& o = sk_.points[e.a == point ? e.b : e.a];
+    const double l = std::hypot(p.x - o.x, p.y - o.y);
+    if (l < 1e-12) return std::nullopt;
+    return std::make_pair((p.x - o.x) / l, (p.y - o.y) / l);
+  }
+  if (e.type == EntityType::Arc) {
+    const auto& c = sk_.points[e.center];
+    const double rx = p.x - c.x, ry = p.y - c.y, r = std::hypot(rx, ry);
+    if (r < 1e-12) return std::nullopt;
+    // Arcs run anticlockwise a -> b: leaving b goes anticlockwise, leaving a clockwise.
+    if (point == e.b) return std::make_pair(-ry / r, rx / r);
+    return std::make_pair(ry / r, -rx / r);
+  }
+  return std::nullopt;
+}
+
+bool SketchEditor::tangentArc(double x, double y, double& cx, double& cy, double& r, bool& ccw) const {
+  if (arcFrom_ < 0) return false;
+  const auto dir = leavingDirection(arcRef_, arcFrom_);
+  if (!dir) return false;
+  const auto& s = sk_.points[arcFrom_];
+  const double nx = -dir->second, ny = dir->first;          // left normal
+  const double ex = x - s.x, ey = y - s.y;
+  const double den = 2 * (ex * nx + ey * ny);
+  if (std::abs(den) < 1e-9 || std::hypot(ex, ey) < tolerance() / 2) return false;
+  const double rs = (ex * ex + ey * ey) / den;               // signed: left (+) or right (-)
+  cx = s.x + nx * rs;
+  cy = s.y + ny * rs;
+  r = std::abs(rs);
+  ccw = rs > 0;
+  return r < 1e6;
+}
+
+void SketchEditor::finishArcDrag(double x, double y) {
+  arcDrag_ = false;
+  double cx, cy, r;
+  bool ccw;
+  const Pick end = pickPoint(x, y, arcFrom_);
+  if (!arcDragMoved_ || !tangentArc(end.x, end.y, cx, cy, r, ccw)) {
+    updatePreview(x, y);
+    return;
+  }
+  checkpoint();
+  const int e = materialize(end);
+  const int c = sk_.addPoint(cx, cy);
+  const int arc = ccw ? sk_.addArc(c, arcFrom_, e, construction_) : sk_.addArc(c, e, arcFrom_, construction_);
+  (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {arcRef_, arc}});
+  clearHud();
+  solveAndShow();
+  if (!res_.ok) {
+    undo();
+    return;
+  }
+  // The line chain carries on from the end of the arc.
+  steps_ = {Pick{{Hit::Point, e}, sk_.points[e].x, sk_.points[e].y}};
+  emit message(tr("Tangent arc added. Keep clicking for lines, or drag from the end again for another arc."));
+}
+
+bool SketchEditor::dragTangentArcForTest(double x, double y) {
+  if (tool_ != Tool::Line || steps_.empty() || steps_.back().hit.kind != Hit::Point) return false;
+  arcFrom_ = steps_.back().hit.index;
+  arcRef_ = curveEndingAt(arcFrom_);
+  if (arcRef_ < 0) return false;
+  const size_t before = sk_.entities.size();
+  arcDrag_ = arcDragMoved_ = true;
+  finishArcDrag(x, y);
+  return sk_.entities.size() > before;
 }
 
 void SketchEditor::collectBodyEdges() {
@@ -452,7 +571,8 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
   }
   if (s.kind == Snap::OnCurve) return s;
   // 5. On a body edge lying in the sketch plane.
-  for (const auto& g : bodyEdges_.segments) {
+  for (int k = 0; k < static_cast<int>(bodyEdges_.segments.size()); ++k) {
+    const auto& g = bodyEdges_.segments[k];
     const double dx = g[2] - g[0], dy = g[3] - g[1], l2 = dx * dx + dy * dy;
     if (l2 < 1e-18) continue;
     const double t = std::clamp(((x - g[0]) * dx + (y - g[1]) * dy) / l2, 0.0, 1.0);
@@ -460,6 +580,7 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
     if (d < best) {
       best = d;
       s.kind = Snap::BodyEdge;
+      s.bodySegment = k;
       s.x = px;
       s.y = py;
     }
@@ -474,6 +595,7 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
     if (d < best) {
       best = d;
       s.kind = Snap::BodyEdge;
+      s.bodySegment = -1;
       s.x = g[0] + (x - g[0]) / d0 * g[2];
       s.y = g[1] + (y - g[1]) / d0 * g[2];
     }
@@ -481,6 +603,33 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
   if (s.kind == Snap::BodyEdge) return s;
   // 6. Inference: horizontal / vertical from the previous point (lines),
   //    then lined up with any other point. Each axis snaps on its own.
+  // 6a. Lines leaving the end of a curve: tangent (straight on) or perpendicular to it.
+  if (!steps_.empty() && tool_ == Tool::Line && steps_.back().hit.kind == Hit::Point) {
+    const int from = steps_.back().hit.index;
+    const int ref = curveEndingAt(from);
+    if (const auto dir = leavingDirection(ref, from)) {
+      const auto& o = sk_.points[from];
+      const double vx = x - o.x, vy = y - o.y, len = std::hypot(vx, vy);
+      if (len > tol * 2) {
+        const double ux = dir->first, uy = dir->second;
+        const std::pair<double, double> cands[] = {{ux, uy}, {-uy, ux}, {uy, -ux}};
+        for (int k = 0; k < 3; ++k) {
+          const auto [cx, cy] = cands[k];
+          const double along = vx * cx + vy * cy;
+          if (along <= 0) continue;
+          if (std::abs(vx * cy - vy * cx) < tol) {   // within the snap distance of that direction
+            s.x = o.x + cx * along;
+            s.y = o.y + cy * along;
+            s.reference = ref;
+            (k == 0 ? s.tangent : s.perpendicular) = true;
+            s.fromX = o.x;
+            s.fromY = o.y;
+            return s;
+          }
+        }
+      }
+    }
+  }
   bool snappedX = false, snappedY = false;
   if (!steps_.empty() && (tool_ == Tool::Line || tool_ == Tool::Spline)) {
     const Pick& from = steps_.back();
@@ -532,7 +681,7 @@ void SketchEditor::showSnap(const Snap& s) {
   const double px = view_->modelPerPixel();
   // Guide lines: dashed from the previous point (H/V), dotted from aligned points.
   sketch::Sketch guides;
-  if (s.horizontal || s.vertical) guides.addLine(s.fromX, s.fromY, s.x, s.y);
+  if (s.horizontal || s.vertical || s.tangent || s.perpendicular) guides.addLine(s.fromX, s.fromY, s.x, s.y);
   if (s.alignX >= 0) guides.addLine(sk_.points[s.alignX].x, sk_.points[s.alignX].y, s.x, s.y);
   if (s.alignY >= 0) guides.addLine(sk_.points[s.alignY].x, sk_.points[s.alignY].y, s.x, s.y);
   const TopoDS_Shape gs = sketch::curves(guides, frame_, false);
@@ -554,6 +703,8 @@ void SketchEditor::showSnap(const Snap& s) {
   }
   if (s.horizontal) glyph += QStringLiteral(" H");
   if (s.vertical) glyph += QStringLiteral(" V");
+  if (s.perpendicular) glyph += QStringLiteral(" \u27C2");   // perpendicular
+  if (s.tangent) glyph += QStringLiteral(" T");
   if (s.kind == Snap::Free || s.kind == Snap::Grid) {
     if (glyph.isEmpty() && s.alignX < 0 && s.alignY < 0 && s.kind == Snap::Free) return;
   }
@@ -653,6 +804,19 @@ void SketchEditor::mousePress(QMouseEvent* e) {
   pressPos_ = e->position();
   double x, y;
   if (!toSketch(e->position(), x, y)) return;
+  // Line tool: pressing on the chain's last point and dragging draws a
+  // tangent arc (release ends it); a plain click there does nothing.
+  if (tool_ == Tool::Line && !steps_.empty() && steps_.back().hit.kind == Hit::Point &&
+      snapPoint(x, y) == steps_.back().hit.index) {
+    arcFrom_ = steps_.back().hit.index;
+    arcRef_ = curveEndingAt(arcFrom_);
+    if (arcRef_ >= 0) {
+      arcDrag_ = true;
+      arcDragMoved_ = false;
+      clearHud();
+      return;
+    }
+  }
   press(x, y, e->modifiers(), e->position());
 }
 
@@ -702,6 +866,12 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       const int b = materialize(end);
       if (chainStart_ < 0) chainStart_ = a;
       const int l = sk_.addLine(a, b, construction_);
+      // Inferred relations first (they say more than horizontal/vertical).
+      if (end.perpendicularTo >= 0)
+        (void)sketch::addConstraintChecked(sk_, {ConstraintType::Perpendicular, {}, {end.perpendicularTo, l}});
+      if (end.tangentTo >= 0 && end.tangentTo < static_cast<int>(sk_.entities.size()) &&
+          sk_.entities[end.tangentTo].type == EntityType::Arc)
+        (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {end.tangentTo, l}});
       autoHorizontalVertical(l);
       if (lockLen) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l}, len});
       const bool closed = end.hit.kind == Hit::Point && b == chainStart_;
@@ -980,6 +1150,40 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
 void SketchEditor::mouseMove(QMouseEvent* e) {
   double x, y;
   if (!toSketch(e->position(), x, y)) return;
+  if (arcDrag_) {
+    if ((e->position() - pressPos_).manhattanLength() >= 4) arcDragMoved_ = true;
+    cursorX_ = x;
+    cursorY_ = y;
+    clearPreview();
+    const Pick end = pickPoint(x, y, arcFrom_);
+    showSnap(snapAt(x, y, arcFrom_));
+    double cx, cy, r;
+    bool ccw;
+    if (arcDragMoved_ && tangentArc(end.x, end.y, cx, cy, r, ccw)) {
+      sketch::Sketch tmp;
+      const int c = tmp.addPoint(cx, cy);
+      const int s = tmp.addPoint(sk_.points[arcFrom_].x, sk_.points[arcFrom_].y);
+      const int t = tmp.addPoint(end.x, end.y);
+      ccw ? tmp.addArc(c, s, t) : tmp.addArc(c, t, s);
+      const TopoDS_Shape sh = sketch::curves(tmp, frame_, false);
+      if (!sh.IsNull()) {
+        Handle(AIS_Shape) w = wire(sh, kPreview, 1.5, Aspect_TOL_DASH);
+        view_->aisContext()->Display(w, AIS_WireFrame, -1, false);
+        view_->aisContext()->SetZLayer(w, Graphic3d_ZLayerId_Topmost);
+        preview_.push_back(w);
+        Handle(AIS_TextLabel) lb = new AIS_TextLabel();
+        lb->SetText(ext(QStringLiteral("R ") + lengthText(r)));
+        lb->SetPosition(sketch::toWorld(frame_, end.x, end.y + view_->modelPerPixel() * 18));
+        lb->SetHeight(13);
+        lb->SetColor(qc(themeColors().sketchLabel));
+        view_->aisContext()->Display(lb, 0, -1, false);
+        view_->aisContext()->SetZLayer(lb, Graphic3d_ZLayerId_Topmost);
+        preview_.push_back(lb);
+      }
+    }
+    view_->redraw();
+    return;
+  }
   if ((e->buttons() & Qt::LeftButton) && (dragPoint_ >= 0 || dragLine_ >= 0)) {
     if (!dragged_) {
       if ((e->position() - pressPos_).manhattanLength() < 4) return;
@@ -1027,6 +1231,12 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
 }
 
 void SketchEditor::mouseRelease(QMouseEvent* e) {
+  if (arcDrag_) {
+    double x, y;
+    if (toSketch(e->position(), x, y)) finishArcDrag(x, y);
+    else arcDrag_ = false;
+    return;
+  }
   if (tool_ != Tool::Select) return;
   const bool wasDrag = dragged_;
   dragPoint_ = dragLine_ = -1;
@@ -2000,10 +2210,11 @@ void SketchEditor::rebuild() {
     if (s.IsNull()) continue;
     const auto& e = sk_.entities[i];
     if (e.construction && !display_.construction) continue;
+    if (e.projected && !display_.projected) continue;
     const bool fixed = res_.ok && i < static_cast<int>(res_.entityFixed.size()) && res_.entityFixed[i];
     const bool hl = selected(Hit::Entity, i) || hovered(Hit::Entity, i);
-    Handle(AIS_Shape) a = wire(s, colorFor(Hit::Entity, i, fixed, e.construction), hl ? 3.0 : 2.0,
-                               e.construction ? Aspect_TOL_DASH : Aspect_TOL_SOLID);
+    const Quantity_Color colour = e.projected && !hl ? rgb(190, 110, 235) : colorFor(Hit::Entity, i, fixed, e.construction);
+    Handle(AIS_Shape) a = wire(s, colour, hl ? 3.0 : 2.0, e.construction ? Aspect_TOL_DASH : Aspect_TOL_SOLID);
     ctx->Display(a, AIS_WireFrame, -1, false);
     ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);   // never hidden behind bodies
     objects_.push_back(a);

@@ -231,13 +231,18 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   pd->close();
   ed = w.startSketch(QStringLiteral("XY"));
   ed->setTool(Tool::Rectangle);
-  ed->clickAt(0, 0);
-  ed->clickAt(4, 3);
+  ed->clickAt(20, 20);   // clear of the box, whose bottom edges would snap
+  ed->clickAt(24, 23);
   ed->setTool(Tool::Dimension);
-  ed->clickAt(2, 0);
-  ed->clickAt(9, 9);
+  ed->clickAt(22, 20);
+  ed->clickAt(29, 29);
   if (!ed->submitValue(QStringLiteral("size * 2"))) return fail("dimension expression box");
-  if (std::abs(ed->sketch().points[2].x - 6.0) > 1e-6) return fail("dimension expression did not drive the geometry");
+  {
+    const auto& sk = ed->sketch();
+    const auto& bottom = sk.entities[0];
+    if (std::abs(std::abs(sk.points[bottom.b].x - sk.points[bottom.a].x) - 6.0) > 1e-6)
+      return fail("dimension expression did not drive the geometry");
+  }
   if (ed->sketch().constraints.back().expression != "size * 2") return fail("dimension expression not kept");
   w.cancelSketch();
 
@@ -373,6 +378,51 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     if (!mid) return fail("line did not snap to the midpoint");
     const auto& last = sk.entities.back();
     if (std::abs(sk.points[last.a].y - sk.points[last.b].y) > 1e-9) return fail("line did not snap horizontal");
+  }
+  w.cancelSketch();
+
+  // Line tool: drag from the end for a tangent arc; tangent and
+  // perpendicular inference; snapping onto a body edge projects it.
+  s.newDocument();
+  if (!s.run("tsr.primitive.box", {{"length", 2.0}, {"width", 2.0}, {"height", 2.0}, {"x", 10.0}}).empty()) return fail("box for projection");
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Line);
+  ed->clickAt(0, 0);
+  ed->clickAt(4, 0);
+  if (!ed->dragTangentArcForTest(6, 2)) return fail("tangent arc drag");
+  {
+    const auto& sk = ed->sketch();
+    const auto& arc = sk.entities.back();
+    if (arc.type != tsr::sketch::EntityType::Arc || std::abs(arc.radius - 2) > 1e-6 || !ed->status().ok)
+      return fail("tangent arc geometry");
+  }
+  ed->clickAt(6.03, 4);   // straight on from the arc's end: tangent
+  {
+    const auto& sk = ed->sketch();
+    const auto& l = sk.entities.back();
+    if (std::abs(sk.points[l.a].x - sk.points[l.b].x) > 1e-6) return fail("tangent inference");
+    int tangents = 0;
+    for (const auto& c : sk.constraints) tangents += c.type == tsr::sketch::ConstraintType::Tangent;
+    if (tangents < 2) return fail("tangent constraints from the arc");
+  }
+  ed->escape();
+  ed->clickAt(0, 6);
+  ed->clickAt(3, 7);
+  ed->clickAt(2.35, 9.0);   // close to perpendicular to the previous line (exact: 2.333, 9)
+  {
+    const auto& sk = ed->sketch();
+    bool perp = false;
+    for (const auto& c : sk.constraints) perp = perp || c.type == tsr::sketch::ConstraintType::Perpendicular;
+    if (!perp) return fail("perpendicular inference");
+  }
+  ed->escape();
+  ed->clickAt(11, 0.01);    // on the box's bottom edge (in the sketch plane)
+  ed->clickAt(11, -2);
+  ed->escape();
+  {
+    bool projected = false;
+    for (const auto& e : ed->sketch().entities) projected = projected || e.projected;
+    if (!projected || !ed->status().ok) return fail("body edge projection");
   }
   w.cancelSketch();
 

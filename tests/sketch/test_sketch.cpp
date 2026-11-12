@@ -292,3 +292,21 @@ TEST(sketch_offset_chain) {
   CHECK_NEAR(c.entities[made[0]].radius, 2.5, 1e-9);
   CHECK(!offsetChain(c, circle, -3, &made).empty());
 }
+
+TEST(sketch_tangent_at_shared_end_is_a_real_constraint) {
+  // A line ending where an arc starts, already tangent: the constraint must
+  // still count (it fixes the arc's centre to the line's normal there).
+  Sketch s;
+  const int a = s.addPoint(0, 0), b = s.addPoint(4, 0), c = s.addPoint(4, 2), e = s.addPoint(6, 2);
+  const int line = s.addLine(a, b);
+  const int arc = s.addArc(c, b, e);
+  CHECK(solve(s).ok);
+  CHECK_EQ(addConstraintChecked(s, C(ConstraintType::Tangent, {}, {line, arc})), std::string());
+  // Drag the arc's end: it stays tangent (radius at the shared end is
+  // perpendicular to the line).
+  s.points[e] = {6.5, 3};
+  CHECK(solve(s, {e}).ok);
+  const double dot = (s.points[c].x - s.points[b].x) * (s.points[b].x - s.points[a].x) +
+                     (s.points[c].y - s.points[b].y) * (s.points[b].y - s.points[a].y);
+  CHECK_NEAR(dot, 0.0, 1e-7);
+}

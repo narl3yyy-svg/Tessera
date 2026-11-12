@@ -54,6 +54,7 @@ private:
   QCheckBox* dimensions_ = nullptr;
   QCheckBox* constraints_ = nullptr;
   QCheckBox* construction_ = nullptr;
+  QCheckBox* projected_ = nullptr;
 };
 
 } // namespace tsr::app

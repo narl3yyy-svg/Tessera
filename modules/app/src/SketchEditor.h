@@ -61,6 +61,7 @@ public:
     bool dimensions = true;
     bool constraints = true;    // constraint glyphs
     bool construction = true;   // construction curves
+    bool projected = true;      // geometry projected from bodies
   };
   const Display& display() const { return display_; }
   void setDisplay(const Display& d);
@@ -118,6 +119,10 @@ private:
     double x = 0, y = 0;
     int onEntity = -1;     // lands on this curve: a point-on-curve constraint is added
     int midpointOf = -1;   // at this line's midpoint: a midpoint constraint is added
+    int perpendicularTo = -1;   // the new line is perpendicular to this line
+    int tangentTo = -1;         // the new line is tangent to this arc (or continues this line)
+    bool bodyPoint = false;     // on body geometry: the point is projected (fixed)
+    int bodySegment = -1;       // on this straight body edge: the edge is projected too
   };
 
   // Where the cursor snaps while drawing, like the familiar sketcher:
@@ -130,6 +135,9 @@ private:
     int point = -1;
     int entity = -1;
     bool horizontal = false, vertical = false;   // H/V from the previous point
+    bool perpendicular = false, tangent = false; // to the curve the line starts from
+    int reference = -1;                          // that curve
+    int bodySegment = -1;                        // BodyEdge: which straight body edge
     int alignX = -1, alignY = -1;                // lined up with these points
     double fromX = 0, fromY = 0;                 // the previous point (for H/V guides)
   };
@@ -142,6 +150,23 @@ private:
     std::vector<std::array<double, 5>> arcs;              // cx, cy, r, a0, sweep (full circle: sweep 2*pi)
   } bodyEdges_;
   void collectBodyEdges();
+  // The curve (line or arc) that ends at `point`, if exactly one does, and
+  // its direction there, pointing out of the curve.
+  int curveEndingAt(int point, int exclude = -1) const;
+  std::optional<std::pair<double, double>> leavingDirection(int entity, int point) const;
+  // Click and drag from the end of a line (Line tool): a tangent arc.
+  bool arcDrag_ = false;
+  bool arcDragMoved_ = false;
+  int arcFrom_ = -1;   // the point it starts at
+  int arcRef_ = -1;    // the curve it is tangent to
+  bool tangentArc(double x, double y, double& cx, double& cy, double& r, bool& ccw) const;
+  void finishArcDrag(double x, double y);
+
+public:
+  // Tests: a click-and-drag from the line chain's last point to (x, y).
+  bool dragTangentArcForTest(double x, double y);
+
+private:
 
   bool toSketch(const QPointF& pos, double& x, double& y) const;
   double tolerance() const;   // hit radius in sketch units

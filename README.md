@@ -67,7 +67,8 @@ never needs the network.
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
 | Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it |
-| Snap while sketching | Points, midpoints (△), curves (○), body vertices/edges (◆ ◇), horizontal/vertical (H/V) and alignment guides; grid snap is on by default (Sketch Palette > Snap) |
+| Snap while sketching | Points, midpoints (△), curves (○), body vertices/edges (◆ ◇, projected in purple), horizontal/vertical (H/V), tangent (T) and perpendicular (⟂) from the curve you start on, and alignment guides; grid snap is on by default (Sketch Palette > Snap) |
+| Tangent arc while drawing lines | Press on the last point of the line chain and drag; release to place the arc, then keep clicking for lines |
 | Extrude a face of a body | *Extrude*, click the face (it joins; drag inwards to cut) |
 | Edit a feature | Double-click it in the timeline (or a sketch in the browser) |
 | Drive sizes from parameters | *Modify → Change Parameters* → **Add**; then type the name or an expression (`width / 2`) into any value or dimension |
