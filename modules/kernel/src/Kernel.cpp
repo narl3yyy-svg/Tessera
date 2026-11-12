@@ -60,6 +60,7 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
+#include <sstream>
 
 #include <memory>
 
@@ -194,6 +195,59 @@ std::vector<TopoDS_Shape> edgesNear(const TopoDS_Shape& shape, const std::vector
     for (const auto& e : out) dup = dup || e.IsSame(edges(best));
     if (!dup) out.push_back(edges(best));
   }
+  return out;
+}
+
+std::string vertexReference(const TopoDS_Shape& vertex) {
+  if (vertex.IsNull() || vertex.ShapeType() != TopAbs_VERTEX) throw KernelError("not a vertex");
+  const gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(vertex));
+  std::ostringstream os;
+  os.precision(12);
+  os << p.X() << ',' << p.Y() << ',' << p.Z();
+  return os.str();
+}
+
+std::vector<TopoDS_Shape> resolveVertices(const TopoDS_Shape& body, const std::string& refs) {
+  TopTools_IndexedMapOfShape vertices;
+  TopExp::MapShapes(body, TopAbs_VERTEX, vertices);
+  Bnd_Box box;
+  BRepBndLib::Add(body, box);
+  double tol = 0.05;
+  if (!box.IsVoid()) {
+    double x0, y0, z0, x1, y1, z1;
+    box.Get(x0, y0, z0, x1, y1, z1);
+    tol = std::max(tol, 0.2 * std::hypot(x1 - x0, y1 - y0, z1 - z0));
+  }
+  std::vector<TopoDS_Shape> out;
+  std::stringstream all(refs);
+  std::string item;
+  while (std::getline(all, item, ';')) {
+    if (item.empty()) continue;
+    std::vector<double> v;
+    std::stringstream ss(item);
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+      try {
+        v.push_back(std::stod(tok));
+      } catch (...) {
+        throw KernelError("bad vertex reference '" + item + "'");
+      }
+    }
+    if (v.size() != 3) throw KernelError("bad vertex reference '" + item + "'");
+    const gp_Pnt want(v[0], v[1], v[2]);
+    int best = 0;
+    double bestD = tol;
+    for (int i = 1; i <= vertices.Extent(); ++i) {
+      const double d = BRep_Tool::Pnt(TopoDS::Vertex(vertices(i))).Distance(want);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    if (best == 0) throw KernelError("a selected vertex no longer exists (the body changed too much)");
+    out.push_back(vertices(best));
+  }
+  if (out.empty()) throw KernelError("select at least one vertex");
   return out;
 }
 

@@ -372,12 +372,24 @@ void MainWindow::updateEdgePicking() {
   std::vector<TopAbs_ShapeEnum> types;
   if (active_ && active_->hasEdgesInput()) types.push_back(TopAbs_EDGE);
   if (active_ && active_->hasFacesInput()) types.push_back(TopAbs_FACE);
+  if (active_ && active_->hasVerticesInput()) types.push_back(TopAbs_VERTEX);
   viewport_->setSubShapePicking(types);
   if (!types.empty()) viewport_->setPickedShapes(pickedEdges_);
 }
 
 void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
   if (!active_) return;
+  if (edge.ShapeType() == TopAbs_VERTEX) {
+    if (!active_->hasVerticesInput()) return;
+    QStringList refs = active_->currentVertices().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    if (!active_->currentBody().isEmpty() && active_->currentBody() != body) refs.clear();
+    active_->pickBody(body);
+    const QString ref = QString::fromStdString(kernel::vertexReference(edge));
+    if (refs.contains(ref)) refs.removeAll(ref);
+    else refs << ref;
+    active_->setVertices(refs.join(QLatin1Char(';')));
+    return;
+  }
   const bool isFace = edge.ShapeType() == TopAbs_FACE;
   if (isFace ? !active_->hasFacesInput() : !(edge.ShapeType() == TopAbs_EDGE && active_->hasEdgesInput())) return;
   const TopoDS_Shape shape = viewport_->bodyShape(body);

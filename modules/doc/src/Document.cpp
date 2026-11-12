@@ -7,6 +7,8 @@
 #include <TDataStd_NamedData.hxx>
 #include <TNaming_Builder.hxx>
 #include <TNaming_NamedShape.hxx>
+#include <Standard_Failure.hxx>
+#include <gp.hxx>
 
 #include <nlohmann/json.hpp>
 
@@ -31,6 +33,8 @@ constexpr int kBodiesTag = 2;
 constexpr int kFeaturesTag = 3;
 constexpr int kSketchesTag = 4;
 constexpr int kPlanesTag = 5;
+constexpr int kAxesTag = 6;
+constexpr int kPointsTag = 7;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -134,6 +138,8 @@ void Document::initLayout() {
   doc_->Main().FindChild(kFeaturesTag, true);
   doc_->Main().FindChild(kSketchesTag, true);
   doc_->Main().FindChild(kPlanesTag, true);
+  doc_->Main().FindChild(kAxesTag, true);
+  doc_->Main().FindChild(kPointsTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -503,6 +509,107 @@ gp_Ax3 Document::planeFrame(const std::string& spec, double offset) const {
   }
 }
 
+namespace {
+TDF_Label namedChild(const Handle(TDocStd_Document)& doc, int tag, const std::string& name) {
+  for (TDF_ChildIterator it(doc->Main().FindChild(tag, false)); it.More(); it.Next())
+    if (it.Value().IsAttribute(TDataStd_NamedData::GetID()) && nameOf(it.Value()) == name) return it.Value();
+  return {};
+}
+double realOf(const Handle(TDataStd_NamedData)& nd, const char* key) {
+  const TCollection_ExtendedString k(key);
+  return nd->HasReal(k) ? nd->GetReal(k) : 0.0;
+}
+// A free name "<base><n>": not used by an existing item or by a feature.
+template <class Exists>
+std::string freeName(const std::vector<Feature>& fs, const char* base, Exists exists) {
+  for (int n = 1;; ++n) {
+    const std::string name = base + std::to_string(n);
+    if (exists(name)) continue;
+    if (std::any_of(fs.begin(), fs.end(), [&](const Feature& f) { return f.name == name; })) continue;
+    return name;
+  }
+}
+} // namespace
+
+std::vector<ConstructionAxis> Document::axes() const {
+  std::vector<ConstructionAxis> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kAxesTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;
+    try {
+      out.push_back({nameOf(it.Value()), gp_Ax1(gp_Pnt(realOf(nd, "ox"), realOf(nd, "oy"), realOf(nd, "oz")),
+                                                gp_Dir(realOf(nd, "dx"), realOf(nd, "dy"), realOf(nd, "dz")))});
+    } catch (const Standard_Failure&) {
+    }
+  }
+  return out;
+}
+
+std::optional<ConstructionAxis> Document::axis(const std::string& name) const {
+  for (auto& a : axes())
+    if (a.name == name) return a;
+  return std::nullopt;
+}
+
+void Document::setAxis(const ConstructionAxis& a) {
+  requireTransaction("setAxis");
+  TDF_Label l = namedChild(doc_, kAxesTag, a.name);
+  if (l.IsNull()) l = doc_->Main().FindChild(kAxesTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(a.name));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  const gp_Pnt o = a.axis.Location();
+  const gp_Dir d = a.axis.Direction();
+  nd->SetReal("ox", o.X());
+  nd->SetReal("oy", o.Y());
+  nd->SetReal("oz", o.Z());
+  nd->SetReal("dx", d.X());
+  nd->SetReal("dy", d.Y());
+  nd->SetReal("dz", d.Z());
+}
+
+std::string Document::nextAxisName() const {
+  return freeName(features(), "Axis", [&](const std::string& n) { return axis(n).has_value(); });
+}
+
+gp_Ax1 Document::axisFrame(const std::string& spec) const {
+  if (spec == "X") return gp::OX();
+  if (spec == "Y") return gp::OY();
+  if (spec == "Z" || spec.empty()) return gp::OZ();
+  if (const auto a = axis(spec)) return a->axis;
+  throw DocumentError("unknown axis '" + spec + "'");
+}
+
+std::vector<ConstructionPoint> Document::points() const {
+  std::vector<ConstructionPoint> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kPointsTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;
+    out.push_back({nameOf(it.Value()), gp_Pnt(realOf(nd, "x"), realOf(nd, "y"), realOf(nd, "z"))});
+  }
+  return out;
+}
+
+std::optional<ConstructionPoint> Document::point(const std::string& name) const {
+  for (auto& p : points())
+    if (p.name == name) return p;
+  return std::nullopt;
+}
+
+void Document::setPoint(const ConstructionPoint& p) {
+  requireTransaction("setPoint");
+  TDF_Label l = namedChild(doc_, kPointsTag, p.name);
+  if (l.IsNull()) l = doc_->Main().FindChild(kPointsTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(p.name));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  nd->SetReal("x", p.point.X());
+  nd->SetReal("y", p.point.Y());
+  nd->SetReal("z", p.point.Z());
+}
+
+std::string Document::nextPointName() const {
+  return freeName(features(), "Point", [&](const std::string& n) { return point(n).has_value(); });
+}
+
 std::vector<Feature> Document::features() const {
   std::vector<Feature> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kFeaturesTag, false)); it.More(); it.Next()) {
@@ -566,7 +673,7 @@ void Document::removeFeature(int id) {
 
 void Document::recompute(const CommandRegistry& registry) {
   requireTransaction("recompute");
-  for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag})
+  for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag, kAxesTag, kPointsTag})
     for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
       if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
 

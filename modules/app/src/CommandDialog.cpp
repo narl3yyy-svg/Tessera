@@ -213,8 +213,25 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::Axis: {
+        auto* combo = new QComboBox;
+        for (const char* o : {"X", "Y", "Z"}) combo->addItem(QString::fromLatin1(o), QString::fromLatin1(o));
+        for (const auto& a : session_.document().axes())
+          combo->addItem(QString::fromStdString(a.name), QString::fromStdString(a.name));
+        if (auto p = std::get_if<std::string>(&cur); p && !p->empty()) {
+          const QString name = QString::fromStdString(*p);
+          if (combo->findData(name) < 0) combo->addItem(name, name);
+          combo->setCurrentIndex(combo->findData(name));
+        }
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
+          onInputChanged(id, combo->currentData().toString().toStdString());
+        });
+        w = combo;
+        break;
+      }
       case InputType::Edges:
       case InputType::Faces:
+      case InputType::Vertices:
       case InputType::Bodies: {
         // Filled by clicking in the 3D view.
         auto* box = new QWidget;
@@ -232,6 +249,10 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           facesLabel_ = label;
           facesId_ = id;
           clear->setObjectName(QStringLiteral("clearFaces"));
+        } else if (in.type == InputType::Vertices) {
+          verticesLabel_ = label;
+          verticesId_ = id;
+          clear->setObjectName(QStringLiteral("clearVertices"));
         } else {
           bodiesLabel_ = label;
           bodiesId_ = id;
@@ -399,6 +420,11 @@ void CommandDialog::setFaces(const QString& faces) {
   updateProfilesLabel();
 }
 
+void CommandDialog::setVertices(const QString& v) {
+  if (!verticesId_.empty()) onInputChanged(verticesId_, v.toStdString());
+  updateProfilesLabel();
+}
+
 void CommandDialog::setTools(const QString& bodies) {
   if (!bodiesId_.empty()) onInputChanged(bodiesId_, bodies.toStdString());
   updateProfilesLabel();
@@ -460,6 +486,10 @@ void CommandDialog::updateProfilesLabel() {
   if (facesLabel_) {
     const int n = count(currentFaces());
     facesLabel_->setText(n == 0 ? tr("None (click faces)") : tr("%n face(s)", nullptr, n));
+  }
+  if (verticesLabel_) {
+    const int n = count(currentVertices());
+    verticesLabel_->setText(n == 0 ? tr("Click vertices in the canvas") : tr("%n vertex(es)", nullptr, n));
   }
   if (bodiesLabel_) {
     const QString t = currentTools();

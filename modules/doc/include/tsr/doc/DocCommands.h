@@ -27,6 +27,15 @@ inline constexpr const char* kCmdPressPull = "tsr.feature.pressPull";
 inline constexpr const char* kCmdOffsetPlane = "tsr.construct.offsetPlane";
 inline constexpr const char* kCmdPlaneAtAngle = "tsr.construct.planeAtAngle";
 inline constexpr const char* kCmdMidplane = "tsr.construct.midplane";
+inline constexpr const char* kCmdAxisCylinder = "tsr.construct.axisCylinder";
+inline constexpr const char* kCmdAxisEdge = "tsr.construct.axisEdge";
+inline constexpr const char* kCmdAxisTwoPoints = "tsr.construct.axisTwoPoints";
+inline constexpr const char* kCmdAxisTwoPlanes = "tsr.construct.axisTwoPlanes";
+inline constexpr const char* kCmdPointVertex = "tsr.construct.pointVertex";
+inline constexpr const char* kCmdPointTwoEdges = "tsr.construct.pointTwoEdges";
+inline constexpr const char* kCmdPointThreePlanes = "tsr.construct.pointThreePlanes";
+inline constexpr const char* kCmdPointCenter = "tsr.construct.pointCenter";
+inline constexpr const char* kCmdPointEdgePlane = "tsr.construct.pointEdgePlane";
 inline constexpr const char* kCmdRectPattern = "tsr.feature.rectangularPattern";
 inline constexpr const char* kCmdCircPattern = "tsr.feature.circularPattern";
 inline constexpr const char* kCmdCylinder = "tsr.primitive.cylinder";
@@ -57,6 +66,9 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 //   tsr.feature.mirror       body, plane, offset, operation ("New Body"/"Join")
 //   tsr.feature.scale        body, factor, about ("Body centre"/"Origin")
 //   tsr.feature.remove       body
+//   tsr.construct.axis*      name; body + faces (cylinder/cone/torus) | edges | vertices (2) | plane + plane2
+//   tsr.construct.point*     name; body + vertices | edges (2) | plane, plane2, plane3 |
+//                            edges or faces (circle / sphere centre) | edges + plane
 // All of these except the parameter command are timeline features.
 // Every Real/Integer input also takes an expression string ("width / 2");
 // see tsr::expressionKey and Document::recompute.

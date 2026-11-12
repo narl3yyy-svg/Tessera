@@ -68,6 +68,12 @@ std::vector<TopoDS_Shape> resolveEdges(const TopoDS_Shape& body, const std::stri
 // A point on the middle of an edge, for referring to it later.
 Vec3 edgeMidpoint(const TopoDS_Shape& edge);
 
+// Vertices of a body, referenced by their position "x,y,z;..." (cm). On
+// replay each reference picks the nearest vertex of the body; throws
+// KernelError when none is near (the body changed too much).
+std::string vertexReference(const TopoDS_Shape& vertex);
+std::vector<TopoDS_Shape> resolveVertices(const TopoDS_Shape& body, const std::string& refs);
+
 // Rounds / bevels edges (tangent-continuous neighbours are included). Throws
 // KernelError, e.g. when the size does not fit the adjacent faces.
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius);

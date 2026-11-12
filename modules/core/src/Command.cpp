@@ -111,6 +111,8 @@ std::string checkInputValue(const InputDef& d, const Value& v) {
     case InputType::Profiles:
     case InputType::Edges:
     case InputType::Faces:
+    case InputType::Vertices:
+    case InputType::Axis:
     case InputType::Bodies:
     case InputType::Plane: {
       auto p = std::get_if<std::string>(&v);
@@ -120,6 +122,7 @@ std::string checkInputValue(const InputDef& d, const Value& v) {
                           : d.type == InputType::Edges ? ": select one or more edges in the canvas"
                           : d.type == InputType::Faces ? ": select one or more faces in the canvas"
                           : d.type == InputType::Bodies ? ": select one or more bodies in the canvas"
+                          : d.type == InputType::Vertices ? ": select vertices in the canvas"
                                                        : ": required");
       return {};
     }

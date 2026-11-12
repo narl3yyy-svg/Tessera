@@ -15,6 +15,8 @@
 //                TDataStd_Name       sketch name ("Sketch1")
 //                TDataStd_NamedData  "plane" (spec), "offset" (real), "data" (solved sketch JSON)
 //   0:1:5      Construction planes; one child per plane: TDataStd_Name, NamedData "spec"
+//   0:1:6      Construction axes; one child per axis: TDataStd_Name, NamedData reals ox,oy,oz,dx,dy,dz
+//   0:1:7      Construction points; one child per point: TDataStd_Name, NamedData reals x,y,z
 //   0:1:3      Features (the timeline), in order; one child per feature:
 //                TDataStd_Name       feature name ("Box1")
 //                TDataStd_NamedData  "command" (id), "inputs" (JSON), "error" (last recompute), "suppressed" (int)
@@ -33,7 +35,9 @@
 
 #include <TDocStd_Document.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax3.hxx>
+#include <gp_Pnt.hxx>
 
 #include <filesystem>
 #include <memory>
@@ -71,6 +75,16 @@ struct SketchRecord {
 struct ConstructionPlane {
   std::string name;   // "Plane1"
   std::string spec;   // custom:... frame (tsr::sketch::planeFrame)
+};
+
+struct ConstructionAxis {
+  std::string name;   // "Axis1"
+  gp_Ax1 axis;
+};
+
+struct ConstructionPoint {
+  std::string name;   // "Point1"
+  gp_Pnt point;
 };
 
 struct Feature {
@@ -147,6 +161,19 @@ public:
   // Resolves "XY"/"XZ"/"YZ"/"custom:..." or a construction plane's name,
   // moved by `offset` along its normal. Throws DocumentError.
   gp_Ax3 planeFrame(const std::string& spec, double offset = 0) const;
+
+  // Construction axes and points (results of Construct features).
+  std::vector<ConstructionAxis> axes() const;
+  std::optional<ConstructionAxis> axis(const std::string& name) const;
+  void setAxis(const ConstructionAxis& a);   // adds, or replaces the one with that name
+  std::string nextAxisName() const;
+  // "X", "Y", "Z" (world axes through the origin) or a construction axis's
+  // name. Throws DocumentError.
+  gp_Ax1 axisFrame(const std::string& spec) const;
+  std::vector<ConstructionPoint> points() const;
+  std::optional<ConstructionPoint> point(const std::string& name) const;
+  void setPoint(const ConstructionPoint& p);
+  std::string nextPointName() const;
 
   // Design history.
   std::vector<Feature> features() const;

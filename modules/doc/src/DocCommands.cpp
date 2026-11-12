@@ -7,7 +7,18 @@
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <Standard_Failure.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepGProp.hxx>
+#include <BRep_Tool.hxx>
+#include <GProp_GProps.hxx>
+#include <GeomAPI_IntCS.hxx>
+#include <Geom_Line.hxx>
+#include <Geom_Plane.hxx>
+#include <Geom_TrimmedCurve.hxx>
+#include <gp_Lin.hxx>
+#include <gp_Pln.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <gp_Ax2.hxx>
@@ -600,8 +611,10 @@ public:
          .defaultValue = std::string{}, .optional = true},
         {.id = "profiles", .label = "Profiles", .tooltip = "Click regions of the sketch. None picked: all of them.",
          .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
-        choice("axis", "Axis", {"Sketch Y axis", "Sketch X axis", "Construction line", "X", "Y", "Z"},
+        choice("axis", "Axis", {"Sketch Y axis", "Sketch X axis", "Construction line", "X", "Y", "Z", "Construction axis"},
                "Axis to turn about. Construction line: the sketch's first construction line."),
+        {.id = "constructionAxis", .label = "Construction axis", .tooltip = "A construction axis (Construct panel).",
+         .type = InputType::Axis, .defaultValue = std::string("Z"), .visibleWhen = "axis=Construction axis"},
         choice("direction", "Direction", {"One Side", "Symmetric"}, "Symmetric turns half the angle each way."),
         {.id = "angle", .label = "Angle", .tooltip = "360 deg for a full turn.", .type = InputType::Real,
          .defaultValue = 2 * 3.14159265358979323846, .unit = Unit::Degree},
@@ -667,6 +680,15 @@ public:
       d = gp_Dir(1, 0, 0);
     } else if (axis == "Y") {
       d = gp_Dir(0, 1, 0);
+    } else if (axis == "Construction axis") {
+      const std::string name = in.count("constructionAxis") ? getString(in, "constructionAxis") : std::string();
+      try {
+        const gp_Ax1 a = doc.axisFrame(name);
+        o = a.Location();
+        d = a.Direction();
+      } catch (const DocumentError& e) {
+        throw CommandError(std::string("Construction axis: ") + e.what());
+      }
     }
     TopoDS_Shape tool;
     try {
@@ -1317,9 +1339,10 @@ private:
 class CircularPattern final : public Command {
 public:
   CircularPattern() {
-    commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies a body around an axis through the origin.", "pattern-circ", "Create");
+    commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies a body around a world or construction axis.", "pattern-circ", "Create");
     def_.inputs = {bodyInput(),
-                   choice("axis", "Axis", {"Z", "Y", "X"}, "World axis through the origin."),
+                   InputDef{.id = "axis", .label = "Axis", .tooltip = "A world axis (through the origin) or a construction axis.",
+                            .type = InputType::Axis, .defaultValue = std::string("Z")},
                    InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
                             .type = InputType::Integer, .defaultValue = std::int64_t{6}, .unit = Unit::None,
                             .min = 2.0, .max = 1000.0},
@@ -1340,7 +1363,15 @@ public:
     const double step = full ? total / n : total / std::max<std::int64_t>(n - 1, 1);
     std::vector<TopoDS_Shape> copies;
     try {
-      for (std::int64_t i = 1; i < n; ++i) copies.push_back(kernel::moved(s, {}, {}, axisVec(getString(in, "axis")), step * i));
+      gp_Ax1 ax;
+      try {
+        ax = doc.axisFrame(getString(in, "axis"));
+      } catch (const DocumentError& e) {
+        throw CommandError(std::string("Axis: ") + e.what());
+      }
+      const kernel::Vec3 pivot{ax.Location().X(), ax.Location().Y(), ax.Location().Z()};
+      const kernel::Vec3 dir{ax.Direction().X(), ax.Direction().Y(), ax.Direction().Z()};
+      for (std::int64_t i = 1; i < n; ++i) copies.push_back(kernel::moved(s, {}, pivot, dir, step * i));
       placeCopies(doc, name, copies, getString(in, "result") == "Join");
     } catch (const kernel::KernelError& e) {
       throw CommandError(e.what());
@@ -1414,6 +1445,266 @@ private:
     }
     return f;
   }
+  Kind kind_;
+  CommandDef def_;
+};
+
+// ---------------------------------------------------------------------------
+// Construct: axes and points, from body geometry or planes.
+
+class ConstructAxisPoint final : public Command {
+public:
+  enum class Kind { AxisCylinder, AxisEdge, AxisTwoPoints, AxisTwoPlanes, PointVertex, PointTwoEdges, PointThreePlanes,
+                    PointCenter, PointEdgePlane };
+  explicit ConstructAxisPoint(Kind kind) : kind_(kind) {
+    struct Info {
+      const char *id, *name, *tip, *icon;
+    };
+    static const Info infos[] = {
+        {kCmdAxisCylinder, "Axis Through Cylinder/Cone/Torus", "The axis of a round face.", "axis"},
+        {kCmdAxisEdge, "Axis Through Edge", "Along a straight edge, or through the centre of a circular edge.", "axis"},
+        {kCmdAxisTwoPoints, "Axis Through Two Points", "Through two vertices.", "axis"},
+        {kCmdAxisTwoPlanes, "Axis Through Two Planes", "Where two planes meet.", "axis"},
+        {kCmdPointVertex, "Point at Vertex", "At a vertex of a body.", "point"},
+        {kCmdPointTwoEdges, "Point Through Two Edges", "Where two edges (or their lines) cross.", "point"},
+        {kCmdPointThreePlanes, "Point Through Three Planes", "Where three planes meet.", "point"},
+        {kCmdPointCenter, "Point at Center of Circle/Sphere/Torus", "The centre of a circular edge or a round face.", "point"},
+        {kCmdPointEdgePlane, "Point at Edge and Plane", "Where an edge (extended if straight) crosses a plane.", "point"},
+    };
+    const Info& info = infos[static_cast<int>(kind)];
+    commonDef(def_, info.id, info.name, info.tip, info.icon, "Construct");
+    def_.nameInput = "name";
+    def_.inputs = {{.id = "name", .label = "Name", .tooltip = isAxis() ? "Empty: Axis<n>." : "Empty: Point<n>.",
+                    .type = InputType::String, .defaultValue = std::string{}, .optional = true}};
+    auto edges = [] {
+      return InputDef{.id = "edges", .label = "Edges", .tooltip = "Click edges in the canvas.", .type = InputType::Edges,
+                      .defaultValue = std::string{}, .optional = true};
+    };
+    auto faces = [] {
+      return InputDef{.id = "faces", .label = "Face", .tooltip = "Click a face in the canvas.", .type = InputType::Faces,
+                      .defaultValue = std::string{}, .optional = true};
+    };
+    auto vertices = [] {
+      return InputDef{.id = "vertices", .label = "Vertices", .tooltip = "Click vertices in the canvas.",
+                      .type = InputType::Vertices, .defaultValue = std::string{}};
+    };
+    switch (kind) {
+      case Kind::AxisCylinder: def_.inputs.insert(def_.inputs.end(), {bodyInput(), faces()}); break;
+      case Kind::AxisEdge:
+      case Kind::PointTwoEdges: def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges()}); break;
+      case Kind::AxisTwoPoints:
+      case Kind::PointVertex: def_.inputs.insert(def_.inputs.end(), {bodyInput(), vertices()}); break;
+      case Kind::PointCenter: def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges(), faces()}); break;
+      case Kind::PointEdgePlane:
+        def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges(), planeChoice("The plane the edge crosses.")});
+        break;
+      case Kind::AxisTwoPlanes:
+        def_.inputs.insert(def_.inputs.end(), {planeChoice("First plane."), planeChoice("Second plane.", "plane2", "Plane 2")});
+        def_.inputs.back().defaultValue = std::string("XZ");
+        break;
+      case Kind::PointThreePlanes:
+        def_.inputs.insert(def_.inputs.end(), {planeChoice("First plane."), planeChoice("Second plane.", "plane2", "Plane 2"),
+                                               planeChoice("Third plane.", "plane3", "Plane 3")});
+        def_.inputs[2].defaultValue = std::string("XZ");
+        def_.inputs[3].defaultValue = std::string("YZ");
+        break;
+    }
+  }
+  const CommandDef& def() const override { return def_; }
+
+  bool isAxis() const { return kind_ <= Kind::AxisTwoPlanes; }
+  bool usesBody() const { return kind_ != Kind::AxisTwoPlanes && kind_ != Kind::PointThreePlanes; }
+
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (usesBody())
+      if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
+    try {
+      if (isAxis()) (void)axisOf(docOf(ctx), in);
+      else (void)pointOf(docOf(ctx), in);
+    } catch (const std::exception& e) {
+      return e.what();
+    }
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "name").empty()) in["name"] = isAxis() ? doc.nextAxisName() : doc.nextPointName();
+    if (!usesBody()) return;
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        if (in.count("edges") && !getString(in, "edges").empty())
+          in["edges"] = kernel::completeEdgeReferences(b->shape, getString(in, "edges"));
+        if (in.count("faces") && !getString(in, "faces").empty())
+          in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::string name = getString(in, "name");
+    if (isAxis()) {
+      if (name.empty()) name = doc.nextAxisName();
+      doc.setAxis({name, axisOf(doc, in)});
+    } else {
+      if (name.empty()) name = doc.nextPointName();
+      doc.setPoint({name, pointOf(doc, in)});
+    }
+  }
+
+private:
+  TopoDS_Shape body(const Document& doc, const Inputs& in) const { return doc.body(bodyName(in, doc))->shape; }
+  std::vector<TopoDS_Shape> edgesOf(const Document& doc, const Inputs& in, size_t want) const {
+    const std::string refs = in.count("edges") ? getString(in, "edges") : std::string();
+    if (refs.empty()) throw CommandError(want == 1 ? "Edges: click an edge" : "Edges: click two edges");
+    std::vector<TopoDS_Shape> e;
+    try {
+      e = kernel::resolveEdges(body(doc, in), refs);
+    } catch (const kernel::KernelError& err) {
+      throw CommandError(std::string("Edges: ") + err.what());
+    }
+    if (e.size() < want) throw CommandError(want == 1 ? "Edges: click an edge" : "Edges: click two edges");
+    return e;
+  }
+  std::vector<gp_Pnt> verticesOf(const Document& doc, const Inputs& in, size_t want) const {
+    std::vector<gp_Pnt> out;
+    try {
+      for (const auto& v : kernel::resolveVertices(body(doc, in), getString(in, "vertices")))
+        out.push_back(BRep_Tool::Pnt(TopoDS::Vertex(v)));
+    } catch (const kernel::KernelError& err) {
+      throw CommandError(std::string("Vertices: ") + err.what());
+    }
+    if (out.size() < want) throw CommandError(want == 1 ? "Vertices: click a vertex" : "Vertices: click two vertices");
+    return out;
+  }
+  static gp_Pln plane(const Document& doc, const Inputs& in, const char* id) {
+    return gp_Pln(planeOf(doc, in, id, "-"));
+  }
+  // Moves an axis's origin to the point on it nearest `near` (for display).
+  static gp_Ax1 centred(const gp_Ax1& a, const gp_Pnt& near) {
+    const gp_Vec v(a.Location(), near);
+    return gp_Ax1(a.Location().Translated(gp_Vec(a.Direction()) * v.Dot(gp_Vec(a.Direction()))), a.Direction());
+  }
+
+  gp_Ax1 axisOf(const Document& doc, const Inputs& in) const {
+    switch (kind_) {
+      case Kind::AxisCylinder: {
+        const std::string refs = getString(in, "faces");
+        if (refs.empty()) throw CommandError("Face: click a cylindrical, conical or toroidal face");
+        TopoDS_Shape f;
+        try {
+          f = kernel::resolveFaces(body(doc, in), refs).front();
+        } catch (const kernel::KernelError& err) {
+          throw CommandError(std::string("Face: ") + err.what());
+        }
+        BRepAdaptor_Surface s(TopoDS::Face(f), true);
+        GProp_GProps g;
+        BRepGProp::SurfaceProperties(f, g);
+        switch (s.GetType()) {
+          case GeomAbs_Cylinder: return centred(s.Cylinder().Axis(), g.CentreOfMass());
+          case GeomAbs_Cone: return centred(s.Cone().Axis(), g.CentreOfMass());
+          case GeomAbs_Torus: return s.Torus().Axis();
+          case GeomAbs_SurfaceOfRevolution: return centred(s.AxeOfRevolution(), g.CentreOfMass());
+          default: throw CommandError("Face: pick a cylindrical, conical or toroidal face");
+        }
+      }
+      case Kind::AxisEdge: {
+        BRepAdaptor_Curve c(TopoDS::Edge(edgesOf(doc, in, 1).front()));
+        const gp_Pnt mid = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+        if (c.GetType() == GeomAbs_Line) return centred(c.Line().Position(), mid);
+        if (c.GetType() == GeomAbs_Circle) return c.Circle().Axis();
+        throw CommandError("Edges: pick a straight or circular edge");
+      }
+      case Kind::AxisTwoPoints: {
+        const auto p = verticesOf(doc, in, 2);
+        if (p[0].Distance(p[1]) < 1e-9) throw CommandError("Vertices: pick two different vertices");
+        return gp_Ax1(p[0], gp_Dir(gp_Vec(p[0], p[1])));
+      }
+      case Kind::AxisTwoPlanes: {
+        const gp_Pln a = plane(doc, in, "plane"), b = plane(doc, in, "plane2");
+        const gp_Vec n1(a.Axis().Direction()), n2(b.Axis().Direction());
+        const gp_Vec u = n1.Crossed(n2);
+        if (u.SquareMagnitude() < 1e-12) throw CommandError("Plane 2: the planes are parallel");
+        const double d1 = n1.Dot(gp_Vec(a.Location().XYZ())), d2 = n2.Dot(gp_Vec(b.Location().XYZ()));
+        const gp_Vec p = (n2.Crossed(u) * d1 + u.Crossed(n1) * d2) / u.SquareMagnitude();
+        return gp_Ax1(gp_Pnt(p.XYZ()), gp_Dir(u));
+      }
+      default: break;
+    }
+    throw CommandError("not an axis");
+  }
+
+  gp_Pnt pointOf(const Document& doc, const Inputs& in) const {
+    switch (kind_) {
+      case Kind::PointVertex: return verticesOf(doc, in, 1).front();
+      case Kind::PointTwoEdges: {
+        const auto e = edgesOf(doc, in, 2);
+        BRepAdaptor_Curve c1(TopoDS::Edge(e[0])), c2(TopoDS::Edge(e[1]));
+        if (c1.GetType() == GeomAbs_Line && c2.GetType() == GeomAbs_Line) {
+          // Straight edges meet where their lines do.
+          const gp_Lin l1 = c1.Line(), l2 = c2.Line();
+          const gp_Vec u(l1.Direction()), v(l2.Direction()), w(l2.Location(), l1.Location());
+          const double b = u.Dot(v), d = u.Dot(w), f = v.Dot(w), den = 1 - b * b;
+          if (den < 1e-12) throw CommandError("Edges: the edges are parallel");
+          const double s = (b * f - d) / den, t = (f - b * d) / den;
+          const gp_Pnt p1 = l1.Location().Translated(u * s), p2 = l2.Location().Translated(v * t);
+          if (p1.Distance(p2) > 1e-6) throw CommandError("Edges: the edges do not cross");
+          return p1;
+        }
+        BRepExtrema_DistShapeShape dss(e[0], e[1]);
+        if (!dss.IsDone() || dss.NbSolution() == 0 || dss.Value() > 1e-6) throw CommandError("Edges: the edges do not meet");
+        return dss.PointOnShape1(1);
+      }
+      case Kind::PointThreePlanes: {
+        const gp_Pln a = plane(doc, in, "plane"), b = plane(doc, in, "plane2"), c = plane(doc, in, "plane3");
+        const gp_Vec n1(a.Axis().Direction()), n2(b.Axis().Direction()), n3(c.Axis().Direction());
+        const double det = n1.Dot(n2.Crossed(n3));
+        if (std::abs(det) < 1e-9) throw CommandError("Planes: the three planes do not meet in one point");
+        const double d1 = n1.Dot(gp_Vec(a.Location().XYZ())), d2 = n2.Dot(gp_Vec(b.Location().XYZ())),
+                     d3 = n3.Dot(gp_Vec(c.Location().XYZ()));
+        const gp_Vec p = (n2.Crossed(n3) * d1 + n3.Crossed(n1) * d2 + n1.Crossed(n2) * d3) / det;
+        return gp_Pnt(p.XYZ());
+      }
+      case Kind::PointCenter: {
+        if (in.count("edges") && !getString(in, "edges").empty()) {
+          BRepAdaptor_Curve c(TopoDS::Edge(edgesOf(doc, in, 1).front()));
+          if (c.GetType() == GeomAbs_Circle) return c.Circle().Location();
+          if (c.GetType() == GeomAbs_Ellipse) return c.Ellipse().Location();
+          throw CommandError("Edges: pick a circular edge");
+        }
+        const std::string refs = in.count("faces") ? getString(in, "faces") : std::string();
+        if (refs.empty()) throw CommandError("Click a circular edge or a spherical / toroidal face");
+        TopoDS_Shape f;
+        try {
+          f = kernel::resolveFaces(body(doc, in), refs).front();
+        } catch (const kernel::KernelError& err) {
+          throw CommandError(std::string("Face: ") + err.what());
+        }
+        BRepAdaptor_Surface s(TopoDS::Face(f), true);
+        if (s.GetType() == GeomAbs_Sphere) return s.Sphere().Location();
+        if (s.GetType() == GeomAbs_Torus) return s.Torus().Location();
+        throw CommandError("Face: pick a spherical or toroidal face");
+      }
+      case Kind::PointEdgePlane: {
+        const TopoDS_Edge e = TopoDS::Edge(edgesOf(doc, in, 1).front());
+        double first = 0, last = 0;
+        const Handle(Geom_Curve) curve = BRep_Tool::Curve(e, first, last);
+        if (curve.IsNull()) throw CommandError("Edges: that edge has no curve");
+        BRepAdaptor_Curve c(e);
+        // Straight edges are extended; curved ones must cross within the edge.
+        const Handle(Geom_Curve) use = c.GetType() == GeomAbs_Line ? Handle(Geom_Curve)(new Geom_Line(c.Line()))
+                                                                    : Handle(Geom_Curve)(new Geom_TrimmedCurve(curve, first, last));
+        GeomAPI_IntCS inter(use, new Geom_Plane(plane(doc, in, "plane")));
+        if (!inter.IsDone() || inter.NbPoints() == 0) throw CommandError("Plane: the edge does not cross the plane");
+        return inter.Point(1);
+      }
+      default: break;
+    }
+    throw CommandError("not a point");
+  }
+
   Kind kind_;
   CommandDef def_;
 };
@@ -1608,6 +1899,10 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CircularPattern>());
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
+  using CAP = ConstructAxisPoint::Kind;
+  for (CAP k : {CAP::AxisCylinder, CAP::AxisEdge, CAP::AxisTwoPoints, CAP::AxisTwoPlanes, CAP::PointVertex,
+                CAP::PointTwoEdges, CAP::PointThreePlanes, CAP::PointCenter, CAP::PointEdgePlane})
+    registry.add(std::make_unique<ConstructAxisPoint>(k));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));
   registry.add(std::make_unique<Shell>());

@@ -46,6 +46,9 @@ public:
 
   // Faces (Shell) and tool bodies (Combine) picked in the 3D view.
   bool hasFacesInput() const;
+  bool hasVerticesInput() const { return !verticesId_.empty(); }
+  QString currentVertices() const { return stringInput(verticesId_); }
+  void setVertices(const QString& v);
   bool hasBodiesInput() const;
   QString currentFaces() const;
   QString currentTools() const;
@@ -91,6 +94,8 @@ private:
   std::string edgesId_;
   QLabel* facesLabel_ = nullptr;
   std::string facesId_;
+  QLabel* verticesLabel_ = nullptr;
+  std::string verticesId_;
   QLabel* bodiesLabel_ = nullptr;
   std::string bodiesId_;
   QString stringInput(const std::string& id) const;

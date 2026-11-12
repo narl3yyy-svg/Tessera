@@ -26,7 +26,9 @@ namespace tsr {
 // Faces:  faces of a body, same reference scheme as Edges.
 // Bodies: several body names separated by ';' (e.g. the tools of Combine).
 // Plane:  "XY", "XZ", "YZ" or the name of a construction plane ("Plane1").
-enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane };
+// Vertices: vertices of a body, as "x,y,z;..." positions, picked in the viewport.
+// Axis:   "X", "Y", "Z" (world axes) or the name of a construction axis ("Axis1").
+enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane, Vertices, Axis };
 
 struct InputDef {
   std::string id;
