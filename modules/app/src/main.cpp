@@ -76,7 +76,8 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (!cyl) return fail("cylinder dialog did not open");
   if (!cyl->setInputForTest(QStringLiteral("operation"), QStringLiteral("Cut"))) return fail("cannot set operation");
   if (!cyl->pickBody(QStringLiteral("Body1"))) return fail("cannot pick target body");
-  if (!cyl->setInputForTest(QStringLiteral("x"), 10.0) || !cyl->setInputForTest(QStringLiteral("y"), 5.0))
+  if (!cyl->setInputForTest(QStringLiteral("x"), 10.0) || !cyl->setInputForTest(QStringLiteral("y"), 5.0) ||
+      !cyl->setInputForTest(QStringLiteral("diameter"), 4.0))   // a hole, narrower than the box
     return fail("cannot set position");
   cyl->accept();
   QApplication::processEvents();
@@ -503,6 +504,43 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     if (auto* rm = panel->findChild<QAbstractButton*>(QStringLiteral("analysisRemove"))) rm->click();
     QApplication::processEvents();
     if (w.analysisPanel() || w.viewport()->analysis().kind != tsr::app::AnalysisKind::None) return fail("analysis remove");
+  }
+  // Symmetry on two circles about a line: mirrored centres, equal sizes.
+  s.newDocument();
+  {
+    auto* se = w.startSketch(QStringLiteral("XY"));
+    if (!se) return fail("sketch for symmetry");
+    se->setTool(Tool::Circle);
+    se->clickAt(-2, 1);
+    se->clickAt(-1.5, 1);     // r 0.5
+    se->setTool(Tool::Circle);
+    se->clickAt(3, 1.5);
+    se->clickAt(3.8, 1.5);    // r 0.8
+    se->setTool(Tool::Line);
+    se->clickAt(0.3, -3);
+    se->clickAt(0.3, 4);
+    se->escape();
+    int c1 = -1, c2 = -1, ln = -1;
+    for (int i = 0; i < static_cast<int>(se->sketch().entities.size()); ++i) {
+      const auto& e = se->sketch().entities[i];
+      if (e.type == tsr::sketch::EntityType::Circle) (c1 < 0 ? c1 : c2) = i;
+      if (e.type == tsr::sketch::EntityType::Line) ln = i;
+    }
+    if (c1 < 0 || c2 < 0 || ln < 0) return fail("symmetry geometry");
+    se->setTool(Tool::Symmetry);
+    se->clickAt(-1.5, 1);     // on the first circle
+    se->clickAt(3.8, 1.5);    // on the second
+    se->clickAt(0.3, 2);      // the line
+    const auto& sk = se->sketch();
+    const auto& a = sk.entities[c1];
+    const auto& b = sk.entities[c2];
+    const auto& pa = sk.points[a.center];
+    const auto& pb = sk.points[b.center];
+    const auto& l0 = sk.points[sk.entities[ln].a];
+    if (std::abs(a.radius - b.radius) > 1e-6 || std::abs(pa.y - pb.y) > 1e-6 ||
+        std::abs((pa.x + pb.x) / 2 - l0.x) > 1e-6)
+      return fail("symmetry of two circles");
+    w.cancelSketch();
   }
   // Browser: a fully defined sketch shows a lock; V hides the current body;
   // a construction plane's double-click no longer opens Change Parameters.

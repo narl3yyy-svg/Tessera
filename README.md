@@ -133,7 +133,14 @@ build/modules/api/tessera-cli --help   # headless scripting
 
 Adding a tool, the test layout and the conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
+Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input,
+and 90 **reference parts** with known volumes, areas and sizes. See [docs/ORACLE.md](docs/ORACLE.md) for which
+pass today.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE). Tessera is an independent project and is not affiliated with Autodesk;
 "Fusion" is mentioned only to describe the workflow Tessera follows.
+
+The reference parts in `tests/oracle/cases` come from [SolidCraft](https://github.com/tangency-labs/solidcraft)
+(MIT); see `tests/oracle/NOTICE`.

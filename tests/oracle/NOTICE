@@ -1,0 +1,12 @@
+Reference parts (tests/oracle/cases/*/recipe.json and expected.json)
+
+These cases come from SolidCraft, https://github.com/tangency-labs/solidcraft
+(tests/oracle, commit 9f114ce40d0f29e7bca21f9e4bd737c3788436df), used under the
+MIT License (see LICENSE-MIT in this folder):
+
+  Copyright (c) 2026 SolidCraft contributors.
+
+They are recipes for parts and the measurements those parts must have
+(worked out by hand, or from an open-source CAD build); they contain no
+SolidCraft program code. Tessera's runner, tests/oracle/run_oracle.py, is
+Tessera's own (GPL-3.0-or-later).

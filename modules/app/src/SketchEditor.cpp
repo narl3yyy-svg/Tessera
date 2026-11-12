@@ -194,7 +194,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Slot: emit message(tr("Slot: click one end centre, then the other. The boxes take length and width.")); break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
-    case Tool::Symmetry: emit message(tr("Symmetry: click two points, then the line of symmetry.")); break;
+    case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
   }
   rebuild();
   if (!preselected.empty()) applyToSelection(preselected);
@@ -1697,14 +1697,38 @@ void SketchEditor::evaluateConstraintPicks() {
       if (!isLine(a) || !isLine(b) || a.index == b.index) return fail(tr("Pick two different lines."));
       return done({{ConstraintType::Collinear, {}, {a.index, b.index}}});
     case Tool::Symmetry: {
+      // Two points, two lines or two circles/arcs, then the line of symmetry.
+      const bool points = a.kind == Hit::Point && b.kind == Hit::Point;
+      const bool lines = isLine(a) && isLine(b) && a.index != b.index;
+      const bool rounds = isRound(a) && isRound(b) && a.index != b.index;
       if (picks_.size() < 3) {
-        if (a.kind != Hit::Point || b.kind != Hit::Point) return fail(tr("Pick two points first, then the line."));
+        if (!points && !lines && !rounds) return fail(tr("Pick two points, two lines or two circles, then the line."));
         emit message(tr("Now pick the line of symmetry."));
         return;
       }
       const Hit l = picks_[2].hit;
-      if (!isLine(l)) return fail(tr("The third pick must be a line."));
-      return done({{ConstraintType::Symmetry, {a.index, b.index}, {l.index}}});
+      if (!isLine(l) || l.index == a.index || l.index == b.index) return fail(tr("The third pick must be another line."));
+      if (points) return done({{ConstraintType::Symmetry, {a.index, b.index}, {l.index}}});
+      const auto& ea = sk_.entities[a.index];
+      const auto& eb = sk_.entities[b.index];
+      if (rounds)   // mirrored centres, and the same size
+        return done({{ConstraintType::Symmetry, {ea.center, eb.center}, {l.index}},
+                     {ConstraintType::Equal, {}, {a.index, b.index}}});
+      // Lines: each end with the nearer end of the other line's mirror image.
+      const auto& la = sk_.entities[l.index];
+      const auto P = [&](int i) { return sk_.points[i]; };
+      const double dx = P(la.b).x - P(la.a).x, dy = P(la.b).y - P(la.a).y, n2 = dx * dx + dy * dy;
+      auto mirror = [&](int i, double& mx, double& my) {
+        const double t = ((P(i).x - P(la.a).x) * dx + (P(i).y - P(la.a).y) * dy) / std::max(n2, 1e-18);
+        const double fx = P(la.a).x + t * dx, fy = P(la.a).y + t * dy;
+        mx = 2 * fx - P(i).x;
+        my = 2 * fy - P(i).y;
+      };
+      double mx, my;
+      mirror(ea.a, mx, my);
+      const bool straight = std::hypot(P(eb.a).x - mx, P(eb.a).y - my) <= std::hypot(P(eb.b).x - mx, P(eb.b).y - my);
+      return done({{ConstraintType::Symmetry, {ea.a, straight ? eb.a : eb.b}, {l.index}},
+                   {ConstraintType::Symmetry, {ea.b, straight ? eb.b : eb.a}, {l.index}}});
     }
     case Tool::Midpoint:
       if (a.kind != Hit::Point || !isLine(b)) return fail(tr("Pick a point, then a line."));

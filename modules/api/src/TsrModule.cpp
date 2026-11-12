@@ -193,6 +193,17 @@ void bindTsr(py::module_& m) {
     const auto bb = kernel::boundingBox(b->shape);
     return py::make_tuple(py::make_tuple(bb.min.x, bb.min.y, bb.min.z), py::make_tuple(bb.max.x, bb.max.y, bb.max.z));
   }, py::arg("body"), "A body's bounding box ((xmin, ymin, zmin), (xmax, ymax, zmax)) in cm.");
+  m.def("mass_properties", [](const std::string& name) {
+    const auto b = activeSession().document().body(name);
+    if (!b) throw std::runtime_error("no body named '" + name + "'");
+    const auto mp = kernel::massProperties(b->shape);
+    py::dict d;
+    d["volume"] = mp.volume;
+    d["area"] = mp.area;
+    d["center"] = py::make_tuple(mp.centerOfMass.x, mp.centerOfMass.y, mp.centerOfMass.z);
+    d["faces"] = kernel::topologyCounts(b->shape).faces;
+    return d;
+  }, py::arg("body"), "A body's volume (cm3), area (cm2), centre of mass (cm) and face count.");
   m.def("components", [] {
     py::list out;
     for (const auto& c : activeSession().document().components()) {

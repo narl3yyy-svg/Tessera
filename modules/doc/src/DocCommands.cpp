@@ -181,11 +181,32 @@ std::string validateOperation(const Inputs& in, const Document& doc) {
 }
 
 // Adds `tool` as a new body or combines it with the target body.
+// A result that falls apart into separate solids becomes separate bodies, as
+// in the familiar tool (a cut through the middle leaves two bodies). The piece
+// first in x, then y, then z keeps `name`; the others get new names.
+void storeBodies(Document& doc, const std::string& name, const TopoDS_Shape& shape, bool isNew) {
+  std::vector<TopoDS_Shape> solids;
+  for (TopExp_Explorer x(shape, TopAbs_SOLID); x.More(); x.Next()) solids.push_back(x.Current());
+  if (solids.size() <= 1) {
+    if (isNew) doc.addBody(name, shape);
+    else doc.replaceBody(name, shape);
+    return;
+  }
+  auto key = [](const TopoDS_Shape& s) {
+    const auto c = kernel::massProperties(s).centerOfMass;
+    return std::tuple(std::round(c.x * 1e6), std::round(c.y * 1e6), std::round(c.z * 1e6));
+  };
+  std::stable_sort(solids.begin(), solids.end(), [&](const TopoDS_Shape& a, const TopoDS_Shape& b) { return key(a) < key(b); });
+  if (isNew) doc.addBody(name, solids.front());
+  else doc.replaceBody(name, solids.front());
+  for (size_t i = 1; i < solids.size(); ++i) doc.addBody(doc.nextBodyName(), solids[i]);
+}
+
 void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, const std::string& what) {
   if (!kernel::isValid(tool)) throw CommandError(what + ": kernel produced an invalid body");
   const std::string op = getString(in, "operation");
   if (op == "New Body") {
-    doc.addBody(doc.nextBodyName(), tool);
+    storeBodies(doc, doc.nextBodyName(), tool, true);
     return;
   }
   std::string target = getString(in, "target");
@@ -200,7 +221,7 @@ void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, c
                   : op == "Cut"  ? kernel::BooleanOp::Cut
                                  : kernel::BooleanOp::Intersect;
   try {
-    doc.replaceBody(target, kernel::boolean(kind, body->shape, tool));
+    storeBodies(doc, target, kernel::boolean(kind, body->shape, tool), false);
   } catch (const kernel::KernelError& e) {
     throw CommandError(e.what());
   }
@@ -999,9 +1020,9 @@ public:
         throw CommandError(e.what());
       }
     }
-    doc.replaceBody(target, result);
     if (!getBool(in, "keep"))
       for (const auto& t : tools) doc.removeBody(t);
+    storeBodies(doc, target, result, false);
   }
 
 private:

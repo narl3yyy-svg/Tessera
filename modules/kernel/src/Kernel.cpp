@@ -16,6 +16,7 @@
 #include <BRepOffsetAPI_MakePipe.hxx>
 #include <BRepOffsetAPI_MakePipeShell.hxx>
 #include <TopoDS_Vertex.hxx>
+#include <BRepOffsetAPI_MakeOffset.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepTools.hxx>
 #include <ShapeAnalysis_FreeBounds.hxx>
@@ -957,7 +958,35 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
         gp_Dir fn = BRepAdaptor_Surface(face).Plane().Axis().Direction();
         if (face.Orientation() == TopAbs_REVERSED) fn.Reverse();
         const bool along = gp_Vec(fn).Dot(n * length) > 0;
-        LocOpe_DPrism dp(face, std::abs(length), -taper);
+        // A profile without holes: the outline offset by length * tan(taper)
+        // (sharp corners) at the far end, joined by flat or ruled sides. This
+        // gives the exact frustum the familiar tool makes.
+        int wires = 0;
+        for (TopExp_Explorer w(face, TopAbs_WIRE); w.More(); w.Next()) ++wires;
+        if (wires == 1) {
+          const TopoDS_Wire outer = BRepTools::OuterWire(face);
+          BRepOffsetAPI_MakeOffset off(face, GeomAbs_Intersection);
+          off.Perform(std::abs(length) * std::tan(taper));
+          if (off.IsDone()) {
+            TopoDS_Wire top;
+            for (TopExp_Explorer w(off.Shape(), TopAbs_WIRE); w.More(); w.Next())
+              if (top.IsNull()) top = TopoDS::Wire(w.Current());
+            if (!top.IsNull()) {
+              gp_Trsf up;
+              up.SetTranslation(n * length);
+              top = TopoDS::Wire(BRepBuilderAPI_Transform(top, up, true).Shape());
+              BRepOffsetAPI_ThruSections loft(true, true);
+              loft.AddWire(outer);
+              loft.AddWire(top);
+              loft.CheckCompatibility(false);
+              loft.Build();
+              if (loft.IsDone() && isValid(loft.Shape())) return loft.Shape();
+            }
+          }
+        }
+        // Its height runs along the slanted side: divide by cos so the
+        // extrude is `length` tall, measured along the profile normal.
+        LocOpe_DPrism dp(face, std::abs(length) / std::cos(taper), -taper);
         TopoDS_Shape s = dp.Shape();
         if (!along) {
           gp_Trsf m;

@@ -42,6 +42,11 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_io_units.py)
   add_test(NAME api_hole_pattern
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_hole_pattern.py)
+  # Reference parts (tests/oracle): every case that passes today must keep passing.
+  add_test(NAME oracle
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/oracle/run_oracle.py)
+  set_tests_properties(oracle PROPERTIES TIMEOUT 900 ENVIRONMENT
+                       "TSR_ORACLE_CASES=${CMAKE_CURRENT_SOURCE_DIR}/oracle/cases;TSR_ORACLE_REQUIRE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/oracle/required.txt")
   add_test(NAME api_chamfer_types
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_chamfer_types.py)
   add_test(NAME api_feature_pattern
