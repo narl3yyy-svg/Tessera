@@ -2,12 +2,14 @@
 #include "MainWindow.h"
 #include "ParametersDialog.h"
 #include "SketchEditor.h"
+#include "SketchPalette.h"
 #include "Theme.h"
 #include "Viewport.h"
 
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Kernel.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -294,6 +296,31 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   ex3->accept();
   QApplication::processEvents();
   if (s.document().bodies().size() != 1 || std::abs(volume() - 4 * 2 * 2.0) > 1e-6) return fail("face extrude volume");
+
+  // Sketch Palette: feature options, linetype, display options, Finish.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  auto* pal = w.sketchPalette();
+  if (!ed || !pal || !pal->isVisible()) return fail("sketch palette");
+  auto paletteButton = [&](const char* name) { return pal->findChild<QAbstractButton*>(QString::fromLatin1(name)); };
+  ed->setTool(Tool::Rectangle);
+  pal->sync();
+  paletteButton("palette.rectCenter")->click();
+  if (ed->tool() != Tool::CenterRectangle) return fail("palette feature option");
+  paletteButton("palette.linetypeConstruction")->click();
+  if (!ed->construction()) return fail("palette linetype");
+  paletteButton("palette.linetypeNormal")->click();
+  paletteButton("palette.dimensions")->click();
+  paletteButton("palette.points")->click();
+  if (ed->display().dimensions || ed->display().points || !ed->display().profiles) return fail("palette display options");
+  paletteButton("palette.grid")->click();
+  if (w.viewport()->gridVisible()) return fail("palette sketch grid");
+  paletteButton("palette.grid")->click();
+  ed->clickAt(0, 0);
+  ed->clickAt(2, 1);
+  paletteButton("palette.finish")->click();
+  QApplication::processEvents();
+  if (w.sketchEditor() || w.sketchPalette() || s.document().sketches().size() != 1) return fail("palette Finish Sketch");
   std::puts("smoke: OK");
   return 0;
 }

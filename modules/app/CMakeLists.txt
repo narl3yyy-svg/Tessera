@@ -9,6 +9,8 @@ add_executable(tessera
   src/MainWindowArrow.cpp
   src/SketchEditor.cpp
   src/SketchEditor.h
+  src/SketchPalette.cpp
+  src/SketchPalette.h
   src/ViewportSketch.cpp
   src/ViewportArrow.cpp
   src/CommandDialog.cpp

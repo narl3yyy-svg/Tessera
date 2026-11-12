@@ -4,6 +4,7 @@
 #include "Icons.h"
 #include "MainWindow.h"
 #include "SketchEditor.h"
+#include "SketchPalette.h"
 #include "Viewport.h"
 
 #include "tsr/doc/DocCommands.h"
@@ -24,7 +25,9 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QToolButton>
+#include <QTimer>
 #include <QVBoxLayout>
+#include <gp_Pln.hxx>
 
 namespace tsr::app {
 
@@ -121,6 +124,27 @@ void MainWindow::enterSketchMode() {
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(true);
   timeline_->setEnabled(false);
   viewport_->setBodiesGhosted(true);
+
+  // SKETCH PALETTE, in the canvas on the right like the command panels.
+  palette_ = new SketchPalette(editor_, viewport_);
+  palette_->setGrid(viewport_->gridVisible(), viewport_->gridSnap());
+  connect(palette_, &SketchPalette::lookAtRequested, this, [this] {
+    if (editor_) viewport_->lookAt(editor_->frame());
+  });
+  connect(palette_, &SketchPalette::sliceToggled, this, [this](bool on) {
+    if (!editor_) return;
+    const gp_Ax3& f = editor_->frame();
+    viewport_->setSection(on, gp_Pln(f.Location(), f.Direction()));   // removes what is in front of the plane
+  });
+  connect(palette_, &SketchPalette::gridToggled, this, [this](bool on) { viewport_->setGridVisible(on); });
+  connect(palette_, &SketchPalette::snapToggled, this, [this](bool on) { viewport_->setGridSnap(on); });
+  connect(palette_, &SketchPalette::finishRequested, this, [this] {
+    QTimer::singleShot(0, this, [this] { finishSketch(); });   // not from inside the palette that closes
+  });
+  connect(editor_, &SketchEditor::changed, palette_, &SketchPalette::sync);
+  connect(editor_, &SketchEditor::toolChanged, this, &MainWindow::syncSketchTools);
+  palette_->show();
+  placeDialog(palette_);
   syncSketchTools();
   refresh();
   viewport_->setFocus();
@@ -145,6 +169,13 @@ void MainWindow::exitSketchMode() {
     ribbon_->setTabEnabled(i, !ribbon_->tabToolTip(i).startsWith(tr("Planned")));
   timeline_->setEnabled(true);
   viewport_->setBodiesGhosted(false);
+  if (palette_) {
+    const bool sliced = palette_->sliceOn();
+    palette_->hide();
+    palette_->deleteLater();
+    palette_ = nullptr;
+    if (sliced) applySection();   // back to the design's own section analysis, if any
+  }
   delete editor_;   // restores the view's grid and mouse handling
   editor_ = nullptr;
   refresh();
@@ -290,8 +321,11 @@ QWidget* MainWindow::buildSketchTab() {
   return page;
 }
 
+SketchPalette* MainWindow::sketchPalette() const { return palette_; }
+
 void MainWindow::syncSketchTools() {
   if (!editor_) return;
+  if (palette_) palette_->sync();
   for (auto& [tool, button] : toolButtons_) button->setChecked(tool == static_cast<int>(editor_->tool()));
   if (constructionButton_) constructionButton_->setChecked(editor_->construction());
 }

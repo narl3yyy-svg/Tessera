@@ -615,6 +615,18 @@ void planeIcon(QPainter& p) {
   face(p, {QPointF(4, 30), QPointF(30, 10), QPointF(60, 16), QPointF(34, 36)}, kTop);
 }
 
+// A sheet seen face-on with an eye-line arrow pointing straight at it.
+void lookAtIcon(QPainter& p) {
+  p.setPen(QPen(kLine, 2));
+  p.setBrush(kTop);
+  p.drawRect(QRectF(26, 8, 32, 40));
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.drawLine(QPointF(4, 46), QPointF(20, 32));
+  p.setPen(Qt::NoPen);
+  p.setBrush(kAccent);
+  p.drawPolygon(QPolygonF({QPointF(26, 27), QPointF(13, 30), QPointF(22, 39)}));
+}
+
 void axisIcon(QPainter& p) {
   p.setPen(QPen(kAccent, 4, Qt::DashLine, Qt::RoundCap));
   p.drawLine(QPointF(32, 2), QPointF(32, 62));
@@ -826,6 +838,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("motion")) motionIcon(p);
   else if (name == QLatin1String("configure")) configureIcon(p);
   else if (name == QLatin1String("plane")) planeIcon(p);
+  else if (name == QLatin1String("look-at")) lookAtIcon(p);
   else if (name == QLatin1String("plane-angle")) {
     planeIcon(p);
     p.setPen(QPen(kAccent, 3));

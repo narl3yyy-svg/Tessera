@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
 #include "ParametersDialog.h"
+#include "SketchPalette.h"
 
 #include <QScrollArea>
 #include <QScrollBar>
@@ -688,6 +689,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
     navBar_->move((viewport_->width() - navBar_->width()) / 2, viewport_->height() - navBar_->height() - 10);
     navBar_->raise();
     if (active_) placeDialog(active_);
+    if (palette_) placeDialog(palette_);
   }
   if (e->type() == QEvent::Wheel) {
     // A ribbon too wide for the window scrolls sideways with the wheel.

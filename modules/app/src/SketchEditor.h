@@ -47,7 +47,21 @@ public:
 
   void setTool(Tool t);
   Tool tool() const { return tool_; }
-  void setConstruction(bool on) { construction_ = on; }
+  void setConstruction(bool on) {
+    construction_ = on;
+    emit changed();
+  }
+
+  // What the canvas shows (Sketch Palette > Options).
+  struct Display {
+    bool profiles = true;       // closed regions shaded
+    bool points = true;
+    bool dimensions = true;
+    bool constraints = true;    // constraint glyphs
+    bool construction = true;   // construction curves
+  };
+  const Display& display() const { return display_; }
+  void setDisplay(const Display& d);
   bool construction() const { return construction_; }
 
   void undo();
@@ -89,6 +103,7 @@ public:
 
 signals:
   void changed();
+  void toolChanged();
   void message(const QString& text);
 
 private:
@@ -181,6 +196,7 @@ private:
   QPointF pressPos_;
   QPointer<QLineEdit> valueBox_;
 
+  Display display_;
   std::vector<Handle(AIS_InteractiveObject)> objects_;
   std::vector<Handle(AIS_InteractiveObject)> preview_;
 };

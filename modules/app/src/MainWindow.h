@@ -33,6 +33,7 @@ namespace tsr::app {
 class CommandDialog;
 class ParametersDialog;
 class SketchEditor;
+class SketchPalette;
 class Viewport;
 
 // Layout (familiar to users of mainstream parametric CAD):
@@ -65,6 +66,7 @@ public:
   // Modify > Change Parameters (non-modal; reuses an open one).
   ParametersDialog* showParameters();
   SketchEditor* sketchEditor() const { return editor_; }
+  SketchPalette* sketchPalette() const;
 
   QTabWidget* ribbon() const { return ribbon_; }
   QTreeWidget* browser() const { return browser_; }
@@ -145,6 +147,7 @@ private:
   QPointer<CommandDialog> active_;
   QPointer<SketchEditor> editor_;
   QWidget* sketchTab_ = nullptr;
+  QPointer<SketchPalette> palette_;
   std::vector<std::pair<int, QAbstractButton*>> toolButtons_;
   QAbstractButton* constructionButton_ = nullptr;
   std::vector<QShortcut*> sketchShortcuts_;

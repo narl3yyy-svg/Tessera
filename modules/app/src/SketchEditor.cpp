@@ -135,6 +135,7 @@ void SketchEditor::setTool(Tool t) {
   tool_ = t;
   selection_.clear();
   clearPreview();
+  emit toolChanged();
   switch (t) {
     case Tool::Select: emit message(tr("Select: click to select, drag points or lines to move them, Delete removes.")); break;
     case Tool::Line: emit message(tr("Line: click points, or type the length (Tab: angle) and press Enter. Click the first point to close.")); break;
@@ -345,6 +346,8 @@ SketchEditor::Hit SketchEditor::hitTest(double x, double y, bool pointsFirst) co
   double labelD = tolerance();
   for (int i = 0; i < static_cast<int>(sk_.constraints.size()); ++i)
     if (auto a = labelAnchor(i)) {
+      // Hidden labels (Sketch Palette) cannot be clicked.
+      if (sketch::isDimension(sk_.constraints[i].type) ? !display_.dimensions : !display_.constraints) continue;
       const double d = std::hypot(a->first - x, a->second - y);
       if (d < labelD) {
         labelD = d;
@@ -1558,12 +1561,38 @@ QString SketchEditor::labelText(const Constraint& c) const {
   }
 }
 
+void SketchEditor::setDisplay(const Display& d) {
+  display_ = d;
+  rebuild();
+}
+
 void SketchEditor::rebuild() {
   if (!view_) return;
   const auto& ctx = view_->aisContext();
   if (ctx.IsNull()) return;
   for (auto& o : objects_) ctx->Remove(o, false);
   objects_.clear();
+
+  // Closed regions, lightly shaded (what Extrude can pick after Finish).
+  if (display_.profiles) {
+    try {
+      for (const auto& pr : sketch::profiles(sk_, frame_)) {
+        Handle(AIS_Shape) f = new AIS_Shape(pr.face);
+        Graphic3d_MaterialAspect m(Graphic3d_NameOfMaterial_UserDefined);
+        const Quantity_Color c = rgb(120, 170, 230);
+        m.SetDiffuseColor(c);
+        m.SetAmbientColor(c);
+        m.SetSpecularColor(Quantity_Color(Quantity_NOC_BLACK));
+        m.SetEmissiveColor(Quantity_Color(c.Rgb() * 0.3f));
+        f->SetMaterial(m);
+        f->SetTransparency(0.8);
+        f->Attributes()->SetFaceBoundaryDraw(false);
+        ctx->Display(f, AIS_Shaded, -1, false);
+        objects_.push_back(f);
+      }
+    } catch (const std::exception&) {
+    }
+  }
 
   auto selected = [&](Hit::Kind k, int i) {
     for (const auto& s : selection_)
@@ -1584,6 +1613,7 @@ void SketchEditor::rebuild() {
     const TopoDS_Shape s = sketch::curve(sk_, frame_, i);
     if (s.IsNull()) continue;
     const auto& e = sk_.entities[i];
+    if (e.construction && !display_.construction) continue;
     const bool fixed = res_.ok && i < static_cast<int>(res_.entityFixed.size()) && res_.entityFixed[i];
     const bool hl = selected(Hit::Entity, i) || hovered(Hit::Entity, i);
     Handle(AIS_Shape) a = wire(s, colorFor(Hit::Entity, i, fixed, e.construction), hl ? 3.0 : 2.0,
@@ -1593,6 +1623,7 @@ void SketchEditor::rebuild() {
     objects_.push_back(a);
   }
   for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {
+    if (!display_.points && i != 0 && !selected(Hit::Point, i) && !hovered(Hit::Point, i)) continue;
     const bool fixed = res_.ok && i < static_cast<int>(res_.pointFixed.size()) && res_.pointFixed[i];
     Handle(AIS_Point) p = new AIS_Point(new Geom_CartesianPoint(sketch::toWorld(frame_, sk_.points[i].x, sk_.points[i].y)));
     const Quantity_Color c = i == 0 && !selected(Hit::Point, 0) && !hovered(Hit::Point, 0)
@@ -1608,6 +1639,7 @@ void SketchEditor::rebuild() {
     const auto anchor = labelAnchor(i);
     if (!anchor) continue;
     const auto& c = sk_.constraints[i];
+    if (sketch::isDimension(c.type) ? !display_.dimensions : !display_.constraints) continue;
     Handle(AIS_TextLabel) t = new AIS_TextLabel();
     t->SetText(ext(labelText(c)));
     t->SetPosition(sketch::toWorld(frame_, anchor->first, anchor->second));
