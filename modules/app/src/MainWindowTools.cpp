@@ -34,6 +34,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
+#include <QSpinBox>
 #include <QTimer>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -97,9 +98,14 @@ void MainWindow::buildUiCommands() {
       [this] { openSection(); });
   add("Inspect", "ui.centerOfMass", "Center of Mass", "com", "Shows the center of mass of the selected body.", "",
       [this] { showCenterOfMass(); });
-  planned("Inspect", "ui.curvature", "Curvature Comb Analysis", "curvature");
-  planned("Inspect", "ui.zebra", "Zebra Analysis", "zebra");
-  planned("Inspect", "ui.draftAnalysis", "Draft Analysis", "draft");
+  add("Inspect", "ui.zebra", "Zebra Analysis", "zebra", "Stripes that show how smoothly faces meet.", "",
+      [this] { openAnalysis(0); });
+  add("Inspect", "ui.draftAnalysis", "Draft Analysis", "draft",
+      "Green: enough draft to release from a mould; yellow: not enough; red: undercut.", "", [this] { openAnalysis(1); });
+  add("Inspect", "ui.curvatureMap", "Curvature Map Analysis", "curvature", "Colours faces by how curved they are.", "",
+      [this] { openAnalysis(2); });
+  add("Inspect", "ui.curvature", "Curvature Comb Analysis", "curvature", "Teeth along edges show their curvature.", "",
+      [this] { openAnalysis(3); });
   add("Insert", "ui.insert", "Insert Mesh / CAD File", "insert", "Adds bodies from a STEP, IGES, STL or BREP file.", "",
       [this] { insertFile(); });
   planned("Insert", "ui.insertSvg", "Insert SVG / DXF", "insert-2d");
@@ -237,6 +243,151 @@ void MainWindow::driveJoints() {
   apply();
   d->show();
   placeDialog(d);
+}
+
+QDialog* MainWindow::openAnalysis(int kind) {
+  if (editor_ || active_ || sectionPanel_) {
+    statusBar()->showMessage(tr("Finish the current command first."), 3000);
+    return nullptr;
+  }
+  if (analysisPanel_) analysisPanel_->reject();
+  static const char* titles[] = {"ZEBRA ANALYSIS", "DRAFT ANALYSIS", "CURVATURE MAP ANALYSIS", "CURVATURE COMB ANALYSIS"};
+  auto* d = new QDialog(viewport_);
+  d->setParent(viewport_, Qt::Widget);
+  d->setProperty("panel", true);
+  d->setAutoFillBackground(true);
+  d->setObjectName(QStringLiteral("analysisPanel"));
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  analysisPanel_ = d;
+  auto* title = new QLabel(QStringLiteral("\u2014  ") + tr(titles[kind]));
+  title->setObjectName(QStringLiteral("panelTitle"));
+  auto* form = new QFormLayout;
+  auto* lay = new QVBoxLayout(d);
+  lay->setContentsMargins(10, 6, 10, 8);
+  lay->addWidget(title);
+  lay->addLayout(form);
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok);
+  auto* remove = buttons->addButton(tr("Remove"), QDialogButtonBox::DestructiveRole);
+  buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("analysisOk"));
+  remove->setObjectName(QStringLiteral("analysisRemove"));
+
+  AnalysisSettings base;
+  if (kind == 0) {
+    auto* stripes = new QSpinBox;
+    stripes->setObjectName(QStringLiteral("zebraStripes"));
+    stripes->setRange(2, 60);
+    stripes->setValue(12);
+    auto* dir = new QComboBox;
+    dir->setObjectName(QStringLiteral("zebraDirection"));
+    dir->addItems({tr("Horizontal"), tr("Vertical")});
+    form->addRow(tr("Stripes"), stripes);
+    form->addRow(tr("Direction"), dir);
+    auto apply = [this, stripes, dir] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::Zebra;
+      a.stripes = stripes->value();
+      a.stripeAxis = dir->currentIndex() == 0 ? gp::DZ() : gp::DX();
+      viewport_->setAnalysis(a);
+    };
+    connect(stripes, &QSpinBox::valueChanged, d, apply);
+    connect(dir, &QComboBox::currentIndexChanged, d, apply);
+    apply();
+  } else if (kind == 1) {
+    auto* plane = new QComboBox;
+    plane->setObjectName(QStringLiteral("draftPlane"));
+    plane->addItems({QStringLiteral("XY"), QStringLiteral("XZ"), QStringLiteral("YZ")});
+    for (const auto& pl : session_.document().planes()) plane->addItem(qs(pl.name));
+    auto* angle = new QDoubleSpinBox;
+    angle->setObjectName(QStringLiteral("draftAngle"));
+    angle->setRange(0, 45);
+    angle->setDecimals(1);
+    angle->setValue(1.0);
+    angle->setSuffix(QStringLiteral(" deg"));
+    auto* flip = new QCheckBox(tr("Flip pull direction"));
+    form->addRow(tr("Pull direction"), plane);
+    form->addRow(tr("Draft angle"), angle);
+    form->addRow(QString(), flip);
+    auto apply = [this, plane, angle, flip] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::Draft;
+      try {
+        gp_Dir n = session_.document().planeFrame(plane->currentText().toStdString()).Direction();
+        if (flip->isChecked()) n.Reverse();
+        a.pull = n;
+      } catch (const std::exception&) {
+      }
+      a.draftAngle = angle->value() * 3.14159265358979323846 / 180.0;
+      viewport_->setAnalysis(a);
+    };
+    connect(plane, &QComboBox::currentIndexChanged, d, apply);
+    connect(angle, &QDoubleSpinBox::valueChanged, d, apply);
+    connect(flip, &QCheckBox::toggled, d, apply);
+    apply();
+  } else if (kind == 2) {
+    auto* scale = new QSlider(Qt::Horizontal);
+    scale->setObjectName(QStringLiteral("curvatureScale"));
+    scale->setRange(1, 100);
+    scale->setValue(20);
+    scale->setMinimumWidth(200);
+    form->addRow(tr("Scale"), scale);
+    auto* legend = new QLabel(tr("<span style='color:#3a8cff'>concave</span> \u2013 "
+                                 "<span style='color:#40c050'>flat</span> \u2013 <span style='color:#ff5040'>convex</span>"));
+    form->addRow(QString(), legend);
+    auto apply = [this, scale] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::CurvatureMap;
+      a.curvatureScale = scale->value() / 10.0;
+      viewport_->setAnalysis(a);
+    };
+    connect(scale, &QSlider::valueChanged, d, apply);
+    apply();
+  } else {
+    auto* info = new QLabel(tr("Click edges in the canvas."));
+    info->setObjectName(QStringLiteral("combInfo"));
+    auto* scale = new QSlider(Qt::Horizontal);
+    scale->setObjectName(QStringLiteral("combScale"));
+    scale->setRange(1, 100);
+    scale->setValue(20);
+    scale->setMinimumWidth(200);
+    auto* clear = new QPushButton(tr("Clear"));
+    form->addRow(tr("Edges"), info);
+    form->addRow(tr("Comb scale"), scale);
+    form->addRow(QString(), clear);
+    combEdges_.clear();
+    combPicking_ = true;
+    viewport_->setSubShapePicking({TopAbs_EDGE});
+    auto redraw = [this, scale, info] {
+      combScale_ = scale->value() / 10.0;
+      viewport_->setCurvatureComb(combEdges_, combScale_);
+      info->setText(combEdges_.empty() ? tr("Click edges in the canvas.") : tr("%n edge(s)", nullptr, static_cast<int>(combEdges_.size())));
+    };
+    connect(scale, &QSlider::valueChanged, d, redraw);
+    connect(clear, &QPushButton::clicked, d, [this, redraw] {
+      combEdges_.clear();
+      redraw();
+    });
+    connect(this, &MainWindow::combEdgesChanged, d, redraw);
+  }
+  lay->addWidget(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, d, &QDialog::accept);   // keeps the analysis shown
+  connect(remove, &QPushButton::clicked, d, [this, d] {
+    viewport_->setAnalysis({});
+    viewport_->setCurvatureComb({}, 1.0);
+    combEdges_.clear();
+    d->reject();
+  });
+  connect(d, &QDialog::finished, this, [this, d] {
+    if (combPicking_) {
+      combPicking_ = false;
+      viewport_->setSubShapePicking({});
+    }
+    analysisPanel_ = nullptr;
+    d->hide();
+    d->deleteLater();
+  });
+  d->show();
+  placeDialog(d);
+  return d;
 }
 
 ParametersDialog* MainWindow::showParameters() {

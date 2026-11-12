@@ -177,8 +177,18 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     viewport_->setFocus();
   });
   connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
-    if (measure_) measurePick(shape);
-    else onEdgeClicked(body, shape);
+    (void)body;
+    if (measure_) {
+      measurePick(shape);
+    } else if (combPicking_ && shape.ShapeType() == TopAbs_EDGE) {
+      // Curvature Comb: clicking an edge adds it (or removes it again).
+      auto it = std::find_if(combEdges_.begin(), combEdges_.end(), [&](const TopoDS_Shape& e) { return e.IsSame(shape); });
+      if (it != combEdges_.end()) combEdges_.erase(it);
+      else combEdges_.push_back(shape);
+      emit combEdgesChanged();
+    } else {
+      onEdgeClicked(body, shape);
+    }
   });
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
     if (sectionPanel_ && sectionPicking_) {

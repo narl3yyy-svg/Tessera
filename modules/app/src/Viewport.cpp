@@ -535,11 +535,13 @@ void Viewport::rebuild() {
     if (sectionOn_ && !clip_.IsNull()) s->AddClipPlane(clip_);
     applyStyle(s);
     shapes_[b.name] = s;
-    if (!hidden_[b.name]) {
+    // Under a surface analysis the coloured meshes stand in for the bodies.
+    if (!hidden_[b.name] && analysis_.kind == AnalysisKind::None) {
       context_->Display(s, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, 0, false);
       if (selected.contains(QString::fromStdString(b.name))) context_->AddOrRemoveSelected(s, false);
     }
   }
+  buildAnalysis();
   applyPickModes();
   if (!fittedOnce_ && !bodies_.empty()) {
     fittedOnce_ = true;

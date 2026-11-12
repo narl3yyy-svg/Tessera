@@ -16,6 +16,7 @@
 #include <V3d_Viewer.hxx>
 #include <Graphic3d_ClipPlane.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <gp.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Pln.hxx>
@@ -56,6 +57,17 @@ struct SketchDisplay {
   TopoDS_Shape construction;
   std::vector<sketch::Profile> profiles;
   bool visible = true;
+};
+
+// Surface analysis shown instead of the plain bodies (Inspect panel).
+enum class AnalysisKind { None, Zebra, Draft, CurvatureMap };
+struct AnalysisSettings {
+  AnalysisKind kind = AnalysisKind::None;
+  int stripes = 12;                    // Zebra: stripes per half turn of the normal
+  gp_Dir stripeAxis = gp::DZ();        // Zebra: stripes run around this direction
+  gp_Dir pull = gp::DZ();              // Draft: pull direction
+  double draftAngle = 0.0174532925;    // Draft: required angle (rad)
+  double curvatureScale = 1.0;         // Curvature Map: colour scale (cm)
 };
 
 class Viewport : public QOpenGLWidget, public AIS_ViewController {
@@ -134,6 +146,12 @@ public:
   // Section analysis: bodies are cut by the plane (the side the normal points
   // to is removed) and the cut faces are filled with a hatch.
   void setSection(bool on, const gp_Pln& plane = gp_Pln());
+
+  // Surface analysis (Zebra, Draft, Curvature Map) replaces the shaded
+  // bodies until set back to None; the comb draws along the given edges.
+  void setAnalysis(const AnalysisSettings& a);
+  const AnalysisSettings& analysis() const { return analysis_; }
+  void setCurvatureComb(const std::vector<TopoDS_Shape>& edges, double scale);
   bool sectionOn() const { return sectionOn_; }
 
   // Measure overlay: a line between two points with a label; none to clear.
@@ -249,6 +267,11 @@ private:
   Handle(Graphic3d_ClipPlane) clip_;
   std::vector<Handle(AIS_InteractiveObject)> measureObjects_;
   std::vector<Handle(AIS_InteractiveObject)> markerObjects_;
+  AnalysisSettings analysis_;
+  std::vector<Handle(AIS_InteractiveObject)> analysisObjects_;
+  std::vector<Handle(AIS_InteractiveObject)> combObjects_;
+  void buildAnalysis();
+  void clearAnalysisObjects();
   bool ghosted_ = false;
   std::vector<Handle(AIS_Shape)> pickedObjects_;
   bool planePicking_ = false;

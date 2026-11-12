@@ -37,7 +37,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Construct**: Offset Plane ✅ · Plane at Angle ✅ · Midplane ✅ · Tangent Plane · Plane through points · Axis ✅ (cylinder/cone/torus, edge, two points, two planes) · Point ✅ (vertex, two edges, three planes, centre, edge and plane)
 
-**Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb · Zebra · Draft Analysis · Curvature Map · Isocurve · Minimum Radius · Accessibility
+**Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb ✅ · Zebra ✅ · Draft Analysis ✅ · Curvature Map ✅ · Isocurve · Minimum Radius · Accessibility
 
 **Insert**: Insert Mesh / CAD (STEP, IGES, STL, BREP) ✅ · Insert SVG · Insert DXF · Canvas · Decal · McMaster-style part libraries (no)
 

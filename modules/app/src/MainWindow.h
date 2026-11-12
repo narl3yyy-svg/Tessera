@@ -81,6 +81,7 @@ public:
   Viewport* viewport() const { return viewport_; }
 
 signals:
+  void combEdgesChanged();
   void sectionPlanePicked(const QString& spec, const QString& label);
   void sectionArrowMoved(double value);
 
@@ -122,6 +123,11 @@ private:
   gp_Pln sectionPlane() const;
   void showCenterOfMass();
   void driveJoints();
+public:
+  // Inspect > Zebra / Draft / Curvature Map / Curvature Comb (0..3).
+  QDialog* openAnalysis(int kind);
+  QDialog* analysisPanel() const { return analysisPanel_; }
+private:
   void checkInterference();
   Unit lengthUnit() const;
   QString formatLength(double cm) const;
@@ -176,6 +182,10 @@ private:
   };
   std::vector<UiCommand> uiCommands_;
   QPointer<QDialog> measure_;
+  QPointer<QDialog> analysisPanel_;
+  std::vector<TopoDS_Shape> combEdges_;
+  double combScale_ = 1.0;
+  bool combPicking_ = false;
   QPointer<ParametersDialog> parameters_;
   QLabel* measureLabel_ = nullptr;
   std::vector<TopoDS_Shape> measurePicks_;

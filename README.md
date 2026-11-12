@@ -30,7 +30,7 @@ scope.
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer, Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical; click a face, edge or point on each part; angle, offset, flip), Drive Joints (slider and Play) |
 | **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
-| **Inspect** | Measure, Interference, Section Analysis, Center of Mass |
+| **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
 | **Parametric** | Every step is in the timeline: double-click to change it and everything after it rebuilds; suppress, delete, unlimited undo |
 | **Parameters** | User parameters and every feature's values in one table (*Modify → Change Parameters*); every value and sketch dimension takes an expression such as `width / 2 + 3 mm`, `sqrt(a^2 + b^2)` or `atan(h / w)`, and the model follows when a parameter changes |
@@ -94,7 +94,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Extrude** | To curved faces, thin walls; drag arrows for Shell, Hole and Move |
 | **Construct** | Tangent Plane, Plane Through Points, Axis, Point |
 | **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Contact Sets |
-| **Inspect** | Curvature Comb, Zebra, Draft and Curvature Map analysis, Minimum Radius |
+| **Inspect** | Minimum Radius, Accessibility, Isocurve analysis |
 | **Insert** | SVG / DXF, Canvas, Decal |
 | **Workspaces** | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |
 | **Files** | DXF export of sketches, named views |

@@ -13,6 +13,7 @@ add_executable(tessera
   src/SketchPalette.h
   src/ViewportSketch.cpp
   src/ViewportArrow.cpp
+  src/ViewportAnalysis.cpp
   src/CommandDialog.cpp
   src/CommandDialog.h
   src/ParametersDialog.cpp
@@ -23,7 +24,7 @@ add_executable(tessera
   src/Icons.h
   src/Viewport.cpp
   src/Viewport.h)
-target_link_libraries(tessera PRIVATE tsr::api Qt6::Widgets Qt6::OpenGLWidgets TKV3d TKOpenGl TKService)
+target_link_libraries(tessera PRIVATE tsr::api Qt6::Widgets Qt6::OpenGLWidgets TKV3d TKOpenGl TKService TKMesh TKTopAlgo TKG3d TKGeomBase)
 
 include(GNUInstallDirs)
 install(TARGETS tessera tessera-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
