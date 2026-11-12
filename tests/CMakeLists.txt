@@ -61,6 +61,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_pipe_coil.py)
   add_test(NAME api_offset_face_draft
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_offset_face_draft.py)
+  add_test(NAME api_thread
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_thread.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()

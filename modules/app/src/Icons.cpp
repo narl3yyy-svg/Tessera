@@ -726,6 +726,20 @@ void offsetFaceIcon(QPainter& p) {
   p.drawLine(QPointF(44, 26), QPointF(52, 20));
 }
 
+void threadIcon(QPainter& p) {
+  p.setPen(QPen(kLine, 2));
+  QLinearGradient g(14, 0, 50, 0);
+  g.setColorAt(0, kLeft);
+  g.setColorAt(1, kRight);
+  p.setBrush(g);
+  p.drawRect(QRectF(18, 6, 28, 52));
+  p.setPen(QPen(kLine, 2.5));
+  for (int i = 0; i < 6; ++i) {
+    const double y = 10 + i * 8;
+    p.drawLine(QPointF(14, y + 6), QPointF(50, y));
+  }
+}
+
 void coilIcon(QPainter& p) {
   p.setBrush(Qt::NoBrush);
   for (int i = 0; i < 4; ++i) {
@@ -876,6 +890,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("spline")) splineIcon(p);
   else if (name == QLatin1String("pipe")) pipeIcon(p);
   else if (name == QLatin1String("coil")) coilIcon(p);
+  else if (name == QLatin1String("thread")) threadIcon(p);
   else if (name == QLatin1String("offset-face")) offsetFaceIcon(p);
   else if (name == QLatin1String("sketch-fillet")) sketchFilletIcon(p);
   else if (name == QLatin1String("offset")) offsetIcon(p);

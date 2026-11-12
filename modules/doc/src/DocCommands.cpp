@@ -2029,6 +2029,60 @@ private:
   CommandDef def_;
 };
 
+class Thread final : public Command {
+public:
+  Thread() {
+    commonDef(def_, kCmdThread, "Thread", "Cuts an ISO metric thread into a shaft or a hole: click its round face.", "thread", "Create");
+    def_.inputs = {
+        bodyInput(),
+        {.id = "faces", .label = "Face", .tooltip = "Click a cylindrical face (outside of a shaft, inside of a hole).",
+         .type = InputType::Faces, .defaultValue = std::string{}},
+        choice("type", "Thread Type", {"ISO Metric profile"}, "60 degree metric threads."),
+        {.id = "pitch", .label = "Pitch", .tooltip = "0: the ISO coarse pitch for the face's diameter.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter, .min = 0.0},
+        choice("fullLength", "Full Length", {"Yes", "No"}, "No: thread only part of the face."),
+        {.id = "length", .label = "Length", .tooltip = "Threaded length.", .type = InputType::Real, .defaultValue = 1.0,
+         .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true, .visibleWhen = "fullLength=No"},
+        {.id = "offset", .label = "Offset", .tooltip = "Where the thread starts along the face.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter, .min = 0.0, .visibleWhen = "fullLength=No"},
+        choice("hand", "Direction", {"Right hand", "Left hand"}, "Right hand: tightens clockwise."),
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
+    if (getString(in, "faces").empty()) return "Face: click a cylindrical face";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Face: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape shape = doc.body(name)->shape;
+    try {
+      const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
+      const bool full = getString(in, "fullLength") == "Yes";
+      doc.replaceBody(name, kernel::thread(shape, faces.front(), getReal(in, "pitch"), full ? 0.0 : getReal(in, "offset"),
+                                           full ? 0.0 : getReal(in, "length"), getString(in, "hand") != "Left hand"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
 class PressPull final : public Command {
 public:
   PressPull() {
@@ -2092,6 +2146,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
   registry.add(std::make_unique<Pipe>());
+  registry.add(std::make_unique<Thread>());
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Offset));
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Draft));
   registry.add(std::make_unique<Coil>());

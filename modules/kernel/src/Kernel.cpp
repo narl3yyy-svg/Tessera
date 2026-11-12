@@ -47,6 +47,8 @@
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepOffset_MakeOffset.hxx>
+#include <BRepTools.hxx>
+#include <gp_Cylinder.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
 #include <Poly_Triangulation.hxx>
 #include <TopoDS_Shell.hxx>
@@ -1120,6 +1122,82 @@ TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
   });
   if (!isValid(r)) throw KernelError("Loft: the profiles could not be joined into a valid solid");
   return r;
+}
+
+double isoCoarsePitch(double diameter) {
+  // ISO 261 coarse series, (nominal mm, pitch mm).
+  static const double table[][2] = {{1, 0.25},   {1.2, 0.25}, {1.6, 0.35}, {2, 0.4},   {2.5, 0.45}, {3, 0.5},
+                                    {3.5, 0.6},  {4, 0.7},    {5, 0.8},    {6, 1.0},   {8, 1.25},   {10, 1.5},
+                                    {12, 1.75},  {14, 2.0},   {16, 2.0},   {18, 2.5},  {20, 2.5},   {22, 2.5},
+                                    {24, 3.0},   {27, 3.0},   {30, 3.5},   {36, 4.0},  {42, 4.5},   {48, 5.0},
+                                    {56, 5.5},   {64, 6.0}};
+  const double mm = diameter * 10;
+  double best = table[0][1], bestD = 1e300;
+  for (const auto& row : table)
+    if (std::abs(row[0] - mm) < bestD) {
+      bestD = std::abs(row[0] - mm);
+      best = row[1];
+    }
+  return best / 10;
+}
+
+TopoDS_Shape thread(const TopoDS_Shape& body, const TopoDS_Shape& faceShape, double pitch, double offset, double length,
+                    bool rightHand, ThreadInfo* info) {
+  if (faceShape.IsNull() || faceShape.ShapeType() != TopAbs_FACE) throw KernelError("Thread: select a cylindrical face");
+  const TopoDS_Face face = TopoDS::Face(faceShape);
+  BRepAdaptor_Surface s(face, true);
+  if (s.GetType() != GeomAbs_Cylinder) throw KernelError("Thread: select a cylindrical face (a shaft or a hole)");
+  const gp_Cylinder cyl = s.Cylinder();
+  const double r = cyl.Radius();
+  if (pitch <= 0) pitch = isoCoarsePitch(2 * r);
+  double u0, u1, v0, v1;
+  BRepTools::UVBounds(face, u0, u1, v0, v1);
+  const gp_Ax1 axis = cyl.Axis();
+  // Shaft or hole: does the face's outward normal point away from the axis?
+  gp_Pnt p;
+  gp_Vec du, dv;
+  s.D1((u0 + u1) / 2, (v0 + v1) / 2, p, du, dv);
+  gp_Vec n = du.Crossed(dv);
+  if (face.Orientation() == TopAbs_REVERSED) n.Reverse();
+  gp_Vec radial(axis.Location(), p);
+  radial -= gp_Vec(axis.Direction()) * radial.Dot(gp_Vec(axis.Direction()));
+  const bool internal = n.Dot(radial) < 0;
+  const double faceLen = v1 - v0;
+  if (offset < 0 || offset >= faceLen) throw KernelError("Thread: the offset is outside the face");
+  if (length <= 0 || offset + length > faceLen) length = faceLen - offset;
+  if (length < pitch) throw KernelError("Thread: the face is shorter than one pitch");
+  if (info) *info = {2 * r, pitch, internal};
+
+  TopoDS_Shape result = guarded("Thread", [&]() -> TopoDS_Shape {
+    // Frame on the axis where the thread starts, X towards the face point.
+    const gp_Dir z = axis.Direction();
+    const gp_Pnt start = axis.Location().Translated(gp_Vec(z) * (v0 + offset));
+    const gp_Dir x(radial);
+    const gp_Ax3 frame(start, z, x);
+    // Helix on the cylinder; one extra pitch so the cut runs out cleanly.
+    const double h = 0.61343 * pitch;   // ISO external thread depth
+    const double e = 0.15 * pitch;      // the tool reaches past the surface
+    const double turns = length / pitch;
+    Handle(Geom_Surface) surf = new Geom_CylindricalSurface(frame, r);
+    const gp_Vec2d d((rightHand ? 1.0 : -1.0) * 2 * 3.14159265358979323846 * turns, length);
+    Handle(Geom2d_Line) line = new Geom2d_Line(gp_Pnt2d(0, 0), gp_Dir2d(d));
+    TopoDS_Edge helix = BRepBuilderAPI_MakeEdge(line, surf, 0.0, d.Magnitude()).Edge();
+    BRepLib::BuildCurves3d(helix);
+    const TopoDS_Wire path = BRepBuilderAPI_MakeWire(helix).Wire();
+    // 60 degree V in the axial plane at the helix start, tip into the material.
+    const double tipR = internal ? r + h : r - h;
+    const double baseR = internal ? r - e : r + e;
+    const double half = std::abs(baseR - tipR) * std::tan(30.0 * 3.14159265358979323846 / 180.0);
+    auto at = [&](double rr, double zz) {
+      return start.Translated(gp_Vec(x) * rr + gp_Vec(z) * zz);
+    };
+    BRepBuilderAPI_MakePolygon tri(at(tipR, 0), at(baseR, half), at(baseR, -half), true);
+    const TopoDS_Shape tool = solidSweep(path, tri.Wire(), &z);
+    if (tool.IsNull()) return tool;
+    return boolean(BooleanOp::Cut, body, tool);
+  });
+  if (!isValid(result)) throw KernelError("Thread: could not cut the thread into this face");
+  return result;
 }
 
 TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance) {

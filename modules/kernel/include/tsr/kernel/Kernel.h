@@ -146,6 +146,20 @@ TopoDS_Shape coil(Vec3 origin, Vec3 axis, Vec3 xdir, double diameter, double tur
 // `distance` (positive adds material, negative removes it).
 TopoDS_Shape pressPull(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);
 
+// Thread (ISO metric 60 degree profile) cut into a cylindrical face: an
+// external thread on a shaft or an internal one in a hole, decided by the
+// face. `pitch` <= 0 picks the coarse ISO pitch for the face's diameter.
+// `length` <= 0 threads the whole face; otherwise from `offset` along it.
+struct ThreadInfo {
+  double diameter = 0;   // of the face (cm)
+  double pitch = 0;      // used (cm)
+  bool internal = false;
+};
+TopoDS_Shape thread(const TopoDS_Shape& body, const TopoDS_Shape& face, double pitch, double offset, double length,
+                    bool rightHand, ThreadInfo* info = nullptr);
+// The coarse ISO metric pitch for a nominal diameter (cm).
+double isoCoarsePitch(double diameter);
+
 // Offset Face: moves faces of any kind along their normals (positive grows
 // the body); neighbouring faces extend or trim to meet them.
 TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, double distance);
