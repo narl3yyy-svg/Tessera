@@ -41,6 +41,7 @@
 #include <gp_Pnt.hxx>
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -199,6 +200,16 @@ public:
   // fails keeps its error and the replay continues. Requires a transaction.
   void recompute(const CommandRegistry& registry);
 
+  // What a feature did to the bodies: each body it changed, before and after
+  // (a null shape: not there). Known for features replayed or made since the
+  // document was opened; otherwise the history is replayed (needs the
+  // registry and an open transaction). Null if the feature made no geometry.
+  struct FeatureEffect {
+    std::map<std::string, std::pair<TopoDS_Shape, TopoDS_Shape>> bodies;
+  };
+  const FeatureEffect* featureEffect(int id);
+  void setRegistry(const CommandRegistry* registry) { registry_ = registry; }
+
   // Display unit for lengths: "mm" (default) or "in". Stored in the document.
   std::string defaultLengthUnit() const { return lengthUnit(); }
   std::string lengthUnit() const;
@@ -218,8 +229,16 @@ private:
   // Evaluates the "=<id>" expressions of a feature's inputs into their values.
   void evaluateFeatureExpressions(const Command& cmd, Inputs& in) const;
 
+  std::map<std::string, TopoDS_Shape> bodyShapes() const;
+  static FeatureEffect effectOf(const std::map<std::string, TopoDS_Shape>& before,
+                                const std::map<std::string, TopoDS_Shape>& after);
+
   Handle(TDocStd_Document) doc_;
   bool modified_ = false;
+  std::map<int, FeatureEffect> effects_;           // in memory only
+  std::map<std::string, TopoDS_Shape> txnBodies_;  // bodies when the transaction opened
+  const CommandRegistry* registry_ = nullptr;
+  bool replaying_ = false;
 };
 
 } // namespace tsr::doc

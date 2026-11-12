@@ -1,0 +1,16 @@
+# Live: Rectangular Pattern from the command search, Pattern Type = Features,
+# click Extrude1 in the timeline, drag the direction arrow, OK.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Rectangular Pattern
+key Return
+waitfor panelOk
+wait 400
+tclick Extrude1
+wait 600
+adrag 90 45
+wait 400
+shot /tmp/live_feature_pattern.png
+click panelOk
+wait 500

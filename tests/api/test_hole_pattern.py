@@ -36,16 +36,17 @@ else:
 # Rectangular pattern 3 x 2 of a 1 cm cube, as new bodies and joined.
 tsr.new_document()
 cmd("tsr.primitive.box", length=1.0, width=1.0, height=1.0)
-cmd("tsr.feature.rectangularPattern", quantity1=3, distance1=2.0, quantity2=2, distance2=2.0, result="New Bodies")
+cmd("tsr.feature.rectangularPattern", patternType="Bodies", distanceType="Spacing", quantity1=3, distance1=2.0,
+    quantity2=2, distance2=2.0, result="New Bodies")
 assert root.bRepBodies.count == 6
 tsr.undo()
-cmd("tsr.feature.rectangularPattern", quantity1=3, distance1=1.0)   # touching cubes join into one
+cmd("tsr.feature.rectangularPattern", patternType="Bodies", quantity1=3, distance1=2.0)   # extent: touching cubes join
 assert root.bRepBodies.count == 1 and abs(vol() - 3.0) < 1e-6
 
 # Circular pattern of 6 around Z.
 tsr.new_document()
 cmd("tsr.primitive.cylinder", diameter=0.5, height=1.0, x=3.0)
-cmd("tsr.feature.circularPattern", quantity=6, result="New Bodies")
+cmd("tsr.feature.circularPattern", patternType="Bodies", quantity=6, result="New Bodies")
 assert root.bRepBodies.count == 6
 total = sum(root.bRepBodies.item(i).volume for i in range(6))
 assert abs(total - 6 * math.pi * 0.0625) < 1e-6

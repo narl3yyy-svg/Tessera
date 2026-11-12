@@ -29,7 +29,7 @@ assert "=height" in box["inputs"] and abs(box["inputs"]["height"] - 0.5) < 1e-12
 assert abs(root.bRepBodies.item(0).volume - 4 * 3 * 0.5) < 1e-9
 
 # Integer inputs take expressions too.
-tsr.run_command("tsr.feature.rectangularPattern", quantity1="holes + 1", distance1="width + 10 mm", result="New Bodies")
+tsr.run_command("tsr.feature.rectangularPattern", patternType="Bodies", distanceType="Spacing", quantity1="holes + 1", distance1="width + 10 mm", result="New Bodies")
 pat = tsr.features()[1]
 assert pat["inputs"]["quantity1"] == 3 and pat["error"] == "", pat
 assert root.bRepBodies.count == 3

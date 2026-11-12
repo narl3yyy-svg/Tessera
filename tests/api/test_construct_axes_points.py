@@ -45,7 +45,7 @@ for bad in [dict(id="tsr.construct.axisCylinder", body="Body1", faces="1,1,1"),
         raise AssertionError("accepted %r" % bad)
 
 # Circular pattern of the box about the cylinder's axis: 4 copies in all.
-cmd("tsr.feature.circularPattern", body="Body1", axis="Axis1", quantity=4, result="New Bodies")
+cmd("tsr.feature.circularPattern", patternType="Bodies", body="Body1", axis="Axis1", quantity=4, result="New Bodies")
 assert root.bRepBodies.count == 5, root.bRepBodies.count
 assert tsr.features()[-1]["error"] == ""
 

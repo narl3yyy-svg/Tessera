@@ -63,10 +63,14 @@ std::string historyEdit(Document& doc, const CommandRegistry& reg, const char* n
 
 } // namespace
 
-Session::Session() : doc_(std::make_unique<Document>()) { registerDocCommands(commands_); }
+Session::Session() : doc_(std::make_unique<Document>()) {
+  registerDocCommands(commands_);
+  doc_->setRegistry(&commands_);
+}
 
 void Session::newDocument() {
   doc_ = std::make_unique<Document>();
+  doc_->setRegistry(&commands_);
   path_.reset();
   notifyChanged();
 }
@@ -74,6 +78,7 @@ void Session::newDocument() {
 void Session::open(const std::filesystem::path& path) {
   auto d = Document::load(path); // throws before we drop the current document
   doc_ = std::move(d);
+  doc_->setRegistry(&commands_);
   path_ = path;
   notifyChanged();
 }

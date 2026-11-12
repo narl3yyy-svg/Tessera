@@ -91,11 +91,60 @@ std::vector<TopoDS_Shape> MainWindow::pickedFaces() const {
   return out;
 }
 
+// Centre of what the open pattern copies: the geometry the picked features
+// added or removed, else the body.
+std::optional<gp_Pnt> MainWindow::patternCentre() {
+  if (!active_) return std::nullopt;
+  auto& doc = session_.document();
+  auto centreOf = [](const TopoDS_Shape& s) -> std::optional<gp_Pnt> {
+    if (s.IsNull()) return std::nullopt;
+    Bnd_Box box;
+    BRepBndLib::Add(s, box);
+    if (box.IsVoid()) return std::nullopt;
+    double x0, y0, z0, x1, y1, z1;
+    box.Get(x0, y0, z0, x1, y1, z1);
+    return gp_Pnt((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  };
+  if (active_->textInput(QStringLiteral("patternType")) == QLatin1String("Features")) {
+    const QString first = active_->currentFeatures().section(QLatin1Char(';'), 0, 0);
+    if (first.isEmpty()) return std::nullopt;
+    if (auto it = patternCentres_.find(first); it != patternCentres_.end()) return it->second;
+    for (const auto& f : doc.features())
+      if (QString::fromStdString(f.name) == first)
+        if (const auto* e = doc.featureEffect(f.id))
+          for (const auto& [body, change] : e->bodies) {
+            const auto& [before, after] = change;
+            if (after.IsNull()) continue;
+            TopoDS_Shape part = after;
+            if (!before.IsNull()) {
+              try {
+                part = kernel::boolean(kernel::BooleanOp::Cut, after, before);
+              } catch (const std::exception&) {
+                try {
+                  part = kernel::boolean(kernel::BooleanOp::Cut, before, after);   // a cut feature
+                } catch (const std::exception&) {
+                  part = after;
+                }
+              }
+            }
+            if (const auto c = centreOf(part)) {
+              patternCentres_[first] = *c;
+              return c;
+            }
+          }
+    return std::nullopt;
+  }
+  QString body = active_->currentBody();
+  if (body.isEmpty() && !doc.bodies().empty()) body = QString::fromStdString(doc.bodies().back().name);
+  return centreOf(viewport_->bodyShape(body));
+}
+
 void MainWindow::updateDragArrow() {
   if (sectionPanel_) return;   // Section Analysis drives the arrow itself
   auto off = [this] {
     arrowInput_.clear();
     arrowInput2_.clear();
+    if (!active_) patternCentres_.clear();
     viewport_->clearDragArrow();
   };
   // The instruction beside the cursor, as in the familiar tools.
@@ -152,6 +201,31 @@ void MainWindow::updateDragArrow() {
     }
     if (place && active_->textInput(QStringLiteral("start")) == QLatin1String("Offset"))
       place->base.Translate(gp_Vec(place->dir) * active_->realInput(QStringLiteral("startOffset")).value_or(0));
+  } else if (id == QLatin1String(doc::kCmdRectPattern)) {
+    // An arrow along each direction from what is being patterned; the second
+    // only when there is more than one row.
+    const auto centre = patternCentre();
+    if (!centre) return off();
+    gp_Dir d1, d2;
+    try {
+      d1 = doc.axisFrame(active_->textInput(QStringLiteral("direction1")).toStdString()).Direction();
+      d2 = doc.axisFrame(active_->textInput(QStringLiteral("direction2")).toStdString()).Direction();
+    } catch (const std::exception&) {
+      return off();
+    }
+    const auto v1 = active_->realInput(QStringLiteral("distance1"));
+    const auto v2 = active_->realInput(QStringLiteral("distance2"));
+    if (!v1) return off();
+    arrowInput_ = QStringLiteral("distance1");
+    viewport_->setDragArrow(*centre, d1, *v1, active_->displayText(arrowInput_));
+    if (v2 && active_->intInput(QStringLiteral("quantity2")).value_or(1) > 1) {
+      arrowInput2_ = QStringLiteral("distance2");
+      viewport_->setDragArrow(*centre, d2, *v2, active_->displayText(arrowInput2_), 1);
+    } else {
+      arrowInput2_.clear();
+      viewport_->clearSecondArrow();
+    }
+    return;
   } else if (id == QLatin1String(doc::kCmdPressPull)) {
     input = QStringLiteral("distance");
     place = facesPlacement(pickedFaces());
@@ -188,7 +262,8 @@ void MainWindow::onDragArrow(double value) {
   }
   if (!active_ || arrowInput_.isEmpty()) return;
   const QString id = active_->commandId();
-  // Fillet and chamfer sizes stay positive.
+  // Fillet and chamfer sizes, and pattern distances, stay positive.
+  if (id == QLatin1String(doc::kCmdRectPattern)) value = std::max(value, viewport_->modelPerPixel());
   if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer))
     value = std::max(value, viewport_->modelPerPixel());
   // Extruding body faces: pulling out joins, pushing in cuts (as Fusion does).

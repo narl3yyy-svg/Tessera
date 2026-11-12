@@ -152,6 +152,7 @@ void Document::requireTransaction(const char* what) const {
 void Document::openTransaction(const std::string& name) {
   if (doc_->HasOpenCommand()) throw DocumentError("a transaction is already open");
   doc_->NewCommand();
+  txnBodies_ = bodyShapes();
   (void)name; // OCAF transaction names are not persisted; kept for the undo UI later.
 }
 
@@ -172,6 +173,7 @@ bool Document::canRedo() const { return !doc_->HasOpenCommand() && doc_->GetAvai
 
 bool Document::undo() {
   if (!canUndo()) return false;
+  effects_.clear();   // the history may differ now; replayed when needed
   const bool ok = doc_->Undo();
   modified_ = modified_ || ok;
   return ok;
@@ -179,6 +181,7 @@ bool Document::undo() {
 
 bool Document::redo() {
   if (!canRedo()) return false;
+  effects_.clear();
   const bool ok = doc_->Redo();
   modified_ = modified_ || ok;
   return ok;
@@ -697,6 +700,34 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   nd->SetString("inputs", ext(toJson(inputs).dump()));
   nd->SetString("error", ext(""));
   nd->SetInteger("suppressed", 0);
+  effects_[l.Tag()] = effectOf(txnBodies_, bodyShapes());
+}
+
+std::map<std::string, TopoDS_Shape> Document::bodyShapes() const {
+  std::map<std::string, TopoDS_Shape> out;
+  for (const auto& b : bodies()) out[b.name] = b.shape;
+  return out;
+}
+
+Document::FeatureEffect Document::effectOf(const std::map<std::string, TopoDS_Shape>& before,
+                                           const std::map<std::string, TopoDS_Shape>& after) {
+  FeatureEffect e;
+  for (const auto& [name, shape] : after) {
+    const auto it = before.find(name);
+    if (it == before.end()) e.bodies[name] = {TopoDS_Shape(), shape};
+    else if (!it->second.IsSame(shape)) e.bodies[name] = {it->second, shape};
+  }
+  for (const auto& [name, shape] : before)
+    if (!after.count(name)) e.bodies[name] = {shape, TopoDS_Shape()};
+  return e;
+}
+
+const Document::FeatureEffect* Document::featureEffect(int id) {
+  if (auto it = effects_.find(id); it != effects_.end()) return it->second.bodies.empty() ? nullptr : &it->second;
+  if (replaying_ || !registry_ || !hasOpenTransaction()) return nullptr;
+  recompute(*registry_);   // fills effects_ for every feature
+  if (auto it = effects_.find(id); it != effects_.end() && !it->second.bodies.empty()) return &it->second;
+  return nullptr;
 }
 
 void Document::setFeatureInputs(int id, const Inputs& inputs) {
@@ -721,8 +752,16 @@ void Document::recompute(const CommandRegistry& registry) {
     for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
       if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
 
+  registry_ = &registry;
+  replaying_ = true;
+  struct Done {
+    bool& flag;
+    ~Done() { flag = false; }
+  } done{replaying_};
+  effects_.clear();
   for (const Feature& f : features()) {
     std::string error;
+    const auto before = bodyShapes();
     if (!f.suppressed) {
       if (const Command* cmd = registry.find(f.commandId)) {
         try {
@@ -741,6 +780,7 @@ void Document::recompute(const CommandRegistry& registry) {
         error = "unknown command '" + f.commandId + "'";
       }
     }
+    effects_[f.id] = error.empty() ? effectOf(before, bodyShapes()) : FeatureEffect{};
     Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
     if (stringOf(nd, "error") != error) nd->SetString("error", ext(error));
   }

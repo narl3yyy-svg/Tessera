@@ -31,7 +31,7 @@ namespace tsr {
 // JointOrigin: a point and direction on a body for a joint, picked in the
 //         viewport: "<body>|face|<ref>", "<body>|edge|<ref>" or "<body>|vertex|x,y,z".
 enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane, Vertices, Axis,
-                       JointOrigin };
+                       JointOrigin, Features };
 
 struct InputDef {
   std::string id;

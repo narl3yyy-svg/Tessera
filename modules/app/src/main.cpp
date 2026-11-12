@@ -564,6 +564,18 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   }
   o[QStringLiteral("widgets")] = widgets;
   {
+    // Timeline items by feature name (centre, global coordinates).
+    QJsonObject items;
+    QListWidget* tl = w.timeline();
+    for (int i = 0; i < tl->count(); ++i) {
+      QListWidgetItem* it = tl->item(i);
+      const QRect r = tl->visualItemRect(it);
+      const QPoint g = tl->viewport()->mapToGlobal(r.center());
+      items[it->data(Qt::AccessibleTextRole).toString()] = QJsonArray{g.x(), g.y()};
+    }
+    o[QStringLiteral("timeline")] = items;
+  }
+  {
     // World axes (1 cm each) on screen: an affine map for the (orthographic) view.
     auto at = [&](double x, double y, double z) {
       const QPoint g = w.viewport()->mapToGlobal(w.viewport()->toWidget(gp_Pnt(x, y, z)).toPoint());

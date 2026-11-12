@@ -1305,11 +1305,6 @@ private:
   CommandDef def_;
 };
 
-// ---------------------------------------------------------------------------
-// Patterns of a body.
-kernel::Vec3 axisVec(const std::string& a) {
-  return a == "X" ? kernel::Vec3{1, 0, 0} : a == "Y" ? kernel::Vec3{0, 1, 0} : kernel::Vec3{0, 0, 1};
-}
 
 void placeCopies(Document& doc, const std::string& name, const std::vector<TopoDS_Shape>& copies, bool join) {
   if (join) {
@@ -1321,46 +1316,148 @@ void placeCopies(Document& doc, const std::string& name, const std::vector<TopoD
   }
 }
 
+// ---------------------------------------------------------------------------
+// Patterns: of features (what they added to or cut from a body, as the
+// familiar tool does) or of whole bodies.
+using CopyFn = std::function<TopoDS_Shape(const TopoDS_Shape&)>;
+
+std::string stringOr(const Inputs& in, const std::string& id, const std::string& fallback) {
+  if (auto it = in.find(id); it != in.end())
+    if (auto s = std::get_if<std::string>(&it->second)) return *s;
+  return fallback;   // documents made before the input existed
+}
+
+InputDef patternTypeInput() {
+  return choice("patternType", "Pattern Type", {"Features", "Bodies"},
+                "Features: copy what the picked features added or removed. Bodies: copy a whole body.");
+}
+InputDef featuresInput() {
+  return InputDef{.id = "features", .label = "Features", .tooltip = "Click features in the timeline.",
+                  .type = InputType::Features, .defaultValue = std::string{}, .optional = true,
+                  .visibleWhen = "patternType=Features"};
+}
+
+std::string checkPattern(const Inputs& in, Document& doc) {
+  if (stringOr(in, "patternType", "Bodies") == "Bodies") return checkBody(in, doc);
+  const auto names = splitNames(getString(in, "features"));
+  if (names.empty()) return "Features: click features in the timeline";
+  const auto all = doc.features();
+  for (const auto& n : names)
+    if (std::none_of(all.begin(), all.end(), [&](const Feature& f) { return f.name == n; }))
+      return "Features: no feature named '" + n + "'";
+  return {};
+}
+
+TopoDS_Shape differenceOrNull(const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  try {
+    TopoDS_Shape d = kernel::boolean(kernel::BooleanOp::Cut, a, b);
+    if (kernel::massProperties(d).volume > 1e-9) return d;
+  } catch (const kernel::KernelError&) {   // nothing left: nothing added / removed
+  }
+  return {};
+}
+
+void patternFeatures(Document& doc, const Inputs& in, const std::vector<CopyFn>& copies, bool join) {
+  for (const auto& name : splitNames(getString(in, "features"))) {
+    std::optional<int> id;
+    for (const auto& f : doc.features())
+      if (f.name == name) id = f.id;
+    const Document::FeatureEffect* effect = id ? doc.featureEffect(*id) : nullptr;
+    if (!effect) throw CommandError("Features: '" + name + "' made no geometry to copy");
+    const auto bodies = effect->bodies;   // copied: a replay may refill the cache
+    for (const auto& [body, change] : bodies) {
+      const auto& [before, after] = change;
+      if (after.IsNull() || !doc.body(body)) continue;
+      if (before.IsNull()) {   // the feature made a new body: copy it
+        std::vector<TopoDS_Shape> made;
+        for (const auto& c : copies) made.push_back(c(after));
+        placeCopies(doc, body, made, join);
+        continue;
+      }
+      const TopoDS_Shape added = differenceOrNull(after, before), removed = differenceOrNull(before, after);
+      TopoDS_Shape cur = doc.body(body)->shape;
+      for (const auto& c : copies) {
+        if (!added.IsNull()) cur = kernel::boolean(kernel::BooleanOp::Join, cur, c(added));
+        if (!removed.IsNull()) cur = kernel::boolean(kernel::BooleanOp::Cut, cur, c(removed));
+      }
+      doc.replaceBody(body, cur);
+    }
+  }
+}
+
+void runPattern(Document& doc, const Inputs& in, const std::vector<CopyFn>& copies) {
+  const bool join = getString(in, "result") == "Join";
+  try {
+    if (stringOr(in, "patternType", "Bodies") == "Features") {
+      patternFeatures(doc, in, copies, join);
+      return;
+    }
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    std::vector<TopoDS_Shape> made;
+    for (const auto& c : copies) made.push_back(c(s));
+    placeCopies(doc, name, made, join);
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(e.what());
+  }
+}
+
 class RectangularPattern final : public Command {
 public:
   RectangularPattern() {
-    commonDef(def_, kCmdRectPattern, "Rectangular Pattern", "Copies a body in rows and columns.", "pattern-rect", "Create");
+    commonDef(def_, kCmdRectPattern, "Rectangular Pattern",
+              "Copies features or a body in rows and columns. Drag the arrows or type the distances.", "pattern-rect",
+              "Create");
     auto count = [](const char* id, const char* label, std::int64_t v) {
       return InputDef{.id = id, .label = label, .tooltip = "Including the original.", .type = InputType::Integer,
                       .defaultValue = v, .unit = Unit::None, .min = 1.0, .max = 1000.0};
     };
-    auto spacing = [](const char* id, const char* label) {
-      return InputDef{.id = id, .label = label, .tooltip = "Distance between copies.", .type = InputType::Real,
-                      .defaultValue = 2.0, .unit = Unit::Millimeter};
+    auto distance = [](const char* id, const char* label, double v) {
+      return InputDef{.id = id, .label = label, .tooltip = "Extent: first to last copy. Spacing: between copies.",
+                      .type = InputType::Real, .defaultValue = v, .unit = Unit::Millimeter};
     };
-    def_.inputs = {bodyInput(),
-                   choice("direction1", "Direction 1", {"X", "Y", "Z"}, {}), count("quantity1", "Quantity", 3),
-                   spacing("distance1", "Spacing"),
-                   choice("direction2", "Direction 2", {"Y", "Z", "X"}, {}), count("quantity2", "Quantity 2", 1),
-                   spacing("distance2", "Spacing 2"),
+    auto direction = [](const char* id, const char* label, const char* v) {
+      return InputDef{.id = id, .label = label, .tooltip = "A world axis or a construction axis.",
+                      .type = InputType::Axis, .defaultValue = std::string(v)};
+    };
+    InputDef body = bodyInput();
+    body.visibleWhen = "patternType=Bodies";
+    def_.inputs = {patternTypeInput(), featuresInput(), body,
+                   direction("direction1", "Direction 1", "X"),
+                   choice("distanceType", "Distance Type", {"Extent", "Spacing"},
+                          "Extent: the distance covers all copies. Spacing: the distance between neighbours."),
+                   count("quantity1", "Quantity", 3), distance("distance1", "Distance", 2.0),
+                   direction("direction2", "Direction 2", "Y"), count("quantity2", "Quantity 2", 1),
+                   distance("distance2", "Distance 2", 2.0),
                    choice("result", "Result", {"Join", "New Bodies"}, "Join: one body; New Bodies: separate copies.")};
   }
   const CommandDef& def() const override { return def_; }
-  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
   void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
-    const std::string name = bodyName(in, doc);
-    const TopoDS_Shape s = doc.body(name)->shape;
-    const auto d1 = axisVec(getString(in, "direction1")), d2 = axisVec(getString(in, "direction2"));
-    const double s1 = getReal(in, "distance1"), s2 = getReal(in, "distance2");
-    std::vector<TopoDS_Shape> copies;
+    gp_Dir d1, d2;
     try {
-      for (std::int64_t i = 0; i < getInt(in, "quantity1"); ++i)
-        for (std::int64_t j = 0; j < getInt(in, "quantity2"); ++j) {
-          if (i == 0 && j == 0) continue;
-          const kernel::Vec3 off{d1.x * s1 * i + d2.x * s2 * j, d1.y * s1 * i + d2.y * s2 * j, d1.z * s1 * i + d2.z * s2 * j};
-          copies.push_back(kernel::moved(s, off, {}, {0, 0, 1}, 0));
-        }
-      placeCopies(doc, name, copies, getString(in, "result") == "Join");
-    } catch (const kernel::KernelError& e) {
-      throw CommandError(e.what());
+      d1 = doc.axisFrame(getString(in, "direction1")).Direction();
+      d2 = doc.axisFrame(getString(in, "direction2")).Direction();
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string("Direction: ") + e.what());
     }
+    const auto n1 = getInt(in, "quantity1"), n2 = getInt(in, "quantity2");
+    double s1 = getReal(in, "distance1"), s2 = getReal(in, "distance2");
+    if (stringOr(in, "distanceType", "Spacing") == "Extent") {
+      s1 = n1 > 1 ? s1 / static_cast<double>(n1 - 1) : 0;
+      s2 = n2 > 1 ? s2 / static_cast<double>(n2 - 1) : 0;
+    }
+    std::vector<CopyFn> copies;
+    for (std::int64_t i = 0; i < n1; ++i)
+      for (std::int64_t j = 0; j < n2; ++j) {
+        if (i == 0 && j == 0) continue;
+        const gp_Vec v = gp_Vec(d1) * (s1 * static_cast<double>(i)) + gp_Vec(d2) * (s2 * static_cast<double>(j));
+        const kernel::Vec3 off{v.X(), v.Y(), v.Z()};
+        copies.push_back([off](const TopoDS_Shape& s) { return kernel::moved(s, off, {}, {0, 0, 1}, 0); });
+      }
+    runPattern(doc, in, copies);
   }
 
 private:
@@ -1370,8 +1467,11 @@ private:
 class CircularPattern final : public Command {
 public:
   CircularPattern() {
-    commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies a body around a world or construction axis.", "pattern-circ", "Create");
-    def_.inputs = {bodyInput(),
+    commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies features or a body around a world or construction axis.",
+              "pattern-circ", "Create");
+    InputDef body = bodyInput();
+    body.visibleWhen = "patternType=Bodies";
+    def_.inputs = {patternTypeInput(), featuresInput(), body,
                    InputDef{.id = "axis", .label = "Axis", .tooltip = "A world axis (through the origin) or a construction axis.",
                             .type = InputType::Axis, .defaultValue = std::string("Z")},
                    InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
@@ -1382,31 +1482,29 @@ public:
                    choice("result", "Result", {"Join", "New Bodies"}, {})};
   }
   const CommandDef& def() const override { return def_; }
-  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
   void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
-    const std::string name = bodyName(in, doc);
-    const TopoDS_Shape s = doc.body(name)->shape;
     const auto n = getInt(in, "quantity");
     const double total = getReal(in, "angle");
     const bool full = std::abs(std::abs(total) - 2 * 3.14159265358979323846) < 1e-9;
-    const double step = full ? total / n : total / std::max<std::int64_t>(n - 1, 1);
-    std::vector<TopoDS_Shape> copies;
+    const double step =
+        full ? total / static_cast<double>(n) : total / static_cast<double>(std::max<std::int64_t>(n - 1, 1));
+    gp_Ax1 ax;
     try {
-      gp_Ax1 ax;
-      try {
-        ax = doc.axisFrame(getString(in, "axis"));
-      } catch (const DocumentError& e) {
-        throw CommandError(std::string("Axis: ") + e.what());
-      }
-      const kernel::Vec3 pivot{ax.Location().X(), ax.Location().Y(), ax.Location().Z()};
-      const kernel::Vec3 dir{ax.Direction().X(), ax.Direction().Y(), ax.Direction().Z()};
-      for (std::int64_t i = 1; i < n; ++i) copies.push_back(kernel::moved(s, {}, pivot, dir, step * i));
-      placeCopies(doc, name, copies, getString(in, "result") == "Join");
-    } catch (const kernel::KernelError& e) {
-      throw CommandError(e.what());
+      ax = doc.axisFrame(getString(in, "axis"));
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string("Axis: ") + e.what());
     }
+    const kernel::Vec3 pivot{ax.Location().X(), ax.Location().Y(), ax.Location().Z()};
+    const kernel::Vec3 dir{ax.Direction().X(), ax.Direction().Y(), ax.Direction().Z()};
+    std::vector<CopyFn> copies;
+    for (std::int64_t i = 1; i < n; ++i) {
+      const double a = step * static_cast<double>(i);
+      copies.push_back([pivot, dir, a](const TopoDS_Shape& s) { return kernel::moved(s, {}, pivot, dir, a); });
+    }
+    runPattern(doc, in, copies);
   }
 
 private:

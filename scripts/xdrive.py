@@ -24,6 +24,7 @@ Script lines (blank lines and # comments ignored):
   wdrag NAME DX DY           press on widget NAME, drag by DX, DY pixels, release
   adrag DX DY                drag the in-canvas arrow by DX, DY pixels
   a2drag DX DY               drag the second arrow (Two Sides extrude)
+  tclick NAME                click a feature in the timeline
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
   type TEXT                  type text (rest of the line)
   shot FILE                  ask the app to save a screenshot to FILE
@@ -208,6 +209,14 @@ def main():
             time.sleep(0.3)
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
+        elif cmd == "tclick":
+            end = time.time() + 5
+            while a[0] not in geometry().get("timeline", {}):
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: no timeline item %s" % (n, a[0]))
+                time.sleep(0.1)
+            click(*geometry()["timeline"][a[0]])
+            time.sleep(0.3)
         elif cmd == "choose":
             click(*widget(a[0]))
             time.sleep(0.3)

@@ -34,6 +34,7 @@ const char* typeName(InputType t) {
     case InputType::Vertices: return "vertices";
     case InputType::Axis: return "axis";
     case InputType::JointOrigin: return "jointOrigin";
+    case InputType::Features: return "features";
   }
   return "?";
 }

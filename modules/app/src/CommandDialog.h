@@ -54,6 +54,10 @@ public:
   QString currentVertices() const { return stringInput(verticesId_); }
   void setVertices(const QString& v);
   bool hasBodiesInput() const;
+  // Pattern Type = Features: features are picked by clicking the timeline.
+  bool wantsFeatures() const;
+  QString currentFeatures() const;
+  void toggleFeature(const QString& name);   // adds it, or removes it again
   QString currentFaces() const;
   QString currentTools() const;
   void setFaces(const QString& faces);
@@ -62,6 +66,7 @@ public:
   // For the in-canvas drag arrow and other canvas tools.
   QString commandId() const { return QString::fromStdString(cmd_->def().id); }
   std::optional<double> realInput(const QString& id) const;
+  std::optional<long long> intInput(const QString& id) const;
   QString textInput(const QString& id) const { return stringInput(id.toStdString()); }
   // What the input's field shows: its expression, else the value with unit.
   QString displayText(const QString& id) const;
@@ -108,6 +113,8 @@ private:
   std::string verticesId_;
   QLabel* bodiesLabel_ = nullptr;
   std::string bodiesId_;
+  QLabel* featuresLabel_ = nullptr;
+  std::string featuresId_;
   QString stringInput(const std::string& id) const;
   void updateVisibility();
   void adjustAfterResize();

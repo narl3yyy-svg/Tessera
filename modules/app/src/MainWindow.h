@@ -16,6 +16,7 @@
 #include <functional>
 
 #include <map>
+#include <optional>
 #include <vector>
 
 class QTabWidget;
@@ -144,6 +145,8 @@ private:
   void updateEdgePicking();
   // In-canvas drag arrow for the open panel (MainWindowArrow.cpp).
   void updateDragArrow();
+  std::optional<gp_Pnt> patternCentre();
+  std::map<QString, gp_Pnt> patternCentres_;   // per feature name, while a pattern is open
   void onDragArrow(double value);
   QString arrowInput_;
   QString arrowInput2_;   // the second arrow's input (Two Sides extrude)

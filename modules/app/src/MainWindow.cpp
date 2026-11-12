@@ -154,6 +154,14 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   connect(timeline_, &QListWidget::itemDoubleClicked, this,
           [this](QListWidgetItem* it) { editFeature(it->data(kFeatureIdRole).toInt()); });
   connect(timeline_, &QListWidget::customContextMenuRequested, this, &MainWindow::showTimelineMenu);
+  // While a pattern wants features, a click on the timeline picks one.
+  connect(timeline_, &QListWidget::itemClicked, this, [this](QListWidgetItem* it) {
+    if (!active_ || !active_->wantsFeatures()) return;
+    if (const auto f = session_.document().feature(it->data(kFeatureIdRole).toInt())) {
+      active_->toggleFeature(qs(f->name));
+      updateDragArrow();
+    }
+  });
   auto* timelineDock = new QDockWidget(tr("TIMELINE"));
   timelineDock->setObjectName(QStringLiteral("timelineDock"));
   timelineDock->setWidget(timeline_);
@@ -819,6 +827,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     viewport_->setPlanePicking(false);
     viewport_->clearDragArrow();
     viewport_->setCursorHint(QString());
+    patternCentres_.clear();
     arrowInput_.clear();
     arrowInput2_.clear();
     pickedEdges_.clear();

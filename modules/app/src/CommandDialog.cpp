@@ -229,6 +229,24 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::Features: {
+        // Filled by clicking features in the timeline.
+        auto* box = new QWidget;
+        auto* row = new QHBoxLayout(box);
+        row->setContentsMargins(0, 0, 0, 0);
+        featuresLabel_ = new QLabel;
+        auto* clear = new QPushButton(tr("Clear"));
+        clear->setObjectName(QStringLiteral("clearFeatures"));
+        row->addWidget(featuresLabel_, 1);
+        row->addWidget(clear);
+        featuresId_ = id;
+        connect(clear, &QPushButton::clicked, this, [this, id] {
+          onInputChanged(id, std::string());
+          updateProfilesLabel();
+        });
+        w = box;
+        break;
+      }
       case InputType::JointOrigin: {
         auto* box = new QWidget;
         auto* row = new QHBoxLayout(box);
@@ -450,6 +468,23 @@ bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
 bool CommandDialog::hasFacesInput() const { return !facesId_.empty(); }
 bool CommandDialog::hasBodiesInput() const { return !bodiesId_.empty(); }
 
+bool CommandDialog::wantsFeatures() const {
+  if (featuresId_.empty()) return false;
+  const InputDef* d = cmd_->def().input(featuresId_);
+  return d && isInputVisible(*d, cmd_->inputs());
+}
+
+QString CommandDialog::currentFeatures() const { return stringInput(featuresId_); }
+
+void CommandDialog::toggleFeature(const QString& name) {
+  if (featuresId_.empty() || name.isEmpty()) return;
+  QStringList list = currentFeatures().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+  if (list.contains(name)) list.removeAll(name);
+  else list.append(name);
+  onInputChanged(featuresId_, list.join(QLatin1Char(';')).toStdString());
+  updateProfilesLabel();
+}
+
 QString CommandDialog::stringInput(const std::string& id) const {
   if (id.empty()) return {};
   if (auto s = std::get_if<std::string>(&cmd_->inputs().at(id))) return QString::fromStdString(*s);
@@ -551,6 +586,11 @@ void CommandDialog::updateProfilesLabel() {
     const int n = count(currentVertices());
     verticesLabel_->setText(n == 0 ? tr("Click vertices in the canvas") : tr("%n vertex(es)", nullptr, n));
   }
+  if (featuresLabel_) {
+    const int n = count(currentFeatures());
+    featuresLabel_->setText(n == 0 ? tr("Click features in the timeline") : tr("%n feature(s)", nullptr, n));
+    featuresLabel_->setToolTip(currentFeatures());
+  }
   if (bodiesLabel_) {
     const QString t = currentTools();
     bodiesLabel_->setText(t.isEmpty() ? tr("Click bodies in the canvas") : t);
@@ -575,6 +615,13 @@ std::optional<double> CommandDialog::realInput(const QString& id) const {
   auto it = cmd_->inputs().find(id.toStdString());
   if (it == cmd_->inputs().end()) return std::nullopt;
   if (auto d = std::get_if<double>(&it->second)) return *d;
+  return std::nullopt;
+}
+
+std::optional<long long> CommandDialog::intInput(const QString& id) const {
+  auto it = cmd_->inputs().find(id.toStdString());
+  if (it == cmd_->inputs().end()) return std::nullopt;
+  if (auto i = std::get_if<std::int64_t>(&it->second)) return static_cast<long long>(*i);
   return std::nullopt;
 }
 
