@@ -12,6 +12,7 @@ Script lines (blank lines and # comments ignored):
   click NAME                 left click the centre of widget NAME
   dclick NAME                double click it
   vclick FX FY               click the canvas at fractions of its width/height
+  vrclick FX FY              right-click the canvas there (marking menu)
   plane XY|XZ|YZ             click that origin plane (while Create Sketch asks for one)
   sclick X Y                 click sketch coordinates (mm) of the open sketch
   wclick X Y Z               click a world point (mm), e.g. on a face of a body
@@ -198,6 +199,12 @@ def main():
                 time.sleep(0.1)
             p = geometry()["planes"][a[0]]
             click(p[0], p[1])
+        elif cmd == "vrclick":
+            x, y = canvas(float(a[0]), float(a[1]))
+            move(x, y)
+            button(True, 3)
+            button(False, 3)
+            time.sleep(0.3)
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
         elif cmd == "choose":

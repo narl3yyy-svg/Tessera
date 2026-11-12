@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
+#include "MarkingMenu.h"
 #include "ParametersDialog.h"
 #include "SketchPalette.h"
 
@@ -855,30 +856,77 @@ void MainWindow::placeDialog(QWidget* dlg) {
   dlg->move(topRight.x() - dlg->width() - 170, topRight.y() + 16);
 }
 
-void MainWindow::showContextMenu(const QPoint& globalPos) {
-  QMenu m(this);
-  if (!lastCommand_.isEmpty() && !active_)
-    if (const Command* c = session_.commands().find(lastCommand_.toStdString())) {
-      const QString id = lastCommand_;
-      m.addAction(icon(qs(c->def().icon)), tr("Repeat %1").arg(qs(c->def().name)), this,
-                  [this, id] { startCommand(id); });
-      m.addSeparator();
-    }
-  m.addAction(undo_);
-  m.addAction(redo_);
-  m.addSeparator();
-  QMenu* create = m.addMenu(tr("Create"));
-  for (const Command* c : session_.commands().all())
-    if (c->def().panel == "Create") {
-      const QString id = qs(c->def().id);
-      create->addAction(icon(qs(c->def().icon)), qs(c->def().name), this, [this, id] { startCommand(id); });
-    }
-  create->setEnabled(!active_);
-  m.addSeparator();
-  m.addAction(icon(QStringLiteral("fit")), tr("Fit"), viewport_, &Viewport::fitAll);
-  m.addAction(icon(QStringLiteral("home")), tr("Home view"), viewport_, &Viewport::home);
-  m.addAction(tr("Command search…"), this, [this] { focusSearch(); });
-  m.exec(globalPos);
+void MainWindow::showContextMenu(const QPoint& globalPos) { (void)openMarkingMenu(globalPos); }
+
+// The right-click marking menu: a ring of the most used commands around the
+// cursor and a list below, different in sketch mode and inside a command.
+MarkingMenu* MainWindow::openMarkingMenu(const QPoint& globalPos) {
+  using Item = MarkingMenu::Item;
+  auto cmd = [this](const char* id, const QString& text = QString()) -> Item {
+    const Command* c = session_.commands().find(id);
+    if (!c) return {};
+    const QString cid = QString::fromLatin1(id);
+    return {text.isEmpty() ? qs(c->def().name) : text, icon(qs(c->def().icon)), [this, cid] { startCommand(cid); },
+            !active_ && !editor_};
+  };
+  auto ui = [this](const QString& text, const char* iconName, std::function<void()> run, bool enabled = true) -> Item {
+    return {text, icon(QString::fromLatin1(iconName)), std::move(run), enabled};
+  };
+  std::vector<Item> ring, list;
+  if (editor_) {
+    using T = SketchEditor::Tool;
+    auto tool = [this, &ui](const QString& text, const char* iconName, T t) {
+      return ui(text, iconName, [this, t] {
+        if (!editor_) return;
+        editor_->setTool(t);
+        syncSketchTools();
+      });
+    };
+    ring = {tool(tr("Line"), "line", T::Line),
+            ui(tr("Undo"), "undo", [this] { if (editor_) editor_->undo(); }, editor_->canUndo()),
+            tool(tr("Trim"), "trim", T::Trim),
+            tool(tr("Offset"), "offset", T::Offset),
+            ui(tr("Finish Sketch"), "finish", [this] { QTimer::singleShot(0, this, [this] { finishSketch(); }); }),
+            tool(tr("Circle"), "circle", T::Circle),
+            tool(tr("Rectangle"), "rectangle", T::Rectangle),
+            tool(tr("Sketch Dimension"), "dimension", T::Dimension)};
+    list = {tool(tr("Arc"), "arc", T::Arc), tool(tr("Spline"), "spline", T::Spline), tool(tr("Fillet"), "sketch-fillet", T::Fillet),
+            tool(tr("Mirror"), "sketch-mirror", T::Mirror),
+            ui(tr("Normal / Construction"), "construction", [this] {
+              if (editor_) editor_->setConstruction(!editor_->construction());
+              syncSketchTools();
+            }),
+            ui(tr("Look At"), "look-at", [this] { if (editor_) viewport_->lookAt(editor_->frame()); }),
+            ui(tr("Cancel Sketch"), "undo", [this] { QTimer::singleShot(0, this, [this] { cancelSketch(); }); })};
+  } else if (active_) {
+    QPointer<CommandDialog> dlg = active_;
+    ring = {ui(tr("OK"), "finish", [dlg] { if (dlg) dlg->accept(); }), {}, {}, {}, ui(tr("Cancel"), "undo", [dlg] { if (dlg) dlg->reject(); })};
+  } else {
+    Item repeat;
+    if (!lastCommand_.isEmpty())
+      if (const Command* c = session_.commands().find(lastCommand_.toStdString())) {
+        const QString id = lastCommand_;
+        repeat = {tr("Repeat %1").arg(qs(c->def().name)), icon(qs(c->def().icon)), [this, id] { startCommand(id); }};
+      }
+    ring = {repeat,
+            ui(tr("Undo"), "undo", [this] { session_.undo(); }, session_.document().canUndo()),
+            cmd(doc::kCmdPressPull),
+            cmd(doc::kCmdHole),
+            ui(tr("Create Sketch"), "sketch", [this] { beginSketch(); }),
+            cmd(doc::kCmdExtrude),
+            cmd(doc::kCmdFillet),
+            cmd(doc::kCmdMove)};
+    list = {ui(tr("Redo"), "redo", [this] { session_.redo(); }, session_.document().canRedo()),
+            ui(tr("Measure"), "measure", [this] { openMeasure(); }),
+            ui(tr("Section Analysis"), "section", [this] { openSection(); }),
+            ui(tr("Change Parameters"), "parameters", [this] { showParameters(); }),
+            ui(tr("Fit"), "fit", [this] { viewport_->fitAll(); }),
+            ui(tr("Home View"), "home", [this] { viewport_->home(); }),
+            ui(tr("Command Search"), "select", [this] { focusSearch(); })};
+  }
+  auto* m = new MarkingMenu(std::move(ring), std::move(list), this);
+  m->popupAt(globalPos);
+  return m;
 }
 
 void MainWindow::showTimelineMenu(const QPoint& pos) {

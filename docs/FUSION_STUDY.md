@@ -45,7 +45,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ### Selection and the canvas
 - [ ] Window selection left-to-right (fully inside) vs right-to-left (crossing); selection priority (bodies / faces / edges / sketch) and the select-through hold.
-- [ ] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy.
+- [x] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy; a sketch-mode ring; OK / Cancel inside a command.
 - [ ] Pre-selection: selected items carried into the next command (select a face, then press E).
 - [ ] Hovering a body shows its name tooltip; double-click selects a tangent chain / loop.
 - [ ] Timeline: drag the rollback marker; drag features to reorder; right-click Edit Feature / Edit Profile Sketch / Suppress / Delete; feature groups.

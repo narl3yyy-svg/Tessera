@@ -1,0 +1,17 @@
+# Live: right-click the canvas, pick Extrude from the marking menu ring,
+# click the box's top face, drag the arrow up, OK.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.1 0.9
+vrclick 0.2 0.8
+waitfor ring_Extrude
+shot /tmp/live_marking.png
+click ring_Extrude
+waitfor panelOk
+wait 400
+wclick 20 15 20        # top face centre
+wait 500
+adrag 0 -80
+wait 300
+click panelOk
+wait 500

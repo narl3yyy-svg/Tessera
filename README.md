@@ -74,6 +74,7 @@ never needs the network.
 | Edit a feature | Double-click it in the timeline (or a sketch in the browser) |
 | Drive sizes from parameters | *Modify → Change Parameters* → **Add**; then type the name or an expression (`width / 2`) into any value or dimension |
 | Command search | **S** |
+| Marking menu | Right-click the canvas: Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy in a ring, more below |
 
 **Shortcuts:** E Extrude · H Hole · Q Press Pull · F Fillet · M Move/Copy · I Measure · Delete · Ctrl+Z / Ctrl+Y.
 **In a sketch:** L Line · R Rectangle · C Circle · A Arc · P Point · D Dimension · T Trim · X Construction ·

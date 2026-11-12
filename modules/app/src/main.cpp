@@ -1,5 +1,6 @@
 #include "CommandDialog.h"
 #include "MainWindow.h"
+#include "MarkingMenu.h"
 #include "ParametersDialog.h"
 #include "SketchEditor.h"
 #include "SketchPalette.h"
@@ -496,6 +497,17 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     if (auto* rm = panel->findChild<QAbstractButton*>(QStringLiteral("analysisRemove"))) rm->click();
     QApplication::processEvents();
     if (w.analysisPanel() || w.viewport()->analysis().kind != tsr::app::AnalysisKind::None) return fail("analysis remove");
+  }
+  // Marking menu: Create Sketch from the ring starts plane picking / sketch.
+  s.newDocument();
+  {
+    auto* mm = w.openMarkingMenu(QPoint(400, 400));
+    if (!mm || !mm->triggerForTest(QStringLiteral("Extrude"))) return fail("marking menu Extrude");
+    QApplication::processEvents();
+    auto* exm = w.findChild<tsr::app::CommandDialog*>(QStringLiteral("tsr.feature.extrude"));
+    if (!exm) return fail("marking menu did not start Extrude");
+    exm->reject();
+    QApplication::processEvents();
   }
   std::puts("smoke: OK");
   return 0;

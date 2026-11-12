@@ -36,6 +36,7 @@ class CommandDialog;
 class ParametersDialog;
 class SketchEditor;
 class SketchPalette;
+class MarkingMenu;
 class Viewport;
 
 // Layout (familiar to users of mainstream parametric CAD):
@@ -69,6 +70,8 @@ public:
   ParametersDialog* showParameters();
   SketchEditor* sketchEditor() const { return editor_; }
   SketchPalette* sketchPalette() const;
+  // The right-click marking menu (also for tests).
+  MarkingMenu* openMarkingMenu(const QPoint& globalPos);
   // Section Analysis (tests): the panel, and picking a plane as a click would.
   QDialog* sectionPanel() const { return sectionPanel_; }
   void openSectionAnalysis() { openSection(); }
