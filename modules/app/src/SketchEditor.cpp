@@ -30,7 +30,9 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QRegularExpression>
+#include <QGuiApplication>
 #include <QMouseEvent>
+#include <QTimer>
 
 #include <algorithm>
 #include <optional>
@@ -150,6 +152,7 @@ void SketchEditor::setTool(Tool t) {
   if (t == Tool::Mirror)
     for (const auto& h : selection_)
       if (h.kind == Hit::Entity) keep.push_back(h);
+  const std::vector<Hit> preselected = isConstraintTool(t) ? selection_ : std::vector<Hit>{};
   resetSteps();
   tool_ = t;
   selection_.clear();
@@ -191,6 +194,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, then the line of symmetry.")); break;
   }
   rebuild();
+  if (!preselected.empty()) applyToSelection(preselected);
 }
 
 void SketchEditor::resetSteps() {
@@ -313,7 +317,7 @@ int SketchEditor::snapPoint(double x, double y, int exclude) const {
 }
 
 void SketchEditor::snapToGrid(double& x, double& y) const {
-  if (!view_ || !view_->gridSnap()) return;
+  if (!view_ || !view_->gridSnap() || snapsSuppressed()) return;
   const double g = view_->gridSpacing();
   if (g <= 0) return;
   x = std::round(x / g) * g;
@@ -569,10 +573,14 @@ void SketchEditor::collectBodyEdges() {
   }
 }
 
+// Holding Ctrl while sketching turns off snapping and automatic constraints.
+bool SketchEditor::snapsSuppressed() { return QGuiApplication::keyboardModifiers() & Qt::ControlModifier; }
+
 SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
   Snap s;
   s.x = x;
   s.y = y;
+  if (snapsSuppressed()) return s;
   const double tol = tolerance();
   // 1. Existing sketch points (ends, centres, the origin).
   if (const int p = snapPoint(x, y, exclude); p >= 0) {
@@ -1425,6 +1433,7 @@ void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
 }
 
 void SketchEditor::autoHorizontalVertical(int line) {
+  if (snapsSuppressed()) return;
   const auto& l = sk_.entities[line];
   const double dx = sk_.points[l.b].x - sk_.points[l.a].x;
   const double dy = sk_.points[l.b].y - sk_.points[l.a].y;
@@ -1446,7 +1455,47 @@ void SketchEditor::constraintPick(double x, double y) {
   if (h.kind == Hit::Label || h.kind == Hit::None) return;
   picks_.push_back({h, x, y});
   rebuild();
+  evaluateConstraintPicks();
+}
 
+bool SketchEditor::isConstraintTool(Tool t) {
+  switch (t) {
+    case Tool::Coincident: case Tool::HorizontalVertical: case Tool::Parallel: case Tool::Perpendicular:
+    case Tool::Equal: case Tool::Tangent: case Tool::Fix: case Tool::Midpoint: case Tool::Concentric:
+    case Tool::Collinear: case Tool::Symmetry:
+      return true;
+    default:
+      return false;
+  }
+}
+
+// Constraint tools started with geometry already selected (the familiar
+// select-then-constrain order): the selection is used as the picks. Tools
+// that take one item apply to every selected one.
+void SketchEditor::applyToSelection(const std::vector<Hit>& selected) {
+  int applied = 0;
+  for (const Hit& h : selected) {
+    if (h.kind != Hit::Point && h.kind != Hit::Entity) continue;
+    const bool one = tool_ == Tool::HorizontalVertical || tool_ == Tool::Fix;
+    if (one) picks_.clear();
+    double x = 0, y = 0;
+    if (h.kind == Hit::Point) {
+      x = sk_.points[h.index].x;
+      y = sk_.points[h.index].y;
+    }
+    picks_.push_back({h, x, y});
+    const auto before = sk_.constraints.size();
+    evaluateConstraintPicks();
+    if (sk_.constraints.size() > before) ++applied;
+  }
+  if (applied > 0 && picks_.empty()) {
+    // Done: back to selecting, as the familiar tool does.
+    QTimer::singleShot(0, this, [this] { setTool(Tool::Select); });
+  }
+}
+
+void SketchEditor::evaluateConstraintPicks() {
+  if (picks_.empty()) return;
   auto isLine = [&](const Hit& p) { return p.kind == Hit::Entity && sk_.entities[p.index].type == EntityType::Line; };
   auto isRound = [&](const Hit& p) { return p.kind == Hit::Entity && sketch::isRound(sk_.entities[p.index].type); };
   auto done = [&](std::vector<Constraint> cs) {
@@ -2218,6 +2267,34 @@ bool SketchEditor::submitValue(const QString& text) {
   if (!valueBox_) return false;
   valueBox_->setText(text);
   emit valueBox_->returnPressed();
+  return true;
+}
+
+bool SketchEditor::toggleSelectedConstruction() {
+  std::vector<int> ents;
+  for (const auto& h : selection_)
+    if (h.kind == Hit::Entity && !sk_.entities[h.index].projected) ents.push_back(h.index);
+  if (ents.empty()) return false;
+  checkpoint();
+  // All construction if any is normal, else all normal.
+  const bool make = std::any_of(ents.begin(), ents.end(), [&](int i) { return !sk_.entities[i].construction; });
+  for (int i : ents) sk_.entities[i].construction = make;
+  solveAndShow();
+  emit message(make ? tr("Changed to construction geometry.") : tr("Changed to normal geometry."));
+  return true;
+}
+
+bool SketchEditor::selectAt(const QPointF& widgetPos) {
+  double x, y;
+  if (!toSketch(widgetPos, x, y)) return !selection_.empty();
+  const Hit h = hitTest(x, y);
+  if (h.kind == Hit::None) return !selection_.empty();
+  const bool already = std::any_of(selection_.begin(), selection_.end(),
+                                   [&](const Hit& s) { return s.kind == h.kind && s.index == h.index; });
+  if (!already) {
+    selection_ = {h};
+    rebuild();
+  }
   return true;
 }
 

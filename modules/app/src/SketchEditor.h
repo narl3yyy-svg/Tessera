@@ -72,6 +72,13 @@ public:
   bool canUndo() const { return !undo_.empty(); }
   bool canRedo() const { return !redo_.empty(); }
   void deleteSelection();
+  // X / Normal-Construction with curves selected: flips those curves between
+  // normal and construction. False when no curve is selected.
+  bool toggleSelectedConstruction();
+  // Right-click: selects what is under the widget position if nothing
+  // selected is there (so the menu acts on it). True if anything is selected.
+  bool selectAt(const QPointF& widgetPos);
+  bool hasSelection() const { return !selection_.empty(); }
   // Esc: abandons the current drawing step, then the tool.
   void escape();
 
@@ -186,6 +193,10 @@ private:
   Pick pickPoint(double x, double y, int exclude = -1) const;
   void press(double x, double y, Qt::KeyboardModifiers mods, const QPointF& widgetPos);
   void constraintPick(double x, double y);
+  void evaluateConstraintPicks();
+  void applyToSelection(const std::vector<Hit>& selected);
+  static bool isConstraintTool(Tool t);
+  static bool snapsSuppressed();   // Ctrl held
   void dimensionPick(double x, double y, const QPointF& widgetPos);
   void askValue(const sketch::Constraint& c, const QPointF& widgetPos, int editIndex = -1);
   double currentValue(const sketch::Constraint& c) const;

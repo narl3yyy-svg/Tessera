@@ -44,7 +44,7 @@ MarkingMenu::MarkingMenu(std::vector<Item> ring, std::vector<Item> list, QWidget
     const QPoint c = centre_ + QPoint(static_cast<int>(std::lround(std::cos(a) * kRadius)),
                                       static_cast<int>(std::lround(std::sin(a) * kRadius)));
     auto* b = new QToolButton(this);
-    b->setObjectName(QStringLiteral("ring_") + ring_[i].text);
+    b->setObjectName(QStringLiteral("ring_") + QString(ring_[i].text).remove(QLatin1Char(' ')));
     b->setText(ring_[i].text);
     b->setIcon(ring_[i].icon);
     b->setIconSize(QSize(18, 18));
@@ -63,7 +63,7 @@ MarkingMenu::MarkingMenu(std::vector<Item> ring, std::vector<Item> list, QWidget
   int y = centre_.y() + kRadius + kButtonH / 2 + 12;
   for (const auto& it : list_) {
     auto* b = new QToolButton(this);
-    b->setObjectName(QStringLiteral("list_") + it.text);
+    b->setObjectName(QStringLiteral("list_") + QString(it.text).remove(QLatin1Char(' ')));
     b->setText(it.text);
     b->setIcon(it.icon);
     b->setIconSize(QSize(16, 16));

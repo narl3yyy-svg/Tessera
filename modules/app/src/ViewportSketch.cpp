@@ -1,5 +1,11 @@
 // Viewport: sketches, profiles, plane picking and the sketch-editor hooks.
 #include "Viewport.h"
+
+#include <limits>
+
+#include <gp_Lin.hxx>
+
+#include <IntCurvesFace_ShapeIntersector.hxx>
 #include "Theme.h"
 
 #include <AIS_Point.hxx>
@@ -502,19 +508,53 @@ bool Viewport::handlePickSelection() {
       emit statusMessage(tr("That face is not flat; pick a flat face or an origin plane."));
       return true;
     }
-    gp_Pln pln = surf.Plane();
-    gp_Ax3 frame = pln.Position();
-    // Outward normal: follow the face orientation.
-    if (face.Orientation() == TopAbs_REVERSED) frame = gp_Ax3(frame.Location(), frame.Direction().Reversed(), frame.XDirection());
-    // Put the sketch origin on the plane where the world origin projects.
-    const gp_Pnt o(0, 0, 0);
-    const gp_Vec d(frame.Location(), o);
-    const gp_Pnt proj = o.Translated(-gp_Vec(frame.Direction()) * d.Dot(gp_Vec(frame.Direction())));
-    frame.SetLocation(proj);
-    emit planePicked(QString::fromStdString(sketch::customPlaneSpec(frame)), tr("face"));
+    emit planePicked(faceSketchSpec(face), tr("face"));
     return true;
   }
   return false;
+}
+
+// The sketch plane of a flat face: outward normal, origin where the world
+// origin projects onto it. Empty for a curved face.
+QString Viewport::faceSketchSpec(const TopoDS_Face& face) {
+  BRepAdaptor_Surface surf(face, true);
+  if (surf.GetType() != GeomAbs_Plane) return {};
+  gp_Ax3 frame = surf.Plane().Position();
+  if (face.Orientation() == TopAbs_REVERSED) frame = gp_Ax3(frame.Location(), frame.Direction().Reversed(), frame.XDirection());
+  const gp_Pnt o(0, 0, 0);
+  const gp_Vec d(frame.Location(), o);
+  frame.SetLocation(o.Translated(-gp_Vec(frame.Direction()) * d.Dot(gp_Vec(frame.Direction()))));
+  return QString::fromStdString(sketch::customPlaneSpec(frame));
+}
+
+// The nearest face of a shown body under a widget position (a ray cast, so it
+// works whatever the selection mode).
+TopoDS_Face Viewport::faceAt(const QPointF& pos) const {
+  if (view_.IsNull()) return {};
+  const Graphic3d_Vec2i px = toPixels(pos);
+  Standard_Real x, y, z, vx, vy, vz;
+  view_->ConvertWithProj(px.x(), px.y(), x, y, z, vx, vy, vz);
+  const gp_Lin ray(gp_Pnt(x, y, z), gp_Dir(vx, vy, vz));
+  TopoDS_Face best;
+  double bestW = std::numeric_limits<double>::max();
+  for (const auto& b : bodies_) {
+    if (auto h = hidden_.find(b.name); h != hidden_.end() && h->second) continue;
+    IntCurvesFace_ShapeIntersector hit;
+    hit.Load(b.shape, 1e-6);
+    hit.Perform(ray, -1e9, 1e9);
+    if (!hit.IsDone()) continue;
+    for (int i = 1; i <= hit.NbPnt(); ++i)
+      if (hit.WParameter(i) < bestW) {
+        bestW = hit.WParameter(i);
+        best = hit.Face(i);
+      }
+  }
+  return best;
+}
+
+QString Viewport::sketchPlaneAt(const QPointF& pos) const {
+  const TopoDS_Face f = faceAt(pos);
+  return f.IsNull() ? QString() : faceSketchSpec(f);
 }
 
 } // namespace tsr::app

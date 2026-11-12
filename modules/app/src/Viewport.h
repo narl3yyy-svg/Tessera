@@ -16,6 +16,7 @@
 #include <V3d_Viewer.hxx>
 #include <Graphic3d_ClipPlane.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <TopoDS_Face.hxx>
 #include <gp.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Ax3.hxx>
@@ -97,7 +98,13 @@ public:
 
   // Layout grid spacing (cm) and snapping sketch points to it.
   void setGridSpacing(double cm);
-  double gridSpacing() const { return gridSpacing_; }
+  // The grid step in use (cm): with the adaptive grid (the default, as in the
+  // familiar tool) a 1-2-5 step that follows the zoom, else the fixed spacing.
+  // Grid snapping uses the same step.
+  double gridSpacing() const;
+  double fixedGridSpacing() const { return gridSpacing_; }
+  void setAdaptiveGrid(bool on);
+  bool adaptiveGrid() const { return adaptiveGrid_; }
   void setGridSnap(bool on) { gridSnap_ = on; }
   bool gridSnap() const { return gridSnap_; }
 
@@ -191,6 +198,11 @@ public:
   // A short instruction that follows the cursor ("Select sketch profiles or
   // planar faces to extrude"); empty hides it.
   void setCursorHint(const QString& text);
+  // The nearest shown body face under a widget position (null if none), and
+  // the sketch plane spec of a flat one there (empty if none or curved).
+  TopoDS_Face faceAt(const QPointF& pos) const;
+  QString sketchPlaneAt(const QPointF& pos) const;
+  static QString faceSketchSpec(const TopoDS_Face& face);
 
 signals:
   void profileClicked(const QString& sketch, int index);
@@ -288,6 +300,9 @@ private:
   ViewInteractor* interactor_ = nullptr;
 
   double gridSpacing_ = 1.0;
+  bool adaptiveGrid_ = true;
+  double appliedGridStep_ = 0;   // what the viewer's grid shows now
+  void updateGridStep();
   bool gridSnap_ = false;
   NavPreset navPreset_ = NavPreset::Fusion;
   bool reverseZoom_ = false;

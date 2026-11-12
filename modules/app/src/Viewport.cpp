@@ -27,6 +27,8 @@
 #include <QTimer>
 #include <QWheelEvent>
 
+#include <cmath>
+
 namespace tsr::app {
 
 namespace {
@@ -244,9 +246,39 @@ void Viewport::setNavigation(NavPreset preset, bool reverseZoom, bool constraine
 
 void Viewport::setGridSpacing(double cm) {
   gridSpacing_ = std::max(cm, 1e-4);
-  if (viewer_.IsNull()) return;
-  viewer_->SetRectangularGridValues(0, 0, gridSpacing_, gridSpacing_, 0);
-  viewer_->SetRectangularGridGraphicValues(gridSpacing_ * 25, gridSpacing_ * 25, 0);
+  updateGridStep();
+}
+
+void Viewport::setAdaptiveGrid(bool on) {
+  adaptiveGrid_ = on;
+  updateGridStep();
+}
+
+double Viewport::gridSpacing() const {
+  if (!adaptiveGrid_ || view_.IsNull() || !glReady_) return gridSpacing_;
+  // About 24 pixels per cell, rounded up to 1, 2 or 5 times a power of ten.
+  double want = 0;
+  try {
+    want = modelPerPixel() * 24;
+  } catch (const Standard_Failure&) {   // the window is not mapped yet
+    return gridSpacing_;
+  }
+  if (!(want > 0)) return gridSpacing_;
+  const double p = std::pow(10.0, std::floor(std::log10(want)));
+  for (double m : {1.0, 2.0, 5.0, 10.0})
+    if (m * p >= want * 0.999) return m * p;
+  return 10 * p;
+}
+
+void Viewport::updateGridStep() {
+  if (viewer_.IsNull() || !glReady_) return;
+  const double step = gridSpacing();
+  if (std::abs(step - appliedGridStep_) <= 1e-12 * std::max(1.0, step)) return;
+  appliedGridStep_ = step;
+  viewer_->SetRectangularGridValues(0, 0, step, step, 0);
+  // Fixed: 25 cells each way; adaptive: enough to fill the view.
+  const double half = step * (adaptiveGrid_ ? 120 : 25);
+  viewer_->SetRectangularGridGraphicValues(half, half, 0);
   redrawAll();
 }
 
@@ -395,6 +427,7 @@ void Viewport::paintEvent(QPaintEvent* e) {
 
 void Viewport::handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) {
   AIS_ViewController::handleViewRedraw(ctx, view);
+  if (adaptiveGrid_) updateGridStep();   // the zoom may have changed
   if (toAskNextFrame()) updateView(); // animation (ViewCube) in progress
 }
 

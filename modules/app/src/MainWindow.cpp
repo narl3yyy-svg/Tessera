@@ -704,7 +704,8 @@ void MainWindow::buildShortcuts() {
   auto* x = new QShortcut(QKeySequence(Qt::Key_X), this);
   x->setEnabled(false);
   connect(x, &QShortcut::activated, this, [this] {
-    if (editor_ && constructionButton_) constructionButton_->click();
+    // Selected curves flip; with none selected, X switches the drawing mode.
+    if (editor_ && !editor_->toggleSelectedConstruction() && constructionButton_) constructionButton_->click();
   });
   sketchShortcuts_.push_back(x);
   for (const auto& u : uiCommands_)
@@ -895,6 +896,9 @@ MarkingMenu* MainWindow::openMarkingMenu(const QPoint& globalPos) {
   std::vector<Item> ring, list;
   if (editor_) {
     using T = SketchEditor::Tool;
+    // Right-click on a curve, point or constraint acts on it (Delete,
+    // Normal / Construction), as in the familiar tool.
+    const bool picked = editor_->tool() == T::Select && editor_->selectAt(viewport_->mapFromGlobal(globalPos));
     auto tool = [this, &ui](const QString& text, const char* iconName, T t) {
       return ui(text, iconName, [this, t] {
         if (!editor_) return;
@@ -913,11 +917,13 @@ MarkingMenu* MainWindow::openMarkingMenu(const QPoint& globalPos) {
     list = {tool(tr("Arc"), "arc", T::Arc), tool(tr("Spline"), "spline", T::Spline), tool(tr("Fillet"), "sketch-fillet", T::Fillet),
             tool(tr("Mirror"), "sketch-mirror", T::Mirror),
             ui(tr("Normal / Construction"), "construction", [this] {
-              if (editor_) editor_->setConstruction(!editor_->construction());
+              if (!editor_) return;
+              if (!editor_->toggleSelectedConstruction()) editor_->setConstruction(!editor_->construction());
               syncSketchTools();
             }),
             ui(tr("Look At"), "look-at", [this] { if (editor_) viewport_->lookAt(editor_->frame()); }),
             ui(tr("Cancel Sketch"), "undo", [this] { QTimer::singleShot(0, this, [this] { cancelSketch(); }); })};
+    if (picked) list.insert(list.begin(), ui(tr("Delete"), "remove", [this] { if (editor_) editor_->deleteSelection(); }));
   } else if (active_) {
     QPointer<CommandDialog> dlg = active_;
     ring = {ui(tr("OK"), "finish", [dlg] { if (dlg) dlg->accept(); }), {}, {}, {}, ui(tr("Cancel"), "undo", [dlg] { if (dlg) dlg->reject(); })};
@@ -928,11 +934,17 @@ MarkingMenu* MainWindow::openMarkingMenu(const QPoint& globalPos) {
         const QString id = lastCommand_;
         repeat = {tr("Repeat %1").arg(qs(c->def().name)), icon(qs(c->def().icon)), [this, id] { startCommand(id); }};
       }
+    // Over a flat face, Create Sketch sketches right on it.
+    const QString facePlane = viewport_->sketchPlaneAt(viewport_->mapFromGlobal(globalPos));
     ring = {repeat,
             ui(tr("Undo"), "undo", [this] { session_.undo(); }, session_.document().canUndo()),
             cmd(doc::kCmdPressPull),
             cmd(doc::kCmdHole),
-            ui(tr("Create Sketch"), "sketch", [this] { beginSketch(); }),
+            ui(tr("Create Sketch"), "sketch",
+               [this, facePlane] {
+                 if (facePlane.isEmpty()) beginSketch();
+                 else if (startSketch(facePlane)) statusBar()->showMessage(tr("Sketching on the face."), 3000);
+               }),
             cmd(doc::kCmdExtrude),
             cmd(doc::kCmdFillet),
             cmd(doc::kCmdMove)};

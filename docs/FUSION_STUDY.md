@@ -8,20 +8,20 @@ behaviours found there that Tessera does not match yet. Each finding moves to `d
 
 | # | Video | Studied |
 |---|---|---|
-| 1 | https://www.youtube.com/watch?v=d3qGQ2utl2A | |
-| 2 | https://www.youtube.com/watch?v=DfAfxae8aRc | |
-| 3 | https://www.youtube.com/watch?v=ZReXmjT42DM | |
-| 4 | https://www.youtube.com/watch?v=9Y-3W-Pr64U | |
-| 5 | https://www.youtube.com/watch?v=zN44hW9zX1I | |
-| 6 | https://www.youtube.com/watch?v=AfeCRrYsAys | |
-| 7 | https://www.youtube.com/watch?v=Mv54UfwYYos | |
-| 8 | https://www.youtube.com/watch?v=o5rcAv7xVUo | |
-| 9 | https://www.youtube.com/watch?v=2YaMulL4dZY | |
-| 10 | https://www.youtube.com/watch?v=BUH3WiUjMXw | |
+| 1 | https://www.youtube.com/watch?v=d3qGQ2utl2A || transcript |
+| 2 | https://www.youtube.com/watch?v=DfAfxae8aRc || transcript |
+| 3 | https://www.youtube.com/watch?v=ZReXmjT42DM || transcript |
+| 4 | https://www.youtube.com/watch?v=9Y-3W-Pr64U || transcript |
+| 5 | https://www.youtube.com/watch?v=zN44hW9zX1I || transcript |
+| 6 | https://www.youtube.com/watch?v=AfeCRrYsAys || transcript |
+| 7 | https://www.youtube.com/watch?v=Mv54UfwYYos || transcript |
+| 8 | https://www.youtube.com/watch?v=o5rcAv7xVUo || transcript |
+| 9 | https://www.youtube.com/watch?v=2YaMulL4dZY || transcript |
+| 10 | https://www.youtube.com/watch?v=BUH3WiUjMXw || transcript |
 | 11 | https://www.youtube.com/watch?v=pa6VWGFoZ2Q | |
 | 12 | https://www.youtube.com/watch?v=J3rPwne4lWY | |
 | 13 | https://www.youtube.com/watch?v=zLL6foqTdJg | |
-| 14 | https://www.youtube.com/watch?v=xmAGzRBDccs | |
+| 14 | https://www.youtube.com/watch?v=xmAGzRBDccs || transcript |
 | 15 | https://www.youtube.com/watch?v=QnDJl9W5Uso | |
 | 16 | https://www.youtube.com/watch?v=vr_zPVEsyjs | |
 | 17 | https://www.youtube.com/watch?v=DJULiA1aTtM | |
@@ -36,7 +36,7 @@ behaviours found there that Tessera does not match yet. Each finding moves to `d
 | 26 | https://www.youtube.com/watch?v=ShmSm9vjKpI | |
 | 27 | https://www.youtube.com/watch?v=NweBvuVYuQo | |
 | 28 | https://www.youtube.com/watch?v=ePEypa1kB-g | |
-| 29 | Playlist: https://www.youtube.com/playlist?list=PLLm7Yjr9z_z07ohtjFGkA5w-j_NMj8B3J (every video) | |
+| 29 | Playlist: https://www.youtube.com/playlist?list=PLLm7Yjr9z_z07ohtjFGkA5w-j_NMj8B3J (every video) | all 40 transcripts fetched; lessons 3, 8, 9 read |
 | 30 | Autodesk tutorial index: https://www.autodesk.com/solutions/design-manufacturing/fusion-tutorials | |
 
 ## Known differences still to build
@@ -75,4 +75,44 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ## Findings from the videos
 
-(added as each video is studied)
+Gathered from the captions (the narrators describe each click); `[x]` is built and tested in Tessera.
+
+### Sketch
+- [x] Holding Ctrl while sketching turns off snapping and automatic constraints (Day 14).
+- [x] Select geometry first (Shift adds), then press a constraint: it applies to the selection and the tool ends (Day 14).
+- [x] Right-click a curve, point or constraint: Delete; Normal / Construction toggles the curve (Day 14).
+- [x] X turns the selected curves into construction (or back); with nothing selected it switches the drawing mode (Days 1, 14).
+- [x] The grid adapts to the zoom and snapping follows it (Snap is on by default).
+- [x] Double-click ends a line chain but keeps the Line tool (Day 14).
+- [ ] P is Project / Include in the sketch (Tessera: Point); A is Appearance (Tessera: Arc in the sketch). Project picks body edges and points into the sketch (Days 6, 7, 10).
+- [ ] Intersect (Project / Include menu) puts body edges that cross the sketch plane into it (Days 4, 7).
+- [ ] Dragging a circle centre onto a line midpoint (triangle glyph) adds the midpoint constraint on release (Day 14).
+- [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
+- [ ] Fully defined sketch: curves turn black and the sketch shows a lock icon in the Browser (Days 6, 7, 8).
+- [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); 3-point arc; Centerline linetype (Day 8).
+- [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
+- [ ] Dimension: where the cursor is dragged decides horizontal / vertical / aligned; dimensions can be named d1, d2 ... and used in others (Days 5, 8).
+
+### Solid
+- [x] Rectangular / Circular Pattern of Features picked in the timeline, Extent / Spacing, a drag arrow per direction (Days 1, 5, 8).
+- [x] Right-click a flat face > Create Sketch sketches on that face (Days 1, 5, 7).
+- [x] Two Sides extrude: an arrow per side.
+- [ ] Pattern directions picked as model edges, and an arrow drag before typing values (Day 1).
+- [ ] Right-click an origin plane in the Browser > Create Sketch (Days 2, 3, 6).
+- [ ] Thread: Full Length on by default; off gives a length arrow and an offset arrow (Days 4, 9); Modeled checkbox.
+- [ ] Hole: click a face, then drag the hole centre; it snaps to circle centres (Day 6).
+- [ ] Chamfer types: Equal Distance, Two Distances, Distance and Angle (Day 8).
+- [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).
+- [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).
+- [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
+- [ ] Click and hold on overlapping geometry opens a "select other" list (Day 6).
+- [ ] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
+- [ ] V hides / shows the selected item (Day 6); Shift-click a range of bodies in the Browser (Day 7).
+- [ ] Appearance (A): drag a material onto a body or onto selected faces (Days 2, 7, 9).
+- [ ] Insert > Canvas (reference image) with Calibrate (Day 2).
+- [ ] Capture Design History on an imported STEP file; Create Components from Bodies (Day 10).
+
+### Interface
+- [x] Marking menu changes with what is under the cursor (Lesson 3).
+- [ ] Pin to Toolbar: the ⋮ beside a menu entry adds it to the ribbon (Lesson 3).
+- [ ] Rename a sketch or body in the Browser: click once to select, again to edit (Days 3, 6).

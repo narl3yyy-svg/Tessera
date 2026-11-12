@@ -1,0 +1,45 @@
+# Live: right-click the box's top face > Create Sketch sketches on it; Ctrl
+# held while drawing turns off snapping and automatic constraints; select two
+# lines then Parallel; right-click a line > Delete; X on a selected line.
+# Points are on even millimetres (the adaptive grid snaps to 2 mm at this zoom)
+# and left of the Sketch Palette, which covers the right of the canvas.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.1 0.9
+wrclick 20 15 20             # top face of the box
+waitfor ring_CreateSketch
+click ring_CreateSketch
+waitfor sketch.line
+wait 500
+click sketch.line
+hold ctrl
+sclick 8 24
+sclick 28 24.6                # nearly level, but Ctrl: no Horizontal
+release ctrl
+key Escape
+sclick 8 14
+sclick 24 20
+key Escape
+sclick 8 6
+sclick 24 10
+key Escape
+sclick 12 12
+sclick 18 12                  # level: gets Horizontal (deleted below)
+key Escape
+key Escape                    # back to selecting
+sclick 16 17
+key x                         # the selected line becomes construction
+wait 300
+sclick 16 17
+hold shift
+sclick 16 8
+release shift
+click sketch.c-parallel
+wait 400
+srclick 15 12
+waitfor list_Delete
+click list_Delete
+wait 300
+shot /tmp/live_sketch_habits.png
+click palette.finish
+wait 800

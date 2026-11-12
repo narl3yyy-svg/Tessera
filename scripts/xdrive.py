@@ -26,6 +26,9 @@ Script lines (blank lines and # comments ignored):
   a2drag DX DY               drag the second arrow (Two Sides extrude)
   tclick NAME                click a feature in the timeline
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
+  hold KEY / release KEY     keep a key down (ctrl, shift, alt or a key name) / let it go
+  srclick X Y                right-click sketch coordinates (mm)
+  wrclick X Y Z              right-click a world point (mm)
   type TEXT                  type text (rest of the line)
   shot FILE                  ask the app to save a screenshot to FILE
   expect NAME                fail unless widget NAME is visible
@@ -201,6 +204,20 @@ def main():
                 time.sleep(0.1)
             p = geometry()["planes"][a[0]]
             click(p[0], p[1])
+        elif cmd in ("hold", "release"):
+            xtst.XTestFakeKeyEvent(dpy, keycode(MODS.get(a[0], a[0])), 1 if cmd == "hold" else 0, 0)
+            x11.XFlush(dpy)
+            time.sleep(0.15)
+        elif cmd == "srclick":
+            move(*sketch_point(float(a[0]), float(a[1])))
+            button(True, 3)
+            button(False, 3)
+            time.sleep(0.3)
+        elif cmd == "wrclick":
+            move(*world_point(float(a[0]), float(a[1]), float(a[2])))
+            button(True, 3)
+            button(False, 3)
+            time.sleep(0.3)
         elif cmd == "vrclick":
             x, y = canvas(float(a[0]), float(a[1]))
             move(x, y)

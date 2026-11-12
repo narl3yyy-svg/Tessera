@@ -555,6 +555,7 @@ void MainWindow::applyPreferences() {
                            s.value(QStringLiteral("nav/perspective"), false).toBool());
   viewport_->setGridSpacing(s.value(QStringLiteral("grid/spacing"), 1.0).toDouble());
   viewport_->setGridSnap(s.value(QStringLiteral("grid/snap"), true).toBool());
+  viewport_->setAdaptiveGrid(s.value(QStringLiteral("grid/adaptive"), true).toBool());
 }
 
 void MainWindow::showPreferences() {
@@ -612,8 +613,17 @@ void MainWindow::showPreferences() {
 
 void MainWindow::gridSettings() {
   bool ok = false;
+  // Adaptive (follows the zoom, the default) or a fixed spacing.
+  const QStringList kinds{tr("Adaptive"), tr("Fixed")};
+  const QString kind = QInputDialog::getItem(this, tr("Grid Settings"), tr("Grid:"), kinds,
+                                             viewport_->adaptiveGrid() ? 0 : 1, false, &ok);
+  if (!ok) return;
+  const bool adaptive = kind == kinds[0];
+  QSettings().setValue(QStringLiteral("grid/adaptive"), adaptive);
+  viewport_->setAdaptiveGrid(adaptive);
+  if (adaptive) return;
   const Unit u = lengthUnit();
-  const double current = fromInternal(viewport_->gridSpacing(), u);
+  const double current = fromInternal(viewport_->fixedGridSpacing(), u);
   const double v = QInputDialog::getDouble(this, tr("Grid Settings"), tr("Grid spacing (%1):").arg(qs(std::string(unitSymbol(u)))),
                                            current, 0.001, 100000, u == Unit::Inch ? 4 : 3, &ok);
   if (!ok) return;
