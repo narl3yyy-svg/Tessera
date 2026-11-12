@@ -8,6 +8,13 @@
 #include "tsr/sketch/SketchOps.h"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRep_Tool.hxx>
+#include <TopExp.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopoDS_Edge.hxx>
+#include <gp_Circ.hxx>
+#include <gp_Pln.hxx>
 #include <BRep_Builder.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
@@ -100,6 +107,7 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
   res_ = sketch::solve(sk_);
   view_->setInteractor(this);
   view_->setGridPlane(frame_);
+  collectBodyEdges();
   // Frame the existing geometry (a new sketch keeps the current zoom).
   if (sk_.points.size() > 1) {
     double x0 = 0, y0 = 0, x1 = 0, y1 = 0;
@@ -304,23 +312,267 @@ QString SketchEditor::lengthText(double cm) const {
 }
 
 SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) const {
+  const Snap s = snapAt(x, y, exclude);
   Pick p;
-  snapToGrid(x, y);
-  p.x = x;
-  p.y = y;
-  const int s = snapPoint(x, y, exclude);
-  if (s >= 0) {
-    p.hit = {Hit::Point, s};
-    p.x = sk_.points[s].x;
-    p.y = sk_.points[s].y;
-  }
+  p.x = s.x;
+  p.y = s.y;
+  if (s.kind == Snap::Point) p.hit = {Hit::Point, s.point};
+  if (s.kind == Snap::OnCurve) p.onEntity = s.entity;
+  if (s.kind == Snap::Midpoint) p.midpointOf = s.entity;
   return p;
 }
 
 int SketchEditor::materialize(const Pick& p) {
   if (p.hit.kind == Hit::Point && p.hit.index >= 0 && p.hit.index < static_cast<int>(sk_.points.size()))
     return p.hit.index;
-  return sk_.addPoint(p.x, p.y);
+  const int pt = sk_.addPoint(p.x, p.y);
+  // Snapped onto a curve or a line's middle: keep it there.
+  if (p.onEntity >= 0 && p.onEntity < static_cast<int>(sk_.entities.size()) &&
+      sk_.entities[p.onEntity].type != EntityType::Spline)
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {p.onEntity}});
+  if (p.midpointOf >= 0 && p.midpointOf < static_cast<int>(sk_.entities.size()))
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Midpoint, {pt}, {p.midpointOf}});
+  return pt;
+}
+
+void SketchEditor::collectBodyEdges() {
+  bodyEdges_ = {};
+  const gp_Pln pln(frame_);
+  auto inPlane = [&](const gp_Pnt& p) { return pln.Distance(p) < 1e-6; };
+  for (const auto& b : session_.document().bodies()) {
+    TopTools_IndexedMapOfShape edges;
+    TopExp::MapShapes(b.shape, TopAbs_EDGE, edges);
+    for (int i = 1; i <= edges.Extent(); ++i) {
+      const TopoDS_Edge e = TopoDS::Edge(edges(i));
+      if (BRep_Tool::Degenerated(e)) continue;
+      BRepAdaptor_Curve c(e);
+      const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+      const gp_Pnt p0 = c.Value(t0), p1 = c.Value(t1), pm = c.Value((t0 + t1) / 2);
+      if (!inPlane(p0) || !inPlane(p1) || !inPlane(pm)) continue;
+      double x0, y0, x1, y1;
+      sketch::toSketch(frame_, p0, x0, y0);
+      sketch::toSketch(frame_, p1, x1, y1);
+      if (c.GetType() == GeomAbs_Line) {
+        bodyEdges_.segments.push_back({x0, y0, x1, y1});
+      } else if (c.GetType() == GeomAbs_Circle) {
+        const gp_Circ circ = c.Circle();
+        double cx, cy;
+        sketch::toSketch(frame_, circ.Location(), cx, cy);
+        const bool full = p0.Distance(p1) < 1e-7;
+        double a0 = std::atan2(y0 - cy, x0 - cx), am = 0, xm, ym;
+        sketch::toSketch(frame_, pm, xm, ym);
+        am = std::atan2(ym - cy, xm - cx);
+        // Sweep from the start through the middle point.
+        double sweep = 2 * kPi;
+        if (!full) {
+          const double a1 = std::atan2(y1 - cy, x1 - cx);
+          double s1 = a1 - a0, sm = am - a0;
+          while (s1 <= 0) s1 += 2 * kPi;
+          while (sm <= 0) sm += 2 * kPi;
+          sweep = sm < s1 ? s1 : s1 - 2 * kPi;
+        }
+        bodyEdges_.arcs.push_back({cx, cy, circ.Radius(), a0, sweep});
+        bodyEdges_.vertices.emplace_back(cx, cy);   // centres snap too
+      } else {
+        continue;
+      }
+      bodyEdges_.vertices.emplace_back(x0, y0);
+      bodyEdges_.vertices.emplace_back(x1, y1);
+    }
+  }
+}
+
+SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
+  Snap s;
+  s.x = x;
+  s.y = y;
+  const double tol = tolerance();
+  // 1. Existing sketch points (ends, centres, the origin).
+  if (const int p = snapPoint(x, y, exclude); p >= 0) {
+    s.kind = Snap::Point;
+    s.point = p;
+    s.x = sk_.points[p].x;
+    s.y = sk_.points[p].y;
+    return s;
+  }
+  // 2. Line midpoints.
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    const auto& e = sk_.entities[i];
+    if (e.type != EntityType::Line || e.a == exclude || e.b == exclude) continue;
+    const double mx = (sk_.points[e.a].x + sk_.points[e.b].x) / 2, my = (sk_.points[e.a].y + sk_.points[e.b].y) / 2;
+    if (std::hypot(mx - x, my - y) < tol) {
+      s.kind = Snap::Midpoint;
+      s.entity = i;
+      s.x = mx;
+      s.y = my;
+      return s;
+    }
+  }
+  // 3. Body vertices lying in the sketch plane.
+  for (const auto& [vx, vy] : bodyEdges_.vertices)
+    if (std::hypot(vx - x, vy - y) < tol) {
+      s.kind = Snap::BodyVertex;
+      s.x = vx;
+      s.y = vy;
+      return s;
+    }
+  // 4. On a sketch curve (nearest point).
+  double best = tol;
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    const auto& e = sk_.entities[i];
+    if (e.type == EntityType::Spline || e.a == exclude || e.b == exclude) continue;
+    double px, py;
+    if (e.type == EntityType::Line) {
+      const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
+      const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+      if (l2 < 1e-18) continue;
+      const double t = std::clamp(((x - a.x) * dx + (y - a.y) * dy) / l2, 0.0, 1.0);
+      px = a.x + t * dx;
+      py = a.y + t * dy;
+    } else {
+      const auto& c = sk_.points[e.center];
+      const double d = std::hypot(x - c.x, y - c.y);
+      if (d < 1e-12) continue;
+      px = c.x + (x - c.x) / d * e.radius;
+      py = c.y + (y - c.y) / d * e.radius;
+      if (e.type == EntityType::Arc) {
+        const auto &st = sk_.points[e.a], &en = sk_.points[e.b];
+        if (!angleInArc(std::atan2(py - c.y, px - c.x), std::atan2(st.y - c.y, st.x - c.x), std::atan2(en.y - c.y, en.x - c.x)))
+          continue;
+      }
+    }
+    const double d = std::hypot(px - x, py - y);
+    if (d < best) {
+      best = d;
+      s.kind = Snap::OnCurve;
+      s.entity = i;
+      s.x = px;
+      s.y = py;
+    }
+  }
+  if (s.kind == Snap::OnCurve) return s;
+  // 5. On a body edge lying in the sketch plane.
+  for (const auto& g : bodyEdges_.segments) {
+    const double dx = g[2] - g[0], dy = g[3] - g[1], l2 = dx * dx + dy * dy;
+    if (l2 < 1e-18) continue;
+    const double t = std::clamp(((x - g[0]) * dx + (y - g[1]) * dy) / l2, 0.0, 1.0);
+    const double px = g[0] + t * dx, py = g[1] + t * dy, d = std::hypot(px - x, py - y);
+    if (d < best) {
+      best = d;
+      s.kind = Snap::BodyEdge;
+      s.x = px;
+      s.y = py;
+    }
+  }
+  for (const auto& g : bodyEdges_.arcs) {
+    const double d0 = std::hypot(x - g[0], y - g[1]);
+    if (d0 < 1e-12) continue;
+    double ang = std::atan2(y - g[1], x - g[0]) - g[3];
+    if (g[4] > 0) { while (ang < 0) ang += 2 * kPi; if (ang > g[4] + 1e-9) continue; }
+    else { while (ang > 0) ang -= 2 * kPi; if (ang < g[4] - 1e-9) continue; }
+    const double d = std::abs(d0 - g[2]);
+    if (d < best) {
+      best = d;
+      s.kind = Snap::BodyEdge;
+      s.x = g[0] + (x - g[0]) / d0 * g[2];
+      s.y = g[1] + (y - g[1]) / d0 * g[2];
+    }
+  }
+  if (s.kind == Snap::BodyEdge) return s;
+  // 6. Inference: horizontal / vertical from the previous point (lines),
+  //    then lined up with any other point. Each axis snaps on its own.
+  bool snappedX = false, snappedY = false;
+  if (!steps_.empty() && (tool_ == Tool::Line || tool_ == Tool::Spline)) {
+    const Pick& from = steps_.back();
+    s.fromX = from.x;
+    s.fromY = from.y;
+    if (std::abs(y - from.y) < tol && std::abs(x - from.x) > tol) {
+      s.y = from.y;
+      s.horizontal = snappedY = true;
+    } else if (std::abs(x - from.x) < tol && std::abs(y - from.y) > tol) {
+      s.x = from.x;
+      s.vertical = snappedX = true;
+    }
+  }
+  double bx = tol, by = tol;
+  for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {
+    if (i == exclude) continue;
+    const auto& p = sk_.points[i];
+    if (!snappedX && std::abs(p.x - x) < bx) {
+      bx = std::abs(p.x - x);
+      s.alignX = i;
+    }
+    if (!snappedY && std::abs(p.y - y) < by) {
+      by = std::abs(p.y - y);
+      s.alignY = i;
+    }
+  }
+  if (s.alignX >= 0) {
+    s.x = sk_.points[s.alignX].x;
+    snappedX = true;
+  }
+  if (s.alignY >= 0) {
+    s.y = sk_.points[s.alignY].y;
+    snappedY = true;
+  }
+  // 7. The grid, for whatever is still free.
+  if (view_ && view_->gridSnap() && view_->gridSpacing() > 0) {
+    const double g = view_->gridSpacing();
+    if (!snappedX) s.x = std::round(x / g) * g;
+    if (!snappedY) s.y = std::round(y / g) * g;
+    if (!snappedX || !snappedY) s.kind = Snap::Grid;
+  }
+  return s;
+}
+
+void SketchEditor::showSnap(const Snap& s) {
+  if (!view_) return;
+  const auto& ctx = view_->aisContext();
+  if (ctx.IsNull()) return;
+  const double px = view_->modelPerPixel();
+  // Guide lines: dashed from the previous point (H/V), dotted from aligned points.
+  sketch::Sketch guides;
+  if (s.horizontal || s.vertical) guides.addLine(s.fromX, s.fromY, s.x, s.y);
+  if (s.alignX >= 0) guides.addLine(sk_.points[s.alignX].x, sk_.points[s.alignX].y, s.x, s.y);
+  if (s.alignY >= 0) guides.addLine(sk_.points[s.alignY].x, sk_.points[s.alignY].y, s.x, s.y);
+  const TopoDS_Shape gs = sketch::curves(guides, frame_, false);
+  if (!gs.IsNull() && TopExp_Explorer(gs, TopAbs_EDGE).More()) {
+    Handle(AIS_Shape) g = wire(gs, Quantity_Color(0.55, 0.85, 0.22, Quantity_TOC_sRGB), 1.0, Aspect_TOL_DOT);
+    ctx->Display(g, AIS_WireFrame, -1, false);
+    ctx->SetZLayer(g, Graphic3d_ZLayerId_Topmost);
+    preview_.push_back(g);
+  }
+  // A marker where the cursor will land, and what it snapped to.
+  QString glyph;
+  switch (s.kind) {
+    case Snap::Point: glyph = QStringLiteral("■"); break;           // black square: on a point
+    case Snap::Midpoint: glyph = QStringLiteral("△"); break;        // triangle: midpoint
+    case Snap::OnCurve: glyph = QStringLiteral("○"); break;         // circle: on the curve
+    case Snap::BodyVertex: glyph = QStringLiteral("◆"); break;      // diamond: body vertex
+    case Snap::BodyEdge: glyph = QStringLiteral("◇"); break;        // hollow diamond: body edge
+    default: break;
+  }
+  if (s.horizontal) glyph += QStringLiteral(" H");
+  if (s.vertical) glyph += QStringLiteral(" V");
+  if (s.kind == Snap::Free || s.kind == Snap::Grid) {
+    if (glyph.isEmpty() && s.alignX < 0 && s.alignY < 0 && s.kind == Snap::Free) return;
+  }
+  Handle(AIS_Point) m = new AIS_Point(new Geom_CartesianPoint(sketch::toWorld(frame_, s.x, s.y)));
+  const Quantity_Color c = s.kind == Snap::Free || s.kind == Snap::Grid ? kPreview : kHover;
+  m->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_O_POINT, c, 2.0));
+  ctx->Display(m, 0, -1, false);
+  ctx->SetZLayer(m, Graphic3d_ZLayerId_Topmost);
+  preview_.push_back(m);
+  if (!glyph.isEmpty()) {
+    Handle(AIS_TextLabel) t = new AIS_TextLabel();
+    t->SetText(ext(glyph));
+    t->SetPosition(sketch::toWorld(frame_, s.x + px * 12, s.y + px * 12));
+    t->SetHeight(13);
+    t->SetColor(kHover);
+    ctx->Display(t, 0, -1, false);
+    ctx->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
+    preview_.push_back(t);
+  }
 }
 
 SketchEditor::Hit SketchEditor::hitEntity(double x, double y) const {
@@ -709,9 +961,10 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       return;
     }
     case Tool::Point: {
-      if (snapPoint(x, y) >= 0) return;
+      const Pick p = pickPoint(x, y);
+      if (p.hit.kind == Hit::Point) return;
       checkpoint();
-      sk_.addPoint(x, y);
+      (void)materialize(p);
       solveAndShow();
       return;
     }
@@ -1886,6 +2139,10 @@ void SketchEditor::clearPreview() {
 
 void SketchEditor::updatePreview(double x, double y) {
   clearPreview();
+  const bool drawing = tool_ == Tool::Line || tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle ||
+                       tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
+                       tool_ == Tool::Slot || tool_ == Tool::Spline;
+  if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (!view_ || steps_.empty()) {
     if (view_) view_->redraw();
     return;

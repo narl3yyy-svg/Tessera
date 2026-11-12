@@ -15,6 +15,8 @@
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <QButtonGroup>
+
+#include <algorithm>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -379,6 +381,10 @@ void MainWindow::updateEdgePicking() {
 
 void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
   if (!active_) return;
+  if (std::find(bodiesBeforeCommand_.begin(), bodiesBeforeCommand_.end(), body.toStdString()) == bodiesBeforeCommand_.end()) {
+    statusBar()->showMessage(tr("That is the preview of this command; pick a face or edge of an existing body."), 4000);
+    return;
+  }
   if (edge.ShapeType() == TopAbs_VERTEX) {
     if (!active_->hasVerticesInput()) return;
     QStringList refs = active_->currentVertices().split(QLatin1Char(';'), Qt::SkipEmptyParts);

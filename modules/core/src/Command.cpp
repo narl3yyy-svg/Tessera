@@ -180,6 +180,8 @@ std::string CommandSession::validate() {
     return cmd_.validate(inputs_, ctx_);
   } catch (const std::exception& e) {
     return e.what();
+  } catch (...) {
+    return cmd_.def().name + ": the geometry kernel failed on these inputs";
   }
 }
 
@@ -209,6 +211,10 @@ std::string CommandSession::applyInTransaction(const std::string& name) {
   } catch (const std::exception& e) {
     ctx_.abortTransaction();
     return e.what();
+  } catch (...) {
+    // e.g. an OCCT Standard_Failure, which is not a std::exception
+    ctx_.abortTransaction();
+    return cmd_.def().name + ": the geometry kernel failed on these inputs";
   }
   return {};
 }

@@ -31,7 +31,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P2-4 | ~~Dimension values are numbers only~~ Closed: sketch dimensions and size boxes take expressions; a dimension keeps its expression and follows parameter changes (size boxes use the value once) | | closed (P5) |
 | P2-5 | Extrude extents: distance only (one side / symmetric); no To Object, All, taper or thin | P2 scope | P3 |
 | P2-6 | Dimensions show as value labels without arrows/extension lines; constraint glyphs are letters | P2 scope | R2 |
-| P2-7 | While drawing, snapping is to points only (no automatic point-on-curve, tangent or perpendicular inference) | P2 scope | P3 |
+| P2-7 | ~~Snapping to points only~~ Partly closed: drawing snaps to points, line midpoints, curves (with a point-on-curve constraint), body vertices and edges in the sketch plane, horizontal/vertical from the previous point, alignment with other points, and the grid (on by default). Still missing: tangent / perpendicular inference, click-and-drag from a line end for a tangent arc, and body edges are snapped to but not projected into the sketch | P2 scope | P11 |
 | P2-8 | The constraint solver is our own Gauss-Newton solver, not planegcs; very large sketches (hundreds of entities) will be slow | Avoids an extra dependency; numeric Jacobian | when needed |
 | P3-1 | Fillet/chamfer edges are found again on replay by a signature (curve type, direction, adjacent face normals, position relative to the body's bounding box), not by full topological naming; big changes can pick a different edge or report it missing | Real topological naming is a larger project | P3 (topological naming) |
 | P3-2 | Fillet: constant radius only (no variable radius, setback or rule-based selection); Chamfer: equal distance only (no two-distance or distance-angle) | P3 scope | P4 |
@@ -45,7 +45,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P10-1 | Construction axes/points are chosen from a list in Revolve and Circular Pattern (not by clicking them in the canvas); no Axis Perpendicular at Point / to Face, Point Along Path, Tangent Plane or Plane Through Three Points yet; vertex picks are stored by position | P10 scope | later |
 | P8-4 | A ribbon wider than the window scrolls sideways with the mouse wheel; Fusion instead folds panels into their menus | Simpler | later |
 | P4-2 | ~~Split Body and Mirror use origin planes only~~ Closed: they take origin planes, construction planes or a picked flat face | | closed |
-| P4-3 | Section Analysis and the units choice for new designs are app settings; section analysis is not saved in the document | P4 scope | later |
+| P4-3 | Section Analysis is an app setting, not saved in the document; it starts from a clicked face or plane with a drag arrow for the depth and an angle field (no rotation ring in the canvas yet) | P4 scope | later |
 | P4-4 | Export writes mm for mesh and STEP/IGES files; F3D, IPT, SKP, SAT, DWG, USD are not available (proprietary or unsupported by the kernel) | Formats | accepted |
 | P4-5 | ASSEMBLE, CONFIGURE, CONSTRUCT and several INSPECT/INSERT entries, and the SURFACE/MESH/SHEET METAL/PLASTIC/MANAGE/UTILITIES tabs, are shown disabled | Not built yet | see ROADMAP.md |
 | P5-1 | Hole places holes at a sketch's points (not by clicking on a face); the direction is opposite the sketch plane's normal unless flipped | P5 scope | P6 (face point placement) |

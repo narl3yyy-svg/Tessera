@@ -19,6 +19,7 @@
 
 #include "tsr/core/Units.h"
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -115,7 +116,32 @@ private:
   struct Pick {
     Hit hit;
     double x = 0, y = 0;
+    int onEntity = -1;     // lands on this curve: a point-on-curve constraint is added
+    int midpointOf = -1;   // at this line's midpoint: a midpoint constraint is added
   };
+
+  // Where the cursor snaps while drawing, like the familiar sketcher:
+  // existing points, line midpoints, body vertices and edges lying in the
+  // sketch plane, curves, horizontal/vertical from the previous point,
+  // alignment with other points, then the grid.
+  struct Snap {
+    enum Kind { Free, Point, Midpoint, OnCurve, BodyVertex, BodyEdge, Grid } kind = Free;
+    double x = 0, y = 0;
+    int point = -1;
+    int entity = -1;
+    bool horizontal = false, vertical = false;   // H/V from the previous point
+    int alignX = -1, alignY = -1;                // lined up with these points
+    double fromX = 0, fromY = 0;                 // the previous point (for H/V guides)
+  };
+  Snap snapAt(double x, double y, int exclude = -1) const;
+  void showSnap(const Snap& s);
+  // Body geometry lying in the sketch plane (sketch coordinates).
+  struct PlaneEdges {
+    std::vector<std::pair<double, double>> vertices;
+    std::vector<std::array<double, 4>> segments;          // x1, y1, x2, y2
+    std::vector<std::array<double, 5>> arcs;              // cx, cy, r, a0, sweep (full circle: sweep 2*pi)
+  } bodyEdges_;
+  void collectBodyEdges();
 
   bool toSketch(const QPointF& pos, double& x, double& y) const;
   double tolerance() const;   // hit radius in sketch units

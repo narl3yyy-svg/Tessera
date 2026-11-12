@@ -92,6 +92,7 @@ std::vector<TopoDS_Shape> MainWindow::pickedFaces() const {
 }
 
 void MainWindow::updateDragArrow() {
+  if (sectionPanel_) return;   // Section Analysis drives the arrow itself
   auto off = [this] {
     arrowInput_.clear();
     viewport_->clearDragArrow();
@@ -154,6 +155,10 @@ void MainWindow::updateDragArrow() {
 }
 
 void MainWindow::onDragArrow(double value) {
+  if (sectionPanel_ && !sectionPicking_) {
+    emit sectionArrowMoved(value);
+    return;
+  }
   if (!active_ || arrowInput_.isEmpty()) return;
   const QString id = active_->commandId();
   // Fillet and chamfer sizes stay positive.

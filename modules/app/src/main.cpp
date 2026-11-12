@@ -38,6 +38,8 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     std::fprintf(stderr, "smoke: FAIL %s\n", what);
     return 1;
   };
+  // Exact positions in these steps: no grid snapping.
+  w.viewport()->setGridSnap(false);
   // Ribbon must expose every registered command.
   for (const tsr::Command* c : s.commands().all()) {
     const QString id = QString::fromStdString(c->def().id);
@@ -351,6 +353,64 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (ed->sketch().entities.back().type != tsr::sketch::EntityType::Spline || ed->sketch().entities.back().fit.size() != 3)
     return fail("spline");
   if (!w.finishSketch()) return fail("finish sketch with fillet/offset/spline");
+
+  // Line tool snapping: to a line's midpoint (with a midpoint constraint)
+  // and horizontal from the previous point.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Line);
+  ed->clickAt(0, 0);
+  ed->clickAt(4, 0);
+  ed->escape();
+  ed->clickAt(2.02, 0.01);   // near the middle of that line
+  ed->clickAt(2, 2);
+  ed->clickAt(4.5, 2.03);    // nearly level with the previous point
+  ed->escape();
+  {
+    const auto& sk = ed->sketch();
+    bool mid = false;
+    for (const auto& c : sk.constraints) mid = mid || c.type == tsr::sketch::ConstraintType::Midpoint;
+    if (!mid) return fail("line did not snap to the midpoint");
+    const auto& last = sk.entities.back();
+    if (std::abs(sk.points[last.a].y - sk.points[last.b].y) > 1e-9) return fail("line did not snap horizontal");
+  }
+  w.cancelSketch();
+
+  // Regression: picking a face of the extrude's own preview, then Two Sides
+  // and dragging, must not crash (the preview body is not a real body).
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Rectangle);
+  ed->clickAt(0, 0);
+  ed->clickAt(2, 1);
+  if (!w.finishSketch()) return fail("sketch for two-sided extrude");
+  {
+    auto* ex4 = w.startCommand(QStringLiteral("tsr.feature.extrude"));
+    if (!ex4 || s.document().bodies().size() != 1) return fail("extrude preview body");
+    TopoDS_Shape face;
+    for (TopExp_Explorer it(s.document().bodies().front().shape, TopAbs_FACE); it.More(); it.Next()) face = it.Current();
+    emit w.viewport()->subShapeClicked(QString::fromStdString(s.document().bodies().front().name), face);
+    QApplication::processEvents();
+    if (!ex4->currentFaces().isEmpty()) return fail("a face of the extrude's own preview was picked");
+    ex4->setInputForTest(QStringLiteral("direction"), QStringLiteral("Two Sides"));
+    w.viewport()->dragArrowForTest(1.5);
+    w.viewport()->dragArrowForTest(-1.0);   // past side 2: reported, not a crash
+    ex4->setInputForTest(QStringLiteral("distance2"), 5.0);   // panel units: mm
+    w.viewport()->dragArrowForTest(1.0);
+    ex4->accept();
+    QApplication::processEvents();
+    if (s.document().bodies().size() != 1 || std::abs(volume() - 2 * 1 * 1.5) > 1e-6) return fail("two-sided extrude volume");
+  }
+  // Section Analysis: pick a plane, then drag the arrow to set the depth.
+  w.openSectionAnalysis();
+  if (!w.sectionPanel()) return fail("section panel");
+  emit w.viewport()->planePicked(QStringLiteral("XY"), QStringLiteral("XY plane"));
+  if (!w.sectionActive() || !w.viewport()->dragArrowActive()) return fail("section after picking a plane");
+  w.viewport()->dragArrowForTest(0.5);
+  if (std::abs(w.sectionOffset() - 0.5) > 1e-9) return fail("section arrow did not move the plane");
+  w.sectionPanel()->accept();
+  QApplication::processEvents();
+  if (w.sectionPanel() || w.viewport()->dragArrowActive()) return fail("section panel close");
   std::puts("smoke: OK");
   return 0;
 }

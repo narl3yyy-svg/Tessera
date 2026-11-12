@@ -165,7 +165,15 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
   connect(viewport_, &Viewport::dragArrowMoved, this, &MainWindow::onDragArrow);
   connect(viewport_, &Viewport::dragArrowTyped, this, [this](const QString& text) {
-    if (active_ && !arrowInput_.isEmpty()) active_->setInputForTest(arrowInput_, text);
+    if (sectionPanel_ && !sectionPicking_) {
+      try {
+        emit sectionArrowMoved(session_.document().evaluate(text.toStdString(), Unit::Millimeter));
+      } catch (const std::exception& e) {
+        statusBar()->showMessage(QString::fromUtf8(e.what()), 4000);
+      }
+    } else if (active_ && !arrowInput_.isEmpty()) {
+      active_->setInputForTest(arrowInput_, text);
+    }
     viewport_->setFocus();
   });
   connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
@@ -173,6 +181,10 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     else onEdgeClicked(body, shape);
   });
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
+    if (sectionPanel_ && sectionPicking_) {
+      emit sectionPlanePicked(spec, label);
+      return;
+    }
     if (active_ && active_->hasPlaneInput()) {
       active_->pickPlane(spec, label);
       return;
@@ -742,6 +754,8 @@ CommandDialog* MainWindow::editFeature(int featureId) {
 }
 
 CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
+  bodiesBeforeCommand_.clear();
+  for (const auto& b : session_.document().bodies()) bodiesBeforeCommand_.push_back(b.name);
   auto* dlg = new CommandDialog(session_, std::move(cmd), this);
   dlg->setAttribute(Qt::WA_DeleteOnClose);
   // Command panels live inside the canvas, top right, like the familiar layout.

@@ -291,6 +291,11 @@ private:
   bool arrowMouseMove(QMouseEvent* e);
   bool arrowMouseRelease(QMouseEvent* e);
   QLabel* pickHint_ = nullptr;   // "Select a plane or planar face" beside the cursor
+  // While picking edges/faces/vertices: a bold highlight of the one under the cursor.
+  Handle(AIS_InteractiveObject) hoverObject_;
+  TopoDS_Shape hoverShape_;
+  void updateHoverHighlight(const QPointF& pos);
+  void clearHoverHighlight();
 };
 
 } // namespace tsr::app

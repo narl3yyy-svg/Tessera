@@ -2,11 +2,13 @@
 #include "tsr/api/PythonHost.h"
 #include "tsr/doc/Session.h"
 
+#include <QDialog>
 #include <QMainWindow>
 #include <QPointer>
 
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Ax3.hxx>
 #include <gp_Pln.hxx>
 
 #include "tsr/core/Units.h"
@@ -67,11 +69,20 @@ public:
   ParametersDialog* showParameters();
   SketchEditor* sketchEditor() const { return editor_; }
   SketchPalette* sketchPalette() const;
+  // Section Analysis (tests): the panel, and picking a plane as a click would.
+  QDialog* sectionPanel() const { return sectionPanel_; }
+  void openSectionAnalysis() { openSection(); }
+  bool sectionActive() const { return section_.active; }
+  double sectionOffset() const { return section_.offset; }
 
   QTabWidget* ribbon() const { return ribbon_; }
   QTreeWidget* browser() const { return browser_; }
   QListWidget* timeline() const { return timeline_; }
   Viewport* viewport() const { return viewport_; }
+
+signals:
+  void sectionPlanePicked(const QString& spec, const QString& label);
+  void sectionArrowMoved(double value);
 
 protected:
   void closeEvent(QCloseEvent* e) override;
@@ -125,6 +136,7 @@ private:
   void updateDragArrow();
   void onDragArrow(double value);
   QString arrowInput_;
+  std::vector<std::string> bodiesBeforeCommand_;   // real bodies when the open panel started
   std::vector<TopoDS_Shape> pickedFaces() const;   // the Real input the arrow drives, empty when none
   bool sketchVisible(const std::string& name) const;
   bool maybeSave();
@@ -169,10 +181,15 @@ private:
   struct SectionState {
     bool active = false;
     bool visible = true;
-    QString plane = QStringLiteral("XZ");
-    double offset = 0;
+    QString plane = QStringLiteral("XZ");   // origin plane, construction plane or custom:... (a picked face)
+    double offset = 0;                      // along the plane's normal
+    double angle = 0;                       // turned about the plane's X axis
     bool flip = false;
   } section_;
+  QPointer<QDialog> sectionPanel_;         // open Section Analysis panel
+  bool sectionPicking_ = false;            // waiting for a plane or face click
+  void updateSectionArrow();
+  gp_Ax3 sectionFrame() const;
   bool comShown_ = false;
   QLabel* unitsLabel_ = nullptr;
 };

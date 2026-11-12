@@ -891,6 +891,7 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
                        double startOffset) {
   if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");
   if (!(std::abs(forward + back) > 1e-9)) throw KernelError("extrude distance must not be zero");
+  if (back > 0 && forward + back <= 1e-9) throw KernelError("Extrude: the two sides overlap (side 1 goes past side 2)");
   const gp_Vec n = gp_Vec(dir.x, dir.y, dir.z).Normalized();
   TopoDS_Shape result;
   for (const TopoDS_Shape& f : faces) {
@@ -918,7 +919,9 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
       BRepPrimAPI_MakePrism mk(base, n * length);
       return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
     });
-    if (!isValid(solid)) throw KernelError("Extrude: the taper angle is too steep for this profile and distance");
+    if (!isValid(solid))
+      throw KernelError(std::abs(taper) > 1e-9 ? "Extrude: the taper angle is too steep for this profile and distance"
+                                               : "Extrude: could not build a solid from this profile");
     result = result.IsNull() ? solid : boolean(BooleanOp::Join, result, solid);
   }
   return result;

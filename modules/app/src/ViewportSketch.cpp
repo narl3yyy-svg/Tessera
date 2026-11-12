@@ -283,9 +283,53 @@ void Viewport::setPlanePicking(bool on) {
   redrawAll();
 }
 
+void Viewport::clearHoverHighlight() {
+  if (!hoverObject_.IsNull() && !context_.IsNull()) {
+    context_->Remove(hoverObject_, false);
+    redrawAll();
+  }
+  hoverObject_.Nullify();
+  hoverShape_.Nullify();
+}
+
+void Viewport::updateHoverHighlight(const QPointF& pos) {
+  if (context_.IsNull() || view_.IsNull() || !glReady_) return;
+  const Graphic3d_Vec2i px = toPixels(pos);
+  context_->MoveTo(px.x(), px.y(), view_, false);
+  TopoDS_Shape s;
+  if (context_->HasDetected()) {
+    const Handle(StdSelect_BRepOwner) owner = Handle(StdSelect_BRepOwner)::DownCast(context_->DetectedOwner());
+    if (!owner.IsNull() && owner->HasShape()) {
+      const TopAbs_ShapeEnum t = owner->Shape().ShapeType();
+      if (std::find(pickTypes_.begin(), pickTypes_.end(), t) != pickTypes_.end()) s = owner->Shape();
+    }
+  }
+  if (s.IsNull()) {
+    if (!hoverObject_.IsNull()) clearHoverHighlight();
+    return;
+  }
+  if (!hoverShape_.IsNull() && s.IsSame(hoverShape_)) return;
+  if (!hoverObject_.IsNull()) context_->Remove(hoverObject_, false);
+  hoverShape_ = s;
+  Handle(AIS_Shape) a = new AIS_Shape(s);
+  const Quantity_Color c = rgb(255, 196, 64);   // warm, distinct from the blue of picked items
+  if (s.ShapeType() == TopAbs_FACE) {
+    faceStyle(a, c, 0.55);
+    context_->Display(a, AIS_Shaded, -1, false);
+  } else {
+    lineStyle(a, c, 5.0, Aspect_TOL_SOLID);
+    a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 4.0));
+    context_->Display(a, AIS_WireFrame, -1, false);
+  }
+  context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+  hoverObject_ = a;
+  redrawAll();
+}
+
 void Viewport::setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types) {
   if (pickTypes_ == types) return;
   pickTypes_ = types;
+  if (types.empty()) clearHoverHighlight();
   if (types.empty()) setPickedShapes({});
   applyPickModes();
 }
@@ -297,13 +341,16 @@ void Viewport::setPickedShapes(const std::vector<TopoDS_Shape>& shapes) {
   for (const auto& s : shapes) {
     if (s.IsNull()) continue;
     Handle(AIS_Shape) a = new AIS_Shape(s);
-    const Quantity_Color blue = rgb(0, 160, 255);
+    const Quantity_Color blue = rgb(0, 150, 255);
     if (s.ShapeType() == TopAbs_FACE) {
-      faceStyle(a, blue, 0.45);
+      faceStyle(a, blue, 0.35);
       context_->Display(a, AIS_Shaded, -1, false);
+      context_->SetZLayer(a, Graphic3d_ZLayerId_Top);
     } else {
-      lineStyle(a, blue, 4.0, Aspect_TOL_SOLID);
-      a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, blue, 3.0));
+      // Picked edges: thick, bright and drawn over everything, so it is
+      // obvious which ones the command will use.
+      lineStyle(a, blue, 6.0, Aspect_TOL_SOLID);
+      a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, blue, 4.0));
       context_->Display(a, AIS_WireFrame, -1, false);
       context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
     }

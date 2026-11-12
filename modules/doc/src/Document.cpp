@@ -688,6 +688,10 @@ void Document::recompute(const CommandRegistry& registry) {
           cmd->apply(in, *this);
         } catch (const std::exception& e) {
           error = e.what();
+        } catch (const Standard_Failure& e) {
+          error = std::string("geometry kernel failure: ") + e.GetMessageString();
+        } catch (...) {
+          error = "geometry kernel failure";
         }
       } else {
         error = "unknown command '" + f.commandId + "'";

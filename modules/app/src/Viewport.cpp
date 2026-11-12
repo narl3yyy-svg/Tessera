@@ -433,6 +433,7 @@ bool Viewport::focusNextPrevChild(bool next) {
 
 void Viewport::leaveEvent(QEvent* e) {
   if (pickHint_) pickHint_->hide();
+  clearHoverHighlight();
   QOpenGLWidget::leaveEvent(e);
 }
 
@@ -460,6 +461,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
   if (arrowMouseMove(e)) return;
+  if (!interactor_ && !pickTypes_.empty()) updateHoverHighlight(e->position());
   if (pickHint_) {
     pickHint_->setVisible(planePicking_);
     if (planePicking_) {

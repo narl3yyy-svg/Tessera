@@ -281,7 +281,7 @@ void MainWindow::applyPreferences() {
                            s.value(QStringLiteral("nav/constrainedOrbit"), false).toBool(),
                            s.value(QStringLiteral("nav/perspective"), false).toBool());
   viewport_->setGridSpacing(s.value(QStringLiteral("grid/spacing"), 1.0).toDouble());
-  viewport_->setGridSnap(s.value(QStringLiteral("grid/snap"), false).toBool());
+  viewport_->setGridSnap(s.value(QStringLiteral("grid/snap"), true).toBool());
 }
 
 void MainWindow::showPreferences() {
@@ -447,11 +447,46 @@ void MainWindow::updateMeasure() {
 // ---------------------------------------------------------------------------
 // INSPECT: Section Analysis, Center of Mass, Interference
 
+gp_Ax3 MainWindow::sectionFrame() const {
+  gp_Ax3 f;
+  try {
+    f = session_.document().planeFrame(section_.plane.toStdString());
+  } catch (const std::exception&) {
+    f = sketch::planeFrame("XZ");
+  }
+  if (std::abs(section_.angle) > 1e-12) f.Rotate(gp_Ax1(f.Location(), f.XDirection()), section_.angle);
+  f.Translate(gp_Vec(f.Direction()) * section_.offset);
+  return f;
+}
+
 gp_Pln MainWindow::sectionPlane() const {
-  const gp_Ax3 f = sketch::planeFrame(section_.plane.toStdString(), section_.offset);
+  const gp_Ax3 f = sectionFrame();
   gp_Dir n = f.Direction();
   if (section_.flip) n.Reverse();
   return gp_Pln(f.Location(), n);
+}
+
+// The section's drag arrow: on the plane where it crosses the middle of the
+// model, along the plane's normal (before the offset).
+void MainWindow::updateSectionArrow() {
+  if (!sectionPanel_ || sectionPicking_ || !section_.active) return;
+  const gp_Ax3 f = sectionFrame();
+  const gp_Dir n = f.Direction();
+  gp_Pnt c = f.Location();
+  bool any = false;
+  double x0 = 1e300, y0 = 1e300, z0 = 1e300, x1 = -1e300, y1 = -1e300, z1 = -1e300;
+  for (const auto& b : session_.document().bodies()) {
+    const auto bb = kernel::boundingBox(b.shape);
+    x0 = std::min(x0, bb.min.x), y0 = std::min(y0, bb.min.y), z0 = std::min(z0, bb.min.z);
+    x1 = std::max(x1, bb.max.x), y1 = std::max(y1, bb.max.y), z1 = std::max(z1, bb.max.z);
+    any = true;
+  }
+  if (any) {
+    const gp_Pnt mid((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    c = mid.Translated(-gp_Vec(n) * gp_Vec(f.Location(), mid).Dot(gp_Vec(n)));   // onto the section plane
+  }
+  const gp_Pnt base = c.Translated(-gp_Vec(n) * section_.offset);
+  viewport_->setDragArrow(base, n, section_.offset, formatLength(section_.offset));
 }
 
 void MainWindow::applySection() {
@@ -460,15 +495,33 @@ void MainWindow::applySection() {
 }
 
 void MainWindow::openSection() {
-  if (editor_) return;
+  if (editor_ || active_ || sectionPanel_) return;
   const auto saved = section_;
-  if (!section_.active) section_ = SectionState{true, true, QStringLiteral("XZ"), 0.0, false};
-  auto* d = toolWindow(this, tr("SECTION ANALYSIS"));
-  d->setModal(false);
+  // Like the familiar tool: first click a face or plane, then drag the arrow.
+  auto* d = new QDialog(viewport_);
+  d->setParent(viewport_, Qt::Widget);
+  d->setProperty("panel", true);
+  d->setAutoFillBackground(true);
+  d->setObjectName(QStringLiteral("sectionPanel"));
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  sectionPanel_ = d;
+  sectionPicking_ = true;
+  auto* title = new QLabel(QStringLiteral("\u2014  ") + tr("SECTION ANALYSIS"));
+  title->setObjectName(QStringLiteral("panelTitle"));
   auto* form = new QFormLayout;
+  auto* pickRow = new QWidget;
+  auto* pickLay = new QHBoxLayout(pickRow);
+  pickLay->setContentsMargins(0, 0, 0, 0);
+  auto* pickLabel = new QLabel(tr("Click a face or plane"));
+  auto* repick = new QPushButton(tr("Select"));
+  repick->setObjectName(QStringLiteral("sectionSelect"));
+  pickLay->addWidget(pickLabel, 1);
+  pickLay->addWidget(repick);
   auto* plane = new QComboBox;
+  plane->setObjectName(QStringLiteral("sectionPlane"));
   plane->addItems({QStringLiteral("XY"), QStringLiteral("XZ"), QStringLiteral("YZ")});
-  plane->setCurrentText(section_.plane);
+  for (const auto& pl : session_.document().planes()) plane->addItem(qs(pl.name));
+  plane->setVisible(false);
   const Unit u = lengthUnit();
   auto* offset = new QDoubleSpinBox;
   offset->setRange(-1e6, 1e6);
@@ -487,26 +540,63 @@ void MainWindow::openSection() {
   slider->setValue(static_cast<int>(section_.offset * 100));
   auto* flip = new QCheckBox(tr("Flip side"));
   flip->setChecked(section_.flip);
-  form->addRow(tr("Plane"), plane);
+  offset->setObjectName(QStringLiteral("sectionDistance"));
+  auto* angle = new QDoubleSpinBox;
+  angle->setObjectName(QStringLiteral("sectionAngle"));
+  angle->setRange(-360, 360);
+  angle->setDecimals(1);
+  angle->setSuffix(QStringLiteral(" deg"));
+  angle->setValue(section_.angle * 180.0 / 3.14159265358979323846);
+  form->addRow(tr("Face/Plane"), pickRow);
+  form->addRow(QString(), plane);
   form->addRow(tr("Distance"), offset);
   form->addRow(QString(), slider);
+  form->addRow(tr("Angle"), angle);
   form->addRow(QString(), flip);
   auto* lay = new QVBoxLayout(d);
+  lay->setContentsMargins(10, 6, 10, 8);
+  lay->addWidget(title);
   lay->addLayout(form);
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
   auto* remove = buttons->addButton(tr("Remove"), QDialogButtonBox::DestructiveRole);
   lay->addWidget(buttons);
 
-  auto update = [this, plane, offset, flip, u] {
-    section_.plane = plane->currentText();
+  auto update = [this, offset, angle, flip, u] {
+    if (sectionPicking_) return;
     section_.offset = toInternal(offset->value(), u);
+    section_.angle = angle->value() * 3.14159265358979323846 / 180.0;
     section_.flip = flip->isChecked();
     section_.active = true;
     section_.visible = true;
     applySection();
+    updateSectionArrow();
   };
-  connect(plane, &QComboBox::currentTextChanged, d, update);
+  // A plane chosen (clicked in the canvas or from the list): the section starts there.
+  auto usePlane = [this, offset, angle, pickLabel, update](const QString& spec, const QString& label) {
+    section_.plane = spec;
+    sectionPicking_ = false;
+    viewport_->setPlanePicking(false);
+    pickLabel->setText(label);
+    {
+      const QSignalBlocker a(offset), b(angle);
+      offset->setValue(0);
+      angle->setValue(0);
+    }
+    update();
+  };
+  connect(plane, &QComboBox::textActivated, d, [usePlane](const QString& t) { usePlane(t, t); });
+  connect(repick, &QPushButton::clicked, d, [this, pickLabel] {
+    sectionPicking_ = true;
+    pickLabel->setText(tr("Click a face or plane"));
+    viewport_->clearDragArrow();
+    viewport_->setPlanePicking(true);
+  });
+  connect(this, &MainWindow::sectionPlanePicked, d, usePlane);
+  connect(this, &MainWindow::sectionArrowMoved, d, [offset, u](double v) {
+    offset->setValue(fromInternal(v, u));   // runs update()
+  });
   connect(offset, &QDoubleSpinBox::valueChanged, d, update);
+  connect(angle, &QDoubleSpinBox::valueChanged, d, update);
   connect(flip, &QCheckBox::toggled, d, update);
   connect(slider, &QSlider::valueChanged, d, [offset, slider, u] {
     const QSignalBlocker b(slider);
@@ -523,9 +613,18 @@ void MainWindow::openSection() {
     applySection();
     d->reject();
   });
+  connect(d, &QDialog::finished, this, [this, d] {
+    sectionPanel_ = nullptr;   // closed now, deleted later
+    sectionPicking_ = false;
+    viewport_->setPlanePicking(false);
+    viewport_->clearDragArrow();
+    d->hide();
+    d->deleteLater();
+  });
   d->show();
   placeDialog(d);
-  update();
+  viewport_->setPlanePicking(true);
+  statusBar()->showMessage(tr("Section Analysis: click a face or plane, then drag the arrow."), 5000);
 }
 
 void MainWindow::showCenterOfMass() {

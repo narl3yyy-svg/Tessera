@@ -53,6 +53,9 @@ std::string historyEdit(Document& doc, const CommandRegistry& reg, const char* n
   } catch (const std::exception& e) {
     doc.abortTransaction();
     return e.what();
+  } catch (...) {
+    doc.abortTransaction();
+    return std::string(name) + ": the geometry kernel failed";
   }
   doc.commitTransaction();
   return {};
