@@ -43,6 +43,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <vector>
 
@@ -175,6 +176,15 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     } else if (active_ && !arrowInput_.isEmpty()) {
       active_->setInputForTest(arrowInput_, text);
     }
+    viewport_->setFocus();
+  });
+  // The second arrow (Two Sides extrude) drives its own input.
+  connect(viewport_, &Viewport::secondArrowMoved, this, [this](double value) {
+    if (!active_ || arrowInput2_.isEmpty() || std::abs(value) < 1e-9) return;
+    active_->setRealInput(arrowInput2_, value);
+  });
+  connect(viewport_, &Viewport::secondArrowTyped, this, [this](const QString& text) {
+    if (active_ && !arrowInput2_.isEmpty()) active_->setInputForTest(arrowInput2_, text);
     viewport_->setFocus();
   });
   connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
@@ -810,6 +820,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     viewport_->clearDragArrow();
     viewport_->setCursorHint(QString());
     arrowInput_.clear();
+    arrowInput2_.clear();
     pickedEdges_.clear();
     refresh();
   });

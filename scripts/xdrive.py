@@ -23,6 +23,7 @@ Script lines (blank lines and # comments ignored):
   vdrag FX1 FY1 FX2 FY2      the same in canvas fractions
   wdrag NAME DX DY           press on widget NAME, drag by DX, DY pixels, release
   adrag DX DY                drag the in-canvas arrow by DX, DY pixels
+  a2drag DX DY               drag the second arrow (Two Sides extrude)
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
   type TEXT                  type text (rest of the line)
   shot FILE                  ask the app to save a screenshot to FILE
@@ -236,13 +237,14 @@ def main():
         elif cmd == "wdrag":
             x, y = widget(a[0])
             drag(x, y, x + float(a[1]), y + float(a[2]))
-        elif cmd == "adrag":
+        elif cmd in ("adrag", "a2drag"):
+            name = "arrow" if cmd == "adrag" else "arrow2"
             end = time.time() + 5
-            while "arrow" not in geometry():
+            while name not in geometry():
                 if time.time() > end:
                     sys.exit("xdrive: line %d: no drag arrow" % n)
                 time.sleep(0.1)
-            x, y = geometry()["arrow"]
+            x, y = geometry()[name]
             drag(x, y, x + float(a[0]), y + float(a[1]), steps=30)
         elif cmd == "key":
             key(a[0])

@@ -1,0 +1,16 @@
+# Live: Extrude with Direction = Two Sides; drag the up arrow and the second
+# (down) arrow with the real mouse, then OK.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 400
+choose direction 1
+wait 600
+adrag 0 -100
+wait 300
+a2drag 0 90
+wait 300
+shot /tmp/live_two_sides.png
+click panelOk
+wait 500

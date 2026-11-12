@@ -176,15 +176,18 @@ public:
   // an arrow at base + dir * value. Press and drag it along dir to change the
   // value; the box beside it shows the value and takes typed values or
   // expressions. `text` is what the box shows when it is not being edited.
-  void setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value, const QString& text);
-  void clearDragArrow();
-  bool dragArrowActive() const { return arrow_.has_value(); }
-  double dragArrowValue() const { return arrow_ ? arrow_->value : 0.0; }
-  QLineEdit* dragArrowBox() const { return arrowBox_; }
+  // `which` 1 is a second, independent arrow (the other side of a Two Sides
+  // extrude); it reports through secondArrowMoved / secondArrowTyped.
+  void setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value, const QString& text, int which = 0);
+  void clearDragArrow();     // both arrows
+  void clearSecondArrow();   // arrow 1 only
+  bool dragArrowActive(int which = 0) const { return which >= 0 && which < 2 && arrows_[which].has_value(); }
+  double dragArrowValue(int which = 0) const { return dragArrowActive(which) ? arrows_[which]->value : 0.0; }
+  QLineEdit* dragArrowBox(int which = 0) const { return which >= 0 && which < 2 ? arrowBoxes_[which] : nullptr; }
   // Tests: as if the arrow were dragged to `value` and released.
-  void dragArrowForTest(double value);
+  void dragArrowForTest(double value, int which = 0);
   // Where to grab the arrow (widget coordinates), when there is one.
-  std::optional<QPointF> dragArrowHandle() const;
+  std::optional<QPointF> dragArrowHandle(int which = 0) const;
   // A short instruction that follows the cursor ("Select sketch profiles or
   // planar faces to extrude"); empty hides it.
   void setCursorHint(const QString& text);
@@ -200,6 +203,8 @@ signals:
   void dragArrowMoved(double value);      // while the arrow is dragged
   void dragArrowReleased(double value);   // mouse released
   void dragArrowTyped(const QString& text);   // Enter in the value box
+  void secondArrowMoved(double value);        // the second arrow, while dragged
+  void secondArrowTyped(const QString& text); // Enter in the second value box
 
 protected:
   void initializeGL() override;
@@ -308,16 +313,20 @@ private:
     gp_Dir dir;
     double value = 0;
   };
-  std::optional<DragArrow> arrow_;
-  bool arrowDragging_ = false;
-  bool arrowHover_ = false;
+  std::optional<DragArrow> arrows_[2];   // 0: main arrow, 1: second side
+  int arrowDragging_ = -1;                // index of the arrow being dragged
+  int arrowHover_ = -1;
   double arrowGrab_ = 0;   // value minus the cursor's position along the arrow at press
-  std::vector<Handle(AIS_InteractiveObject)> arrowObjects_;
-  QLineEdit* arrowBox_ = nullptr;
-  void rebuildArrow();
-  void placeArrowBox();
-  bool nearArrow(const QPointF& pos) const;
-  std::optional<double> arrowParam(const QPointF& pos) const;
+  std::vector<Handle(AIS_InteractiveObject)> arrowObjects_[2];
+  QLineEdit* arrowBoxes_[2] = {nullptr, nullptr};
+  bool anyArrow() const { return arrows_[0].has_value() || arrows_[1].has_value(); }
+  void rebuildArrow(int which);
+  void rebuildArrows();
+  void placeArrowBoxes();
+  void clearArrow(int which);
+  void emitArrow(int which, double value, bool released);
+  int arrowAt(const QPointF& pos) const;   // the arrow under the cursor, or -1
+  std::optional<double> arrowParam(int which, const QPointF& pos) const;
   bool arrowMousePress(QMouseEvent* e);
   bool arrowMouseMove(QMouseEvent* e);
   bool arrowMouseRelease(QMouseEvent* e);

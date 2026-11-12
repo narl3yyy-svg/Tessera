@@ -146,6 +146,7 @@ private:
   void updateDragArrow();
   void onDragArrow(double value);
   QString arrowInput_;
+  QString arrowInput2_;   // the second arrow's input (Two Sides extrude)
   std::vector<std::string> bodiesBeforeCommand_;   // real bodies when the open panel started
   std::vector<TopoDS_Shape> pickedFaces() const;   // the Real input the arrow drives, empty when none
   bool sketchVisible(const std::string& name) const;

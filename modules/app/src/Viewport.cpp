@@ -375,7 +375,7 @@ void Viewport::paintGL() {
   view_->InvalidateImmediate();
   FlushViewEvents(context_, view_, true);
   // The camera may have moved: keep the drag arrow's value box beside it.
-  if (arrow_) QTimer::singleShot(0, this, [this] { placeArrowBox(); });
+  if (anyArrow()) QTimer::singleShot(0, this, [this] { placeArrowBoxes(); });
 }
 
 void Viewport::paintEvent(QPaintEvent* e) {
@@ -495,7 +495,7 @@ void Viewport::wheelEvent(QWheelEvent* e) {
   const double delta = (reverseZoom_ ? -1.0 : 1.0) * e->angleDelta().y() / 8.0;
   if (UpdateZoom(Aspect_ScrollDelta(toPixels(e->position()), delta))) updateView();
   // The arrow keeps its size on screen; rebuild once the zoom has applied.
-  if (arrow_) QTimer::singleShot(0, this, [this] { if (arrow_) rebuildArrow(); });
+  if (anyArrow()) QTimer::singleShot(0, this, [this] { rebuildArrows(); });
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {

@@ -95,6 +95,7 @@ void MainWindow::updateDragArrow() {
   if (sectionPanel_) return;   // Section Analysis drives the arrow itself
   auto off = [this] {
     arrowInput_.clear();
+    arrowInput2_.clear();
     viewport_->clearDragArrow();
   };
   // The instruction beside the cursor, as in the familiar tools.
@@ -166,6 +167,18 @@ void MainWindow::updateDragArrow() {
   if (!place || !value) return off();
   arrowInput_ = input;
   viewport_->setDragArrow(place->base, place->dir, *value, active_->displayText(input));
+  // Two Sides: a second arrow pointing the other way sets side 2's distance.
+  const auto value2 = id == QLatin1String(doc::kCmdExtrude) &&
+                              active_->textInput(QStringLiteral("direction")) == QLatin1String("Two Sides")
+                          ? active_->realInput(QStringLiteral("distance2"))
+                          : std::nullopt;
+  if (value2) {
+    arrowInput2_ = QStringLiteral("distance2");
+    viewport_->setDragArrow(place->base, place->dir.Reversed(), *value2, active_->displayText(arrowInput2_), 1);
+  } else {
+    arrowInput2_.clear();
+    viewport_->clearSecondArrow();
+  }
 }
 
 void MainWindow::onDragArrow(double value) {

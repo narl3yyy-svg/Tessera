@@ -475,9 +475,14 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     w.viewport()->dragArrowForTest(-1.0);   // past side 2: reported, not a crash
     ex4->setInputForTest(QStringLiteral("distance2"), 5.0);   // panel units: mm
     w.viewport()->dragArrowForTest(1.0);
+    // Two Sides shows a second arrow, pointing the other way, for side 2.
+    if (!w.viewport()->dragArrowActive(1)) return fail("two-sided extrude second arrow");
+    w.viewport()->dragArrowForTest(0.8, 1);
+    QApplication::processEvents();
+    if (std::abs(ex4->realInput(QStringLiteral("distance2")).value_or(0) - 0.8) > 1e-9) return fail("second arrow sets side 2");
     ex4->accept();
     QApplication::processEvents();
-    if (s.document().bodies().size() != 1 || std::abs(volume() - 2 * 1 * 1.5) > 1e-6) return fail("two-sided extrude volume");
+    if (s.document().bodies().size() != 1 || std::abs(volume() - 2 * 1 * 1.8) > 1e-6) return fail("two-sided extrude volume");
   }
   // Section Analysis: pick a plane, then drag the arrow to set the depth.
   w.openSectionAnalysis();
@@ -570,6 +575,10 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   if (const auto h = w.viewport()->dragArrowHandle()) {
     const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
     o[QStringLiteral("arrow")] = QJsonArray{g.x(), g.y()};
+  }
+  if (const auto h = w.viewport()->dragArrowHandle(1)) {
+    const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
+    o[QStringLiteral("arrow2")] = QJsonArray{g.x(), g.y()};
   }
   if (w.viewport()->planePicking()) {
     QJsonObject planes;
