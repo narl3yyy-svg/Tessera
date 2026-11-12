@@ -47,6 +47,10 @@ public:
   // Faces (Shell) and tool bodies (Combine) picked in the 3D view.
   bool hasFacesInput() const;
   bool hasVerticesInput() const { return !verticesId_.empty(); }
+  bool hasBodyInput() const { return bodyInput_ != nullptr; }
+  // Joint origins: the next empty one is filled by a click (then the last one is replaced).
+  bool hasJointOriginInput() const { return !jointIds_.empty(); }
+  void pickJointOrigin(const QString& spec);
   QString currentVertices() const { return stringInput(verticesId_); }
   void setVertices(const QString& v);
   bool hasBodiesInput() const;
@@ -94,6 +98,7 @@ private:
   std::string edgesId_;
   QLabel* facesLabel_ = nullptr;
   std::string facesId_;
+  std::vector<std::pair<std::string, QLabel*>> jointIds_;
   QLabel* verticesLabel_ = nullptr;
   std::string verticesId_;
   QLabel* bodiesLabel_ = nullptr;

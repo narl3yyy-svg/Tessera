@@ -25,6 +25,8 @@ inline constexpr const char* kCmdSweep = "tsr.feature.sweep";
 inline constexpr const char* kCmdLoft = "tsr.feature.loft";
 inline constexpr const char* kCmdPressPull = "tsr.feature.pressPull";
 inline constexpr const char* kCmdPipe = "tsr.feature.pipe";
+inline constexpr const char* kCmdNewComponent = "tsr.assemble.newComponent";
+inline constexpr const char* kCmdJoint = "tsr.assemble.joint";
 inline constexpr const char* kCmdThread = "tsr.feature.thread";
 inline constexpr const char* kCmdOffsetFace = "tsr.feature.offsetFace";
 inline constexpr const char* kCmdDraft = "tsr.feature.draft";
@@ -75,6 +77,9 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 //   tsr.feature.draft        body, faces, plane (pull direction = its normal; neutral plane), angle, flip
 //   tsr.feature.thread       body, faces (one cylinder), pitch (0: ISO coarse), fullLength, length, offset,
 //                            hand ("Right"/"Left")
+//   tsr.assemble.newComponent  name, bodies ("Body1;Body2")
+//   tsr.assemble.joint       origin1, origin2 (JointOrigin), type ("Rigid"/"Revolute"/"Slider"/"Cylindrical"),
+//                            angle, offset, flip, rotation (motion, rad), slide (motion, cm)
 //   tsr.feature.pipe         path (sketch), section, size, hollow ("No"/"Yes"), thickness, operation
 //   tsr.feature.coil         plane, x, y, diameter, type, revolutions, height, pitch, angle,
 //                            section, position, size, operation

@@ -375,6 +375,7 @@ void MainWindow::updateEdgePicking() {
   if (active_ && active_->hasEdgesInput()) types.push_back(TopAbs_EDGE);
   if (active_ && active_->hasFacesInput()) types.push_back(TopAbs_FACE);
   if (active_ && active_->hasVerticesInput()) types.push_back(TopAbs_VERTEX);
+  if (active_ && active_->hasJointOriginInput()) types = {TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX};
   viewport_->setSubShapePicking(types);
   if (!types.empty()) viewport_->setPickedShapes(pickedEdges_);
 }
@@ -383,6 +384,23 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
   if (!active_) return;
   if (std::find(bodiesBeforeCommand_.begin(), bodiesBeforeCommand_.end(), body.toStdString()) == bodiesBeforeCommand_.end()) {
     statusBar()->showMessage(tr("That is the preview of this command; pick a face or edge of an existing body."), 4000);
+    return;
+  }
+  if (active_->hasJointOriginInput()) {
+    // Joint: the face / edge / point clicked becomes the next joint origin.
+    const TopoDS_Shape shape = viewport_->bodyShape(body);
+    try {
+      QString spec;
+      switch (edge.ShapeType()) {
+        case TopAbs_FACE: spec = body + QStringLiteral("|face|") + QString::fromStdString(kernel::faceReference(shape, edge)); break;
+        case TopAbs_EDGE: spec = body + QStringLiteral("|edge|") + QString::fromStdString(kernel::edgeReference(shape, edge)); break;
+        case TopAbs_VERTEX: spec = body + QStringLiteral("|vertex|") + QString::fromStdString(kernel::vertexReference(edge)); break;
+        default: return;
+      }
+      active_->pickJointOrigin(spec);
+    } catch (const std::exception& e) {
+      statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
+    }
     return;
   }
   if (edge.ShapeType() == TopAbs_VERTEX) {

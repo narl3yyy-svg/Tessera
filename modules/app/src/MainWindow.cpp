@@ -199,7 +199,8 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       viewport_->clearSelection();
       return;
     }
-    if (active_ && active_->hasBodiesInput() && !active_->currentBody().isEmpty() && active_->currentBody() != name) {
+    if (active_ && active_->hasBodiesInput() &&
+        (!active_->hasBodyInput() || (!active_->currentBody().isEmpty() && active_->currentBody() != name))) {
       // Combine: further bodies toggle in the tool list.
       QStringList tools = active_->currentTools().split(QLatin1Char(';'), Qt::SkipEmptyParts);
       if (tools.contains(name)) tools.removeAll(name);
@@ -962,6 +963,36 @@ void MainWindow::refreshBrowser(const QString& docName) {
     it->setData(0, kBodyRole, n);
     it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
     it->setCheckState(0, viewport_->isBodyVisible(n) ? Qt::Checked : Qt::Unchecked);
+  }
+
+  const auto comps = d.components();
+  if (!comps.empty()) {
+    auto* folder = new QTreeWidgetItem(root, {tr("Components (%1)").arg(comps.size())});
+    folder->setIcon(0, icon(QStringLiteral("component")));
+    for (const auto& c : comps) {
+      auto* it = new QTreeWidgetItem(folder, {qs(c.name)});
+      it->setIcon(0, icon(QStringLiteral("component")));
+      for (const auto& b : c.bodies) {
+        auto* bi = new QTreeWidgetItem(it, {qs(b)});
+        bi->setIcon(0, icon(QStringLiteral("body")));
+      }
+      it->setExpanded(true);
+    }
+    folder->setExpanded(true);
+  }
+  {
+    std::vector<std::pair<int, std::string>> joints;
+    for (const auto& f : d.features())
+      if (f.commandId == doc::kCmdJoint) joints.emplace_back(f.id, f.name);
+    if (!joints.empty()) {
+      auto* folder = new QTreeWidgetItem(root, {tr("Joints (%1)").arg(joints.size())});
+      folder->setIcon(0, icon(QStringLiteral("joint")));
+      for (const auto& [id, name] : joints) {
+        auto* it = new QTreeWidgetItem(folder, {qs(name)});
+        it->setIcon(0, icon(QStringLiteral("joint")));
+      }
+      folder->setExpanded(true);
+    }
   }
 
   const auto sketches = d.sketches();

@@ -11,6 +11,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QAbstractSlider>
 #include <QAbstractSpinBox>
 #include <QComboBox>
 #include <QFile>
@@ -530,12 +531,21 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   for (QWidget* x : w.findChildren<QWidget*>()) {
     if (x->objectName().isEmpty() || !x->isVisible()) continue;
     if (!qobject_cast<QAbstractButton*>(x) && !qobject_cast<QLineEdit*>(x) && !qobject_cast<QComboBox*>(x) &&
-        !qobject_cast<QAbstractSpinBox*>(x) && !x->property("panel").toBool())
+        !qobject_cast<QAbstractSpinBox*>(x) && !qobject_cast<QAbstractSlider*>(x) && !x->property("panel").toBool())
       continue;
     // The first visible one of a name wins (ribbon buttons before menu copies).
     if (!widgets.contains(x->objectName())) widgets[x->objectName()] = rect(x);
   }
   o[QStringLiteral("widgets")] = widgets;
+  {
+    // World axes (1 cm each) on screen: an affine map for the (orthographic) view.
+    auto at = [&](double x, double y, double z) {
+      const QPoint g = w.viewport()->mapToGlobal(w.viewport()->toWidget(gp_Pnt(x, y, z)).toPoint());
+      return QJsonArray{g.x(), g.y()};
+    };
+    o[QStringLiteral("world")] = QJsonObject{{QStringLiteral("o"), at(0, 0, 0)}, {QStringLiteral("x"), at(1, 0, 0)},
+                                             {QStringLiteral("y"), at(0, 1, 0)}, {QStringLiteral("z"), at(0, 0, 1)}};
+  }
   if (const auto h = w.viewport()->dragArrowHandle()) {
     const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
     o[QStringLiteral("arrow")] = QJsonArray{g.x(), g.y()};

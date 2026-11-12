@@ -34,6 +34,7 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
+#include <QTimer>
 #include <QStatusBar>
 #include <QVBoxLayout>
 
@@ -80,12 +81,11 @@ void MainWindow::buildUiCommands() {
   add("Modify", "ui.changeParameters", "Change Parameters", "parameters",
       "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
       [this] { showParameters(); });
-  planned("Assemble", "ui.newComponent", "New Component", "component");
-  planned("Assemble", "ui.joint", "Joint", "joint", "J");
   planned("Assemble", "ui.asBuiltJoint", "As-Built Joint", "joint", "Shift+J");
   planned("Assemble", "ui.jointOrigin", "Joint Origin", "joint-origin");
   planned("Assemble", "ui.rigidGroup", "Rigid Group", "rigid");
-  planned("Assemble", "ui.driveJoints", "Drive Joints", "motion");
+  add("Assemble", "ui.driveJoints", "Drive Joints", "motion", "Moves a joint through its range; Play animates it.", "",
+      [this] { driveJoints(); });
   planned("Assemble", "ui.motionLink", "Motion Link", "motion");
   planned("Configure", "ui.configure", "Configurations", "configure");
   planned("Construct", "ui.tangentPlane", "Tangent Plane", "plane");
@@ -115,6 +115,128 @@ void MainWindow::buildUiCommands() {
       [this] { setSelectionFilter({TopAbs_EDGE}); });
   add("Select", "ui.filterVertices", "Select Vertices", "vertex", "Selection filter: vertices.", "",
       [this] { setSelectionFilter({TopAbs_VERTEX}); });
+}
+
+// Drive Joints: pick a joint, move it with the slider (live preview), Play
+// sweeps it back and forth; OK keeps the position as one undo step.
+void MainWindow::driveJoints() {
+  if (editor_ || active_) {
+    statusBar()->showMessage(tr("Finish the current command first."), 3000);
+    return;
+  }
+  std::vector<doc::Feature> joints;
+  for (const auto& f : session_.document().features())
+    if (f.commandId == doc::kCmdJoint && !f.suppressed) joints.push_back(f);
+  if (joints.empty()) {
+    statusBar()->showMessage(tr("Drive Joints: there is no joint yet (Assemble > Joint)."), 4000);
+    return;
+  }
+  auto* d = new QDialog(viewport_);
+  d->setParent(viewport_, Qt::Widget);
+  d->setProperty("panel", true);
+  d->setAutoFillBackground(true);
+  d->setObjectName(QStringLiteral("drivePanel"));
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  auto* title = new QLabel(QStringLiteral("\u2014  ") + tr("DRIVE JOINTS"));
+  title->setObjectName(QStringLiteral("panelTitle"));
+  auto* jointBox = new QComboBox;
+  jointBox->setObjectName(QStringLiteral("driveJoint"));
+  for (const auto& j : joints) jointBox->addItem(qs(j.name), j.id);
+  auto* slider = new QSlider(Qt::Horizontal);
+  slider->setObjectName(QStringLiteral("driveSlider"));
+  slider->setRange(-3600, 3600);   // tenths of a degree, or of a millimetre
+  slider->setMinimumWidth(240);
+  auto* value = new QLabel;
+  auto* play = new QPushButton(tr("Play"));
+  play->setObjectName(QStringLiteral("drivePlay"));
+  play->setCheckable(true);
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+  buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("driveOk"));
+  auto* form = new QFormLayout;
+  form->addRow(tr("Joint"), jointBox);
+  form->addRow(tr("Motion"), slider);
+  form->addRow(QString(), value);
+  form->addRow(QString(), play);
+  auto* lay = new QVBoxLayout(d);
+  lay->setContentsMargins(10, 6, 10, 8);
+  lay->addWidget(title);
+  lay->addLayout(form);
+  lay->addWidget(buttons);
+
+  struct State {
+    std::unique_ptr<CommandSession> edit;
+    std::string input;   // "rotation" or "slide"
+    double start = 0;
+  };
+  auto st = std::make_shared<State>();
+  auto* timer = new QTimer(d);
+  const Unit u = lengthUnit();
+  auto begin = [this, st, jointBox, slider, value, u] {
+    if (st->edit) st->edit->cancel();
+    st->edit = session_.editFeature(jointBox->currentData().toInt());
+    if (!st->edit) return;
+    const auto& in = st->edit->inputs();
+    const std::string type = std::get<std::string>(in.at("type"));
+    st->input = type == "Slider" ? "slide" : "rotation";
+    if (type == "Rigid") value->setText(tr("A rigid joint does not move."));
+    st->start = std::get<double>(in.at(st->input));
+    const QSignalBlocker b(slider);
+    slider->setValue(static_cast<int>(std::lround(
+        st->input == "slide" ? fromInternal(st->start, u) * 10 : st->start * 1800.0 / 3.14159265358979323846)));
+  };
+  auto apply = [this, st, slider, value, u] {
+    if (!st->edit) return;
+    const double v = st->input == "slide" ? toInternal(slider->value() / 10.0, u)
+                                          : slider->value() / 10.0 * 3.14159265358979323846 / 180.0;
+    value->setText(st->input == "slide" ? formatLength(v) : QStringLiteral("%1 deg").arg(slider->value() / 10.0, 0, 'f', 1));
+    if (!st->edit->setInput(st->input, v).empty()) return;
+    const std::string err = st->edit->preview();
+    if (!err.empty()) statusBar()->showMessage(qs(err), 3000);
+    session_.notifyChanged();
+  };
+  connect(jointBox, &QComboBox::currentIndexChanged, d, [begin, apply] {
+    begin();
+    apply();
+  });
+  connect(slider, &QSlider::valueChanged, d, apply);
+  // Play: sweep forwards and back.
+  auto step = std::make_shared<int>(30);
+  connect(timer, &QTimer::timeout, d, [slider, step] {
+    int v = slider->value() + *step;
+    if (v > slider->maximum() || v < slider->minimum()) {
+      *step = -*step;
+      v = slider->value() + *step;
+    }
+    slider->setValue(v);
+  });
+  connect(play, &QPushButton::toggled, d, [timer, play](bool on) {
+    play->setText(on ? QObject::tr("Stop") : QObject::tr("Play"));
+    if (on) timer->start(40);
+    else timer->stop();
+  });
+  connect(buttons, &QDialogButtonBox::accepted, d, [this, st, d] {
+    if (st->edit) {
+      const std::string err = st->edit->execute();
+      if (!err.empty()) statusBar()->showMessage(qs(err), 5000);
+      st->edit.reset();
+    }
+    d->accept();
+  });
+  connect(buttons, &QDialogButtonBox::rejected, d, &QDialog::reject);
+  connect(d, &QDialog::finished, this, [this, st, timer, d] {
+    timer->stop();
+    if (st->edit) {
+      st->edit->cancel();
+      st->edit.reset();
+    }
+    d->hide();
+    d->deleteLater();
+    session_.notifyChanged();
+  });
+  begin();
+  apply();
+  d->show();
+  placeDialog(d);
 }
 
 ParametersDialog* MainWindow::showParameters() {

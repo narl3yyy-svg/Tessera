@@ -28,6 +28,7 @@ scope.
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
 | **Create** | Extrude of sketch profiles or body faces with a drag arrow in the canvas (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (modeled ISO metric, shaft or hole), Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer, Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
+| **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical; click a face, edge or point on each part; angle, offset, flip), Drive Joints (slider and Play) |
 | **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
@@ -92,7 +93,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Modify** | Replace Face, Split Face, Align, Appearance, Physical Material |
 | **Extrude** | To Object / To Face, thin walls; drag arrows for Shell, Hole and Move |
 | **Construct** | Tangent Plane, Plane Through Points, Axis, Point |
-| **Assemble** | Components, Joints, As-Built Joints, Rigid Groups, Drive Joints, Motion Links, Contact Sets |
+| **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Contact Sets |
 | **Inspect** | Curvature Comb, Zebra, Draft and Curvature Map analysis, Minimum Radius |
 | **Insert** | SVG / DXF, Canvas, Decal |
 | **Workspaces** | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |

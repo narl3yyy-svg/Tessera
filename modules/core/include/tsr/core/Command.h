@@ -28,7 +28,10 @@ namespace tsr {
 // Plane:  "XY", "XZ", "YZ" or the name of a construction plane ("Plane1").
 // Vertices: vertices of a body, as "x,y,z;..." positions, picked in the viewport.
 // Axis:   "X", "Y", "Z" (world axes) or the name of a construction axis ("Axis1").
-enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane, Vertices, Axis };
+// JointOrigin: a point and direction on a body for a joint, picked in the
+//         viewport: "<body>|face|<ref>", "<body>|edge|<ref>" or "<body>|vertex|x,y,z".
+enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane, Vertices, Axis,
+                       JointOrigin };
 
 struct InputDef {
   std::string id;

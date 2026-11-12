@@ -17,6 +17,7 @@
 //   0:1:5      Construction planes; one child per plane: TDataStd_Name, NamedData "spec"
 //   0:1:6      Construction axes; one child per axis: TDataStd_Name, NamedData reals ox,oy,oz,dx,dy,dz
 //   0:1:7      Construction points; one child per point: TDataStd_Name, NamedData reals x,y,z
+//   0:1:8      Components; one child per component: TDataStd_Name, NamedData "bodies" ("Body1;Body2")
 //   0:1:3      Features (the timeline), in order; one child per feature:
 //                TDataStd_Name       feature name ("Box1")
 //                TDataStd_NamedData  "command" (id), "inputs" (JSON), "error" (last recompute), "suppressed" (int)
@@ -85,6 +86,11 @@ struct ConstructionAxis {
 struct ConstructionPoint {
   std::string name;   // "Point1"
   gp_Pnt point;
+};
+
+struct Component {
+  std::string name;                 // "Component1"
+  std::vector<std::string> bodies;  // bodies that belong to it
 };
 
 struct Feature {
@@ -170,6 +176,13 @@ public:
   // "X", "Y", "Z" (world axes through the origin) or a construction axis's
   // name. Throws DocumentError.
   gp_Ax1 axisFrame(const std::string& spec) const;
+  // Components (results of New Component features). Bodies not in any
+  // component belong to the root.
+  std::vector<Component> components() const;
+  std::optional<Component> component(const std::string& name) const;
+  void setComponent(const Component& c);
+  std::string nextComponentName() const;
+  std::optional<std::string> componentOfBody(const std::string& body) const;
   std::vector<ConstructionPoint> points() const;
   std::optional<ConstructionPoint> point(const std::string& name) const;
   void setPoint(const ConstructionPoint& p);

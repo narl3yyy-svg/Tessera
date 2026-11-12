@@ -5,6 +5,7 @@
 #include "tsr/api/PythonHost.h"
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Io.h"
+#include "tsr/kernel/Kernel.h"
 #include "tsr/sketch/SketchOps.h"
 
 #include <TopoDS_Shape.hxx>
@@ -32,6 +33,7 @@ const char* typeName(InputType t) {
     case InputType::Plane: return "plane";
     case InputType::Vertices: return "vertices";
     case InputType::Axis: return "axis";
+    case InputType::JointOrigin: return "jointOrigin";
   }
   return "?";
 }
@@ -168,6 +170,23 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("entity"), py::arg("distance"),
      "Offset the chain through an entity (cm; closed chains: positive is outward); returns the new sketch JSON.");
+
+  m.def("bounding_box", [](const std::string& name) {
+    const auto b = activeSession().document().body(name);
+    if (!b) throw std::runtime_error("no body named '" + name + "'");
+    const auto bb = kernel::boundingBox(b->shape);
+    return py::make_tuple(py::make_tuple(bb.min.x, bb.min.y, bb.min.z), py::make_tuple(bb.max.x, bb.max.y, bb.max.z));
+  }, py::arg("body"), "A body's bounding box ((xmin, ymin, zmin), (xmax, ymax, zmax)) in cm.");
+  m.def("components", [] {
+    py::list out;
+    for (const auto& c : activeSession().document().components()) {
+      py::dict d;
+      d["name"] = c.name;
+      d["bodies"] = c.bodies;
+      out.append(d);
+    }
+    return out;
+  });
 
   m.def("export", [](const std::string& path, int refinement) {
     const auto format = kernel::formatForPath(path);

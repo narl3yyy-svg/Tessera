@@ -33,7 +33,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull ✅ · Draft ✅ · Offset Face ✅ · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) ✅ · Compute All
 
-**Assemble**: New Component · Joint · As-Built Joint · Joint Origin · Rigid Group · Drive Joints · Motion Link · Motion Study · Contact Sets
+**Assemble**: New Component ✅ · Joint ✅ (rigid, revolute, slider, cylindrical) · As-Built Joint · Joint Origin · Rigid Group · Drive Joints ✅ · Motion Link · Motion Study · Contact Sets
 
 **Construct**: Offset Plane ✅ · Plane at Angle ✅ · Midplane ✅ · Tangent Plane · Plane through points · Axis ✅ (cylinder/cone/torus, edge, two points, two planes) · Point ✅ (vertex, two edges, three planes, centre, edge and plane)
 

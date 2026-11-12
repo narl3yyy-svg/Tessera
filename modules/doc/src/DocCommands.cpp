@@ -8,6 +8,11 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <Standard_Failure.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_Transform.hxx>
+#include <BRepTools.hxx>
+#include <gp.hxx>
+#include <gp_Circ.hxx>
+#include <sstream>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <BRepGProp.hxx>
@@ -2083,6 +2088,235 @@ private:
   CommandDef def_;
 };
 
+// ---------------------------------------------------------------------------
+// Assemblies: components and joints.
+
+class NewComponent final : public Command {
+public:
+  NewComponent() {
+    commonDef(def_, kCmdNewComponent, "New Component", "Groups bodies into a component that joints can move.", "component",
+              "Assemble");
+    def_.nameInput = "name";
+    def_.inputs = {{.id = "name", .label = "Name", .tooltip = "Empty: Component<n>.", .type = InputType::String,
+                    .defaultValue = std::string{}, .optional = true},
+                   {.id = "bodies", .label = "Bodies", .tooltip = "Click the bodies that make up the component.",
+                    .type = InputType::Bodies, .defaultValue = std::string{}, .optional = true}};
+  }
+  const CommandDef& def() const override { return def_; }
+  static std::vector<std::string> split(const std::string& s) {
+    std::vector<std::string> out;
+    std::stringstream ss(s);
+    std::string b;
+    while (std::getline(ss, b, ';'))
+      if (!b.empty()) out.push_back(b);
+    return out;
+  }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const auto bodies = split(getString(in, "bodies"));
+    if (bodies.empty() && doc.bodies().empty()) return "Bodies: there is no body to put in a component";
+    for (const auto& b : bodies)
+      if (!doc.body(b)) return "Bodies: '" + b + "' does not exist";
+    const std::string name = getString(in, "name");
+    if (!name.empty() && !isIdentifier(name)) return "Name: letters, digits and underscores only";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "name").empty()) in["name"] = doc.nextComponentName();
+    if (getString(in, "bodies").empty() && !doc.bodies().empty()) in["bodies"] = doc.bodies().back().name;
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto bodies = split(getString(in, "bodies"));
+    // A body belongs to one component: take it out of any other.
+    for (auto c : doc.components()) {
+      const auto before = c.bodies.size();
+      std::erase_if(c.bodies, [&](const std::string& b) { return std::find(bodies.begin(), bodies.end(), b) != bodies.end(); });
+      if (c.bodies.size() != before) doc.setComponent(c);
+    }
+    std::string name = getString(in, "name");
+    if (name.empty()) name = doc.nextComponentName();
+    doc.setComponent({name, bodies});
+  }
+
+private:
+  CommandDef def_;
+};
+
+// A joint origin picked on a body: where it is and which way its Z points.
+struct JointPick {
+  std::string body;
+  gp_Ax3 frame;
+};
+
+JointPick jointOrigin(const Document& doc, const std::string& spec, const char* label) {
+  const auto bar1 = spec.find('|'), bar2 = spec.find('|', bar1 == std::string::npos ? 0 : bar1 + 1);
+  if (spec.empty() || bar1 == std::string::npos || bar2 == std::string::npos)
+    throw CommandError(std::string(label) + ": click a face, edge or point");
+  JointPick out;
+  out.body = spec.substr(0, bar1);
+  const std::string kind = spec.substr(bar1 + 1, bar2 - bar1 - 1), ref = spec.substr(bar2 + 1);
+  const auto body = doc.body(out.body);
+  if (!body) throw CommandError(std::string(label) + ": body '" + out.body + "' does not exist");
+  auto perpendicular = [](const gp_Dir& z) {
+    const gp_Vec a = std::abs(z.Z()) < 0.9 ? gp_Vec(0, 0, 1) : gp_Vec(1, 0, 0);
+    return gp_Dir(gp_Vec(z).Crossed(a));
+  };
+  try {
+    if (kind == "face") {
+      const TopoDS_Face f = TopoDS::Face(kernel::resolveFaces(body->shape, ref).front());
+      BRepAdaptor_Surface s(f, true);
+      GProp_GProps g;
+      BRepGProp::SurfaceProperties(f, g);
+      const gp_Pnt c = g.CentreOfMass();
+      if (s.GetType() == GeomAbs_Plane) {
+        gp_Dir n = s.Plane().Axis().Direction();
+        if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+        out.frame = gp_Ax3(c, n, perpendicular(n));
+      } else if (s.GetType() == GeomAbs_Cylinder || s.GetType() == GeomAbs_Cone) {
+        const gp_Ax1 ax = s.GetType() == GeomAbs_Cylinder ? s.Cylinder().Axis() : s.Cone().Axis();
+        const gp_Vec v(ax.Location(), c);
+        const gp_Pnt on = ax.Location().Translated(gp_Vec(ax.Direction()) * v.Dot(gp_Vec(ax.Direction())));
+        out.frame = gp_Ax3(on, ax.Direction(), perpendicular(ax.Direction()));
+      } else {
+        double u0, u1, v0, v1;
+        BRepTools::UVBounds(f, u0, u1, v0, v1);
+        gp_Pnt p;
+        gp_Vec du, dv;
+        s.D1((u0 + u1) / 2, (v0 + v1) / 2, p, du, dv);
+        gp_Dir n(du.Crossed(dv));
+        if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+        out.frame = gp_Ax3(p, n, perpendicular(n));
+      }
+    } else if (kind == "edge") {
+      BRepAdaptor_Curve c(TopoDS::Edge(kernel::resolveEdges(body->shape, ref).front()));
+      if (c.GetType() == GeomAbs_Circle) {
+        const gp_Circ circ = c.Circle();
+        out.frame = gp_Ax3(circ.Location(), circ.Axis().Direction(), perpendicular(circ.Axis().Direction()));
+      } else {
+        gp_Pnt p;
+        gp_Vec t;
+        c.D1((c.FirstParameter() + c.LastParameter()) / 2, p, t);
+        const gp_Dir z(t);
+        out.frame = gp_Ax3(p, z, perpendicular(z));
+      }
+    } else if (kind == "vertex") {
+      const gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(kernel::resolveVertices(body->shape, ref).front()));
+      out.frame = gp_Ax3(p, gp::DZ(), gp::DX());
+    } else {
+      throw CommandError(std::string(label) + ": unknown kind of pick '" + kind + "'");
+    }
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(std::string(label) + ": " + e.what());
+  }
+  return out;
+}
+
+class Joint final : public Command {
+public:
+  Joint() {
+    commonDef(def_, kCmdJoint, "Joint", "Positions a component on another and sets how it may move: click a face, "
+              "edge or point on the part that moves, then on the part it attaches to.", "joint", "Assemble");
+    def_.shortcut = "J";
+    def_.inputs = {
+        {.id = "origin1", .label = "Component 1", .tooltip = "The part that moves: click a face, edge or point.",
+         .type = InputType::JointOrigin, .defaultValue = std::string{}},
+        {.id = "origin2", .label = "Component 2", .tooltip = "The part it attaches to: click a face, edge or point.",
+         .type = InputType::JointOrigin, .defaultValue = std::string{}},
+        choice("type", "Type", {"Rigid", "Revolute", "Slider", "Cylindrical"},
+               "Rigid: fixed. Revolute: turns about the joint axis. Slider: moves along it. Cylindrical: both."),
+        {.id = "angle", .label = "Angle", .tooltip = "Turns component 1 about the joint axis.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree},
+        {.id = "offset", .label = "Offset", .tooltip = "Gap between the two origins along the joint axis.",
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter},
+        choice("flip", "Flip", {"No", "Yes"}, "Yes: component 1 faces the other way."),
+        {.id = "rotation", .label = "Rotation", .tooltip = "The joint's current turn (Drive Joints changes it).",
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Degree, .visibleWhen = "type=Revolute|Cylindrical"},
+        {.id = "slide", .label = "Slide", .tooltip = "The joint's current travel (Drive Joints changes it).",
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "type=Slider|Cylindrical"},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  // Only input checks here: the picked geometry is found in apply(), where
+  // (on replay) the parts are where they were when it was picked. Editing a
+  // joint validates against the model it already moved.
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    for (const char* id : {"origin1", "origin2"}) {
+      const std::string spec = getString(in, id);
+      const std::string label = id == std::string("origin1") ? "Component 1" : "Component 2";
+      if (spec.empty()) return label + ": click a face, edge or point";
+      const std::string body = spec.substr(0, spec.find('|'));
+      if (!doc.body(body)) return label + ": body '" + body + "' does not exist";
+    }
+    const std::string b1 = getString(in, "origin1").substr(0, getString(in, "origin1").find('|'));
+    const std::string b2 = getString(in, "origin2").substr(0, getString(in, "origin2").find('|'));
+    const auto c1 = doc.componentOfBody(b1);
+    if (!c1) return "Component 1: " + b1 + " is not in a component (use New Component first)";
+    if (doc.componentOfBody(b2) == c1) return "Component 2: pick a different component";
+    return {};
+  }
+  // Face and edge picks become full signatures, so a replay after the parts
+  // change finds the same face / edge (as Fillet and Shell do).
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    for (const char* id : {"origin1", "origin2"}) {
+      const std::string spec = getString(in, id);
+      const auto bar1 = spec.find('|'), bar2 = spec.find('|', bar1 == std::string::npos ? 0 : bar1 + 1);
+      if (bar1 == std::string::npos || bar2 == std::string::npos) continue;
+      const std::string body = spec.substr(0, bar1), kind = spec.substr(bar1 + 1, bar2 - bar1 - 1);
+      const auto b = doc.body(body);
+      if (!b) continue;
+      try {
+        if (kind == "face") in[id] = body + "|face|" + kernel::completeFaceReferences(b->shape, spec.substr(bar2 + 1));
+        if (kind == "edge") in[id] = body + "|edge|" + kernel::completeEdgeReferences(b->shape, spec.substr(bar2 + 1));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string(id == std::string("origin1") ? "Component 1: " : "Component 2: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto [moving, trsf] = motion(doc, in);
+    const auto comp = doc.component(moving);
+    for (const auto& name : comp->bodies) {
+      const auto b = doc.body(name);
+      if (!b) continue;
+      doc.replaceBody(name, BRepBuilderAPI_Transform(b->shape, trsf, true).Shape());
+    }
+  }
+
+private:
+  static double real(const Inputs& in, const char* id) { return in.count(id) ? getReal(in, id) : 0.0; }
+  // The component that moves, and how.
+  static std::pair<std::string, gp_Trsf> motion(const Document& doc, const Inputs& in) {
+    const JointPick a = jointOrigin(doc, getString(in, "origin1"), "Component 1");
+    const JointPick b = jointOrigin(doc, getString(in, "origin2"), "Component 2");
+    const auto c1 = doc.componentOfBody(a.body);
+    if (!c1) throw CommandError("Component 1: " + a.body + " is not in a component (use New Component first)");
+    if (doc.componentOfBody(b.body) == c1) throw CommandError("Component 2: pick a different component");
+    // Bring origin 1 onto origin 2, facing it (or the same way with Flip).
+    const gp_Ax3& f2 = b.frame;
+    const bool flip = in.count("flip") && getString(in, "flip") == "Yes";
+    const gp_Ax3 target(f2.Location(), flip ? f2.Direction() : f2.Direction().Reversed(), f2.XDirection());
+    gp_Trsf place;
+    place.SetDisplacement(a.frame, target);
+    const std::string type = getString(in, "type");
+    double turn = real(in, "angle"), along = real(in, "offset");
+    if (type == "Revolute" || type == "Cylindrical") turn += real(in, "rotation");
+    if (type == "Slider" || type == "Cylindrical") along += real(in, "slide");
+    gp_Trsf rot, move;
+    rot.SetRotation(gp_Ax1(f2.Location(), target.Direction()), turn);
+    move.SetTranslation(gp_Vec(f2.Direction()) * along);   // away from component 2
+    gp_Trsf total = move;
+    total.Multiply(rot);
+    total.Multiply(place);
+    return {*c1, total};
+  }
+  CommandDef def_;
+};
+
 class PressPull final : public Command {
 public:
   PressPull() {
@@ -2146,6 +2380,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
   registry.add(std::make_unique<Pipe>());
+  registry.add(std::make_unique<NewComponent>());
+  registry.add(std::make_unique<Joint>());
   registry.add(std::make_unique<Thread>());
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Offset));
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Draft));

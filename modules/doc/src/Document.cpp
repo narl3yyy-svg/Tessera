@@ -35,6 +35,7 @@ constexpr int kSketchesTag = 4;
 constexpr int kPlanesTag = 5;
 constexpr int kAxesTag = 6;
 constexpr int kPointsTag = 7;
+constexpr int kComponentsTag = 8;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -140,6 +141,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kPlanesTag, true);
   doc_->Main().FindChild(kAxesTag, true);
   doc_->Main().FindChild(kPointsTag, true);
+  doc_->Main().FindChild(kComponentsTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -579,6 +581,48 @@ gp_Ax1 Document::axisFrame(const std::string& spec) const {
   throw DocumentError("unknown axis '" + spec + "'");
 }
 
+std::vector<Component> Document::components() const {
+  std::vector<Component> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kComponentsTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;
+    Component c;
+    c.name = nameOf(it.Value());
+    std::stringstream ss(stringOf(nd, "bodies"));
+    std::string b;
+    while (std::getline(ss, b, ';'))
+      if (!b.empty()) c.bodies.push_back(b);
+    out.push_back(std::move(c));
+  }
+  return out;
+}
+
+std::optional<Component> Document::component(const std::string& name) const {
+  for (auto& c : components())
+    if (c.name == name) return c;
+  return std::nullopt;
+}
+
+void Document::setComponent(const Component& c) {
+  requireTransaction("setComponent");
+  TDF_Label l = namedChild(doc_, kComponentsTag, c.name);
+  if (l.IsNull()) l = doc_->Main().FindChild(kComponentsTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(c.name));
+  std::string joined;
+  for (const auto& b : c.bodies) joined += (joined.empty() ? "" : ";") + b;
+  TDataStd_NamedData::Set(l)->SetString("bodies", ext(joined));
+}
+
+std::string Document::nextComponentName() const {
+  return freeName(features(), "Component", [&](const std::string& n) { return component(n).has_value(); });
+}
+
+std::optional<std::string> Document::componentOfBody(const std::string& body) const {
+  for (const auto& c : components())
+    if (std::find(c.bodies.begin(), c.bodies.end(), body) != c.bodies.end()) return c.name;
+  return std::nullopt;
+}
+
 std::vector<ConstructionPoint> Document::points() const {
   std::vector<ConstructionPoint> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kPointsTag, false)); it.More(); it.Next()) {
@@ -673,7 +717,7 @@ void Document::removeFeature(int id) {
 
 void Document::recompute(const CommandRegistry& registry) {
   requireTransaction("recompute");
-  for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag, kAxesTag, kPointsTag})
+  for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag, kAxesTag, kPointsTag, kComponentsTag})
     for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
       if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
 

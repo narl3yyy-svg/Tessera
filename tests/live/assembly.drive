@@ -1,0 +1,25 @@
+# Live: Joint by clicking the block's top face then the plate's top face,
+# make it revolute, OK; then Drive Joints with the slider, OK.
+waitfor tsr.assemble.joint
+wait 800
+click tsr.assemble.joint
+waitfor panelOk
+wait 400
+wclick 65 20 30        # block: top face centre
+wait 300
+wclick 20 20 10        # plate: top face centre
+wait 300
+choose type 1          # Revolute
+wait 500
+shot /tmp/live_joint.png
+click panelOk
+wait 400
+shot /tmp/live_joint_after.png
+wait 600
+click ui.driveJoints
+waitfor driveSlider
+wdrag driveSlider 30 0
+wait 400
+shot /tmp/live_drive.png
+click driveOk
+wait 500

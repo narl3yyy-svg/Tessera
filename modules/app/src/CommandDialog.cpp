@@ -229,6 +229,23 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::JointOrigin: {
+        auto* box = new QWidget;
+        auto* row = new QHBoxLayout(box);
+        row->setContentsMargins(0, 0, 0, 0);
+        auto* label = new QLabel;
+        auto* clear = new QPushButton(tr("Clear"));
+        clear->setObjectName(QStringLiteral("clear_") + QString::fromStdString(id));
+        row->addWidget(label, 1);
+        row->addWidget(clear);
+        jointIds_.emplace_back(id, label);
+        connect(clear, &QPushButton::clicked, this, [this, id] {
+          onInputChanged(id, std::string());
+          updateProfilesLabel();
+        });
+        w = box;
+        break;
+      }
       case InputType::Edges:
       case InputType::Faces:
       case InputType::Vertices:
@@ -422,6 +439,18 @@ void CommandDialog::setFaces(const QString& faces) {
   updateProfilesLabel();
 }
 
+void CommandDialog::pickJointOrigin(const QString& spec) {
+  if (jointIds_.empty()) return;
+  std::string target = jointIds_.back().first;
+  for (const auto& [id, label] : jointIds_)
+    if (stringInput(id).isEmpty()) {
+      target = id;
+      break;
+    }
+  onInputChanged(target, spec.toStdString());
+  updateProfilesLabel();
+}
+
 void CommandDialog::setVertices(const QString& v) {
   if (!verticesId_.empty()) onInputChanged(verticesId_, v.toStdString());
   updateProfilesLabel();
@@ -488,6 +517,11 @@ void CommandDialog::updateProfilesLabel() {
   if (facesLabel_) {
     const int n = count(currentFaces());
     facesLabel_->setText(n == 0 ? tr("None (click faces)") : tr("%n face(s)", nullptr, n));
+  }
+  for (const auto& [id, label] : jointIds_) {
+    const QString spec = stringInput(id);
+    const QStringList parts = spec.split(QLatin1Char('|'));
+    label->setText(parts.size() < 2 ? tr("Click a face, edge or point") : tr("%1: %2").arg(parts[0], parts[1]));
   }
   if (verticesLabel_) {
     const int n = count(currentVertices());

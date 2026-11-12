@@ -14,6 +14,8 @@ Script lines (blank lines and # comments ignored):
   vclick FX FY               click the canvas at fractions of its width/height
   plane XY|XZ|YZ             click that origin plane (while Create Sketch asks for one)
   sclick X Y                 click sketch coordinates (mm) of the open sketch
+  wclick X Y Z               click a world point (mm), e.g. on a face of a body
+  choose NAME INDEX          pick the INDEX-th entry (from 0) of combo box NAME
   smove X Y                  move the pointer there (hover)
   sdrag X1 Y1 X2 Y2          press at one sketch point, drag to another, release
   spress X Y / srelease      press (and hold) / release the left button at a sketch point
@@ -156,6 +158,14 @@ def sketch_point(x_mm, y_mm):
             o[1] + (ax[1] - o[1]) * x_mm / 10 + (ay[1] - o[1]) * y_mm / 10)
 
 
+def world_point(x, y, z):
+    w = geometry()["world"]
+    o = w["o"]
+    sx = o[0] + sum((w[k][0] - o[0]) * v / 10 for k, v in (("x", x), ("y", y), ("z", z)))
+    sy = o[1] + sum((w[k][1] - o[1]) * v / 10 for k, v in (("x", x), ("y", y), ("z", z)))
+    return sx, sy
+
+
 def main():
     with open(sys.argv[2]) as f:
         lines = f.read().splitlines()
@@ -188,6 +198,16 @@ def main():
                 time.sleep(0.1)
             p = geometry()["planes"][a[0]]
             click(p[0], p[1])
+        elif cmd == "wclick":
+            click(*world_point(float(a[0]), float(a[1]), float(a[2])))
+        elif cmd == "choose":
+            click(*widget(a[0]))
+            time.sleep(0.3)
+            key("Home")
+            for _ in range(int(a[1])):
+                key("Down")
+            key("Return")
+            time.sleep(0.3)
         elif cmd == "sclick":
             click(*sketch_point(float(a[0]), float(a[1])))
         elif cmd == "smove":

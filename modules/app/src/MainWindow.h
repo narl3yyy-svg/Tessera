@@ -121,6 +121,7 @@ private:
   void applySection();
   gp_Pln sectionPlane() const;
   void showCenterOfMass();
+  void driveJoints();
   void checkInterference();
   Unit lengthUnit() const;
   QString formatLength(double cm) const;
