@@ -8,6 +8,9 @@
 
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Kernel.h"
+
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <QButtonGroup>
@@ -309,17 +312,35 @@ void MainWindow::updateProfilePicking() {
 // Edge picking (Fillet, Chamfer)
 
 void MainWindow::updateEdgePicking() {
-  const bool on = active_ && active_->hasEdgesInput();
-  viewport_->setEdgePicking(on);
-  if (on) viewport_->setPickedEdges(pickedEdges_);
+  std::vector<TopAbs_ShapeEnum> types;
+  if (active_ && active_->hasEdgesInput()) types.push_back(TopAbs_EDGE);
+  if (active_ && active_->hasFacesInput()) types.push_back(TopAbs_FACE);
+  viewport_->setSubShapePicking(types);
+  if (!types.empty()) viewport_->setPickedShapes(pickedEdges_);
 }
 
 void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
-  if (!active_ || !active_->hasEdgesInput()) return;
+  if (!active_) return;
+  const bool isFace = edge.ShapeType() == TopAbs_FACE;
+  if (isFace ? !active_->hasFacesInput() : !(edge.ShapeType() == TopAbs_EDGE && active_->hasEdgesInput())) return;
   const TopoDS_Shape shape = viewport_->bodyShape(body);
   if (shape.IsNull()) return;
-  // Edges from another body start a new selection.
-  QStringList refs = active_->currentEdges().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+  auto current = [&] { return isFace ? active_->currentFaces() : active_->currentEdges(); };
+  auto store = [&](const QString& v) {
+    if (isFace) active_->setFaces(v);
+    else active_->setEdges(v);
+  };
+  auto keyPoint = [](const TopoDS_Shape& s) {
+    if (s.ShapeType() == TopAbs_FACE) {
+      GProp_GProps g;
+      BRepGProp::SurfaceProperties(s, g);
+      const gp_Pnt c = g.CentreOfMass();
+      return kernel::Vec3{c.X(), c.Y(), c.Z()};
+    }
+    return kernel::edgeMidpoint(s);
+  };
+  // Picks from another body start a new selection.
+  QStringList refs = current().split(QLatin1Char(';'), Qt::SkipEmptyParts);
   if (!active_->currentBody().isEmpty() && active_->currentBody() != body) {
     refs.clear();
     pickedEdges_.clear();
@@ -327,26 +348,26 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
   active_->pickBody(body);
   // Clicking a picked edge again removes it (compared by position: the
   // preview rebuilds the body, so the shapes are new objects).
-  const auto mid = kernel::edgeMidpoint(edge);
+  const auto mid = keyPoint(edge);
   for (int i = 0; i < static_cast<int>(pickedEdges_.size()); ++i) {
-    if (pickedEdges_[i].IsNull()) continue;
-    const auto m = kernel::edgeMidpoint(pickedEdges_[i]);
+    if (pickedEdges_[i].IsNull() || pickedEdges_[i].ShapeType() != edge.ShapeType()) continue;
+    const auto m = keyPoint(pickedEdges_[i]);
     if (std::abs(m.x - mid.x) + std::abs(m.y - mid.y) + std::abs(m.z - mid.z) < 1e-6) {
       pickedEdges_.erase(pickedEdges_.begin() + i);
       if (i < refs.size()) refs.removeAt(i);
-      active_->setEdges(refs.join(QLatin1Char(';')));
+      store(refs.join(QLatin1Char(';')));
       updateEdgePicking();
       return;
     }
   }
   try {
-    refs << QString::fromStdString(kernel::edgeReference(shape, edge));
+    refs << QString::fromStdString(isFace ? kernel::faceReference(shape, edge) : kernel::edgeReference(shape, edge));
   } catch (const std::exception& e) {
     statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
     return;
   }
   pickedEdges_.push_back(edge);
-  active_->setEdges(refs.join(QLatin1Char(';')));
+  store(refs.join(QLatin1Char(';')));
   updateEdgePicking();
 }
 

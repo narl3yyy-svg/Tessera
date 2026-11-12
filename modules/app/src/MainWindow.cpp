@@ -129,13 +129,22 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   setCentralWidget(viewport_);
   connect(viewport_, &Viewport::contextMenuRequested, this, &MainWindow::showContextMenu);
   connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
-  connect(viewport_, &Viewport::edgeClicked, this, &MainWindow::onEdgeClicked);
+  connect(viewport_, &Viewport::subShapeClicked, this, &MainWindow::onEdgeClicked);
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
     viewport_->setPlanePicking(false);
     if (startSketch(spec)) statusBar()->showMessage(tr("Sketching on %1.").arg(label), 4000);
   });
   connect(viewport_, &Viewport::statusMessage, this, [this](const QString& m) { statusBar()->showMessage(m, 5000); });
   connect(viewport_, &Viewport::bodyClicked, this, [this](const QString& name) {
+    if (active_ && active_->hasBodiesInput() && !active_->currentBody().isEmpty() && active_->currentBody() != name) {
+      // Combine: further bodies toggle in the tool list.
+      QStringList tools = active_->currentTools().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+      if (tools.contains(name)) tools.removeAll(name);
+      else tools << name;
+      active_->setTools(tools.join(QLatin1Char(';')));
+      viewport_->clearSelection();
+      return;
+    }
     if (active_ && active_->pickBody(name)) viewport_->clearSelection();
   });
   connect(viewport_, &Viewport::selectionChanged, this, [this] {

@@ -38,6 +38,14 @@ public:
   QString currentBody() const;
   void setEdges(const QString& edges);
 
+  // Faces (Shell) and tool bodies (Combine) picked in the 3D view.
+  bool hasFacesInput() const;
+  bool hasBodiesInput() const;
+  QString currentFaces() const;
+  QString currentTools() const;
+  void setFaces(const QString& faces);
+  void setTools(const QString& bodies);
+
 signals:
   void inputsChanged();
 
@@ -60,6 +68,11 @@ private:
   std::string profilesId_;
   QLabel* edgesLabel_ = nullptr;
   std::string edgesId_;
+  QLabel* facesLabel_ = nullptr;
+  std::string facesId_;
+  QLabel* bodiesLabel_ = nullptr;
+  std::string bodiesId_;
+  QString stringInput(const std::string& id) const;
   void updateProfilesLabel();
 };
 

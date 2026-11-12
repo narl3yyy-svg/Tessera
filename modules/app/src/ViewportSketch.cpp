@@ -2,7 +2,12 @@
 #include "Viewport.h"
 #include "Theme.h"
 
+#include <AIS_Point.hxx>
+#include <AIS_TextLabel.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepBuilderAPI_MakeEdge.hxx>
+#include <Geom_CartesianPoint.hxx>
+#include <Prs3d_PointAspect.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <Prs3d_LineAspect.hxx>
@@ -181,24 +186,96 @@ void Viewport::setPlanePicking(bool on) {
   updateView();
 }
 
-void Viewport::setEdgePicking(bool on) {
-  if (edgePicking_ == on) return;
-  edgePicking_ = on;
-  if (!on) setPickedEdges({});
+void Viewport::setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types) {
+  if (pickTypes_ == types) return;
+  pickTypes_ = types;
+  if (types.empty()) setPickedShapes({});
   applyPickModes();
 }
 
-void Viewport::setPickedEdges(const std::vector<TopoDS_Shape>& edges) {
+void Viewport::setPickedShapes(const std::vector<TopoDS_Shape>& shapes) {
   if (context_.IsNull()) return;
-  for (auto& e : pickedEdgeObjects_) context_->Remove(e, false);
-  pickedEdgeObjects_.clear();
-  for (const auto& e : edges) {
-    if (e.IsNull()) continue;
-    Handle(AIS_Shape) a = new AIS_Shape(e);
-    lineStyle(a, rgb(0, 160, 255), 4.0, Aspect_TOL_SOLID);
-    context_->Display(a, AIS_WireFrame, -1, false);
-    context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
-    pickedEdgeObjects_.push_back(a);
+  for (auto& e : pickedObjects_) context_->Remove(e, false);
+  pickedObjects_.clear();
+  for (const auto& s : shapes) {
+    if (s.IsNull()) continue;
+    Handle(AIS_Shape) a = new AIS_Shape(s);
+    const Quantity_Color blue = rgb(0, 160, 255);
+    if (s.ShapeType() == TopAbs_FACE) {
+      faceStyle(a, blue, 0.45);
+      context_->Display(a, AIS_Shaded, -1, false);
+    } else {
+      lineStyle(a, blue, 4.0, Aspect_TOL_SOLID);
+      a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, blue, 3.0));
+      context_->Display(a, AIS_WireFrame, -1, false);
+      context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+    }
+    pickedObjects_.push_back(a);
+  }
+  updateView();
+}
+
+void Viewport::setSection(bool on, const gp_Pln& plane) {
+  sectionOn_ = on;
+  if (on) {
+    if (clip_.IsNull()) {
+      clip_ = new Graphic3d_ClipPlane();
+      clip_->SetCapping(true);
+      clip_->SetCappingHatch(Aspect_HS_DIAGONAL_45);
+      clip_->SetCappingHatchOn();
+      clip_->SetUseObjectMaterial(false);
+      Graphic3d_MaterialAspect m(Graphic3d_NameOfMaterial_UserDefined);
+      m.SetDiffuseColor(rgb(214, 96, 70));
+      m.SetAmbientColor(rgb(214, 96, 70));
+      clip_->SetCappingMaterial(m);
+    }
+    // Graphic3d clips away the side the plane normal points to.
+    clip_->SetEquation(plane);
+    clip_->SetOn(true);
+  }
+  if (glReady_) rebuild();
+}
+
+void Viewport::setMeasureLine(bool on, const gp_Pnt& from, const gp_Pnt& to, const QString& label) {
+  if (context_.IsNull()) return;
+  for (auto& o : measureObjects_) context_->Remove(o, false);
+  measureObjects_.clear();
+  if (on && from.Distance(to) > 1e-9) {
+    Handle(AIS_Shape) l = new AIS_Shape(BRepBuilderAPI_MakeEdge(from, to).Shape());
+    lineStyle(l, rgb(255, 200, 40), 2.5, Aspect_TOL_DASH);
+    context_->Display(l, AIS_WireFrame, -1, false);
+    context_->SetZLayer(l, Graphic3d_ZLayerId_Topmost);
+    measureObjects_.push_back(l);
+    Handle(AIS_TextLabel) t = new AIS_TextLabel();
+    t->SetText(TCollection_ExtendedString(label.toUtf8().constData(), true));
+    t->SetPosition(gp_Pnt((from.XYZ() + to.XYZ()) / 2));
+    t->SetHeight(15);
+    t->SetColor(rgb(255, 214, 90));
+    context_->Display(t, 0, -1, false);
+    context_->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
+    measureObjects_.push_back(t);
+  }
+  updateView();
+}
+
+void Viewport::setMarker(bool on, const gp_Pnt& at, const QString& label) {
+  if (context_.IsNull()) return;
+  for (auto& o : markerObjects_) context_->Remove(o, false);
+  markerObjects_.clear();
+  if (on) {
+    Handle(AIS_Point) p = new AIS_Point(new Geom_CartesianPoint(at));
+    p->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_RING3, rgb(255, 200, 40), 3.0));
+    context_->Display(p, 0, -1, false);
+    context_->SetZLayer(p, Graphic3d_ZLayerId_Topmost);
+    markerObjects_.push_back(p);
+    Handle(AIS_TextLabel) t = new AIS_TextLabel();
+    t->SetText(TCollection_ExtendedString(label.toUtf8().constData(), true));
+    t->SetPosition(at);
+    t->SetHeight(14);
+    t->SetColor(rgb(255, 214, 90));
+    context_->Display(t, 0, -1, false);
+    context_->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
+    markerObjects_.push_back(t);
   }
   updateView();
 }
@@ -212,11 +289,13 @@ TopoDS_Shape Viewport::bodyShape(const QString& name) const {
 void Viewport::applyPickModes() {
   if (context_.IsNull()) return;
   const int faceMode = AIS_Shape::SelectionMode(TopAbs_FACE);
-  const int edgeMode = AIS_Shape::SelectionMode(TopAbs_EDGE);
   for (const auto& [name, shape] : shapes_) {
     if (!context_->IsDisplayed(shape)) continue;
     context_->Deactivate(shape);
-    context_->Activate(shape, planePicking_ ? faceMode : edgePicking_ ? edgeMode : 0);
+    if (planePicking_) context_->Activate(shape, faceMode);
+    else if (!pickTypes_.empty())
+      for (TopAbs_ShapeEnum t : pickTypes_) context_->Activate(shape, AIS_Shape::SelectionMode(t));
+    else context_->Activate(shape, 0);
   }
   for (auto& s : sketchCurves_) context_->Deactivate(s);
   for (auto& p : profileObjects_) {
@@ -238,14 +317,14 @@ bool Viewport::handlePickSelection() {
       emit profileClicked(QString::fromStdString(p.sketch), p.index);
       return true;
     }
-  if (edgePicking_) {
+  if (!pickTypes_.empty() && !planePicking_) {
     const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(owner);
-    if (!brep.IsNull() && brep->Shape().ShapeType() == TopAbs_EDGE) {
+    if (!brep.IsNull() && brep->HasShape()) {
       for (const auto& [name, shape] : shapes_)
         if (shape == obj) {
-          const TopoDS_Shape edge = brep->Shape();
+          const TopoDS_Shape picked = brep->Shape();
           context_->ClearSelected(false);
-          emit edgeClicked(QString::fromStdString(name), edge);
+          emit subShapeClicked(QString::fromStdString(name), picked);
           return true;
         }
     }

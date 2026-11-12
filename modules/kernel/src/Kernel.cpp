@@ -28,6 +28,18 @@
 #include <gp_Pnt2d.hxx>
 
 #include <cstdio>
+#include <cmath>
+
+#include <BRepAlgoAPI_Splitter.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeSolid.hxx>
+#include <BRepClass_FaceClassifier.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepOffsetAPI_MakeOffsetShape.hxx>
+#include <BRepOffsetAPI_MakeThickSolid.hxx>
+#include <Poly_Triangulation.hxx>
+#include <TopoDS_Shell.hxx>
+#include <gp_Pln.hxx>
 #include <gp_Trsf.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
@@ -404,6 +416,376 @@ std::vector<TopoDS_Shape> resolveEdges(const TopoDS_Shape& body, const std::stri
     if (!dup) out.push_back(edges(best + 1));
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Face references
+
+namespace {
+struct FaceSig {
+  Vec3 point;
+  bool full = false;
+  int type = 0;
+  Vec3 rel, normal;
+  double area = 0;
+};
+
+// A point inside the face: the UV centre if it lies on the face, else the
+// centroid of its largest mesh triangle.
+gp_Pnt pointOnFace(const TopoDS_Face& f) {
+  BRepAdaptor_Surface s(f);
+  const double u = (s.FirstUParameter() + s.LastUParameter()) / 2;
+  const double v = (s.FirstVParameter() + s.LastVParameter()) / 2;
+  BRepClass_FaceClassifier cls(f, gp_Pnt2d(u, v), 1e-7);
+  if (cls.State() == TopAbs_IN) return s.Value(u, v);
+  BRepMesh_IncrementalMesh mesh(f, 0.05, false, 0.5, false);
+  TopLoc_Location loc;
+  const Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(f, loc);
+  if (tri.IsNull() || tri->NbTriangles() == 0) return s.Value(u, v);
+  double best = -1;
+  gp_Pnt bestP = s.Value(u, v);
+  for (int i = 1; i <= tri->NbTriangles(); ++i) {
+    int n1, n2, n3;
+    tri->Triangle(i).Get(n1, n2, n3);
+    const gp_Pnt a = tri->Node(n1).Transformed(loc), b = tri->Node(n2).Transformed(loc),
+                 c = tri->Node(n3).Transformed(loc);
+    const double ar = gp_Vec(a, b).Crossed(gp_Vec(a, c)).Magnitude();
+    if (ar > best) {
+      best = ar;
+      bestP = gp_Pnt((a.XYZ() + b.XYZ() + c.XYZ()) / 3);
+    }
+  }
+  return bestP;
+}
+
+gp_Dir faceNormalAt(const TopoDS_Face& f, const gp_Pnt& p) {
+  const Handle(Geom_Surface) surf = BRep_Tool::Surface(f);
+  ShapeAnalysis_Surface sas(surf);
+  const gp_Pnt2d uv = sas.ValueOfUV(p, 1e-7);
+  BRepAdaptor_Surface bs(f, false);
+  BRepLProp_SLProps props(bs, uv.X(), uv.Y(), 1, 1e-7);
+  gp_Dir n = props.IsNormalDefined() ? props.Normal() : gp_Dir(0, 0, 1);
+  if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+  return n;
+}
+
+FaceSig faceSignature(const TopoDS_Face& f, const BodyFrame& frame) {
+  FaceSig s;
+  s.full = true;
+  const gp_Pnt p = pointOnFace(f);
+  s.point = {p.X(), p.Y(), p.Z()};
+  s.type = static_cast<int>(BRepAdaptor_Surface(f).GetType());
+  s.rel = frame.rel(p);
+  const gp_Dir n = faceNormalAt(f, p);
+  s.normal = {n.X(), n.Y(), n.Z()};
+  GProp_GProps g;
+  BRepGProp::SurfaceProperties(f, g);
+  s.area = g.Mass();
+  return s;
+}
+
+std::string encodeFace(const FaceSig& s) {
+  std::string out = fmt(s.point);
+  if (s.full) out += "@" + std::to_string(s.type) + ":" + fmt(s.rel) + ":" + fmt(s.normal) + ":" + fmt(s.area);
+  return out;
+}
+
+std::vector<FaceSig> decodeFaces(const std::string& refs) {
+  std::vector<FaceSig> out;
+  size_t start = 0;
+  while (start < refs.size()) {
+    size_t end = refs.find(';', start);
+    if (end == std::string::npos) end = refs.size();
+    const std::string item = refs.substr(start, end - start);
+    start = end + 1;
+    if (item.empty()) continue;
+    FaceSig s;
+    const size_t at = item.find('@');
+    s.point = parseVec(item.substr(0, at));
+    if (at != std::string::npos) {
+      std::vector<std::string> parts;
+      size_t p = at + 1;
+      while (p <= item.size()) {
+        size_t q = item.find(':', p);
+        if (q == std::string::npos) q = item.size();
+        parts.push_back(item.substr(p, q - p));
+        p = q + 1;
+      }
+      if (parts.size() != 4) throw KernelError("bad face reference '" + item + "'");
+      s.full = true;
+      s.type = std::stoi(parts[0]);
+      s.rel = parseVec(parts[1]);
+      s.normal = parseVec(parts[2]);
+      s.area = std::stod(parts[3]);
+    }
+    out.push_back(s);
+  }
+  return out;
+}
+
+double faceScore(const FaceSig& want, const FaceSig& have, double diag) {
+  const double absDist = (vec(want.point) - vec(have.point)).Magnitude() / diag;
+  if (!want.full) return absDist;
+  double s = 0;
+  if (want.type != have.type) s += 10;
+  s += 5 * (1 - dot(want.normal, have.normal));
+  s += 4 * (vec(want.rel) - vec(have.rel)).Magnitude();
+  if (want.area > 0 && have.area > 0) s += 0.5 * std::abs(std::log(have.area / want.area));
+  s += absDist;
+  return s;
+}
+
+TopoDS_Shape nearestFace(const TopoDS_Shape& body, const gp_Pnt& p, double tol) {
+  const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(p).Shape();
+  TopoDS_Shape best;
+  double bestD = tol;
+  for (TopExp_Explorer it(body, TopAbs_FACE); it.More(); it.Next()) {
+    BRepExtrema_DistShapeShape d(v, it.Current());
+    if (d.IsDone() && d.Value() < bestD) {
+      bestD = d.Value();
+      best = it.Current();
+    }
+  }
+  return best;
+}
+} // namespace
+
+std::string faceReference(const TopoDS_Shape& body, const TopoDS_Shape& face) {
+  return encodeFace(faceSignature(TopoDS::Face(face), BodyFrame(body)));
+}
+
+std::string completeFaceReferences(const TopoDS_Shape& body, const std::string& refs) {
+  const BodyFrame frame(body);
+  std::string out;
+  for (const auto& s : decodeFaces(refs)) {
+    std::string item = encodeFace(s);
+    if (!s.full) {
+      const TopoDS_Shape f = nearestFace(body, pnt(s.point), std::max(0.05, 0.2 * frame.diag));
+      if (f.IsNull()) throw KernelError("no face near the given point");
+      FaceSig full = faceSignature(TopoDS::Face(f), frame);
+      full.point = s.point;
+      item = encodeFace(full);
+    }
+    out += (out.empty() ? "" : ";") + item;
+  }
+  return out;
+}
+
+std::vector<TopoDS_Shape> resolveFaces(const TopoDS_Shape& body, const std::string& refs) {
+  const auto wants = decodeFaces(refs);
+  const BodyFrame frame(body);
+  std::vector<TopoDS_Shape> faces;
+  std::vector<FaceSig> have;
+  for (TopExp_Explorer it(body, TopAbs_FACE); it.More(); it.Next()) {
+    faces.push_back(it.Current());
+    have.push_back(faceSignature(TopoDS::Face(it.Current()), frame));
+  }
+  std::vector<TopoDS_Shape> out;
+  for (const auto& w : wants) {
+    int best = -1;
+    double bestScore = 1e300;
+    for (int i = 0; i < static_cast<int>(faces.size()); ++i) {
+      double sc;
+      if (!w.full) {
+        const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(w.point)).Shape();
+        BRepExtrema_DistShapeShape d(v, faces[i]);
+        sc = d.IsDone() ? d.Value() / frame.diag : 1e300;
+      } else {
+        sc = faceScore(w, have[i], frame.diag);
+      }
+      if (sc < bestScore) {
+        bestScore = sc;
+        best = i;
+      }
+    }
+    if (best < 0 || bestScore > (w.full ? 3.0 : 0.2))
+      throw KernelError("a selected face no longer exists (the body changed too much)");
+    bool dup = false;
+    for (const auto& f : out) dup = dup || f.IsSame(faces[best]);
+    if (!dup) out.push_back(faces[best]);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Shell, split
+
+namespace {
+TopoDS_Shape asSolid(const TopoDS_Shape& s) {
+  if (s.ShapeType() == TopAbs_SOLID) return s;
+  TopExp_Explorer solid(s, TopAbs_SOLID);
+  if (solid.More()) return solid.Current();
+  TopExp_Explorer shellIt(s, TopAbs_SHELL);
+  if (shellIt.More()) return BRepBuilderAPI_MakeSolid(TopoDS::Shell(shellIt.Current())).Solid();
+  return {};
+}
+} // namespace
+
+TopoDS_Shape shell(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& openFaces, double thickness, bool outside) {
+  requirePositive(thickness, "shell thickness");
+  TopoDS_Shape r;
+  try {
+    if (!openFaces.empty()) {
+      TopTools_ListOfShape faces;
+      for (const auto& f : openFaces) faces.Append(f);
+      BRepOffsetAPI_MakeThickSolid mk;
+      mk.MakeThickSolidByJoin(body, faces, outside ? thickness : -thickness, 1e-4);
+      if (mk.IsDone()) r = mk.Shape();
+    } else {
+      // Closed hollow: offset the whole body and subtract.
+      BRepOffsetAPI_MakeOffsetShape off;
+      off.PerformByJoin(body, outside ? thickness : -thickness, 1e-4);
+      if (off.IsDone()) {
+        const TopoDS_Shape other = asSolid(off.Shape());
+        if (!other.IsNull()) r = outside ? boolean(BooleanOp::Cut, other, body) : boolean(BooleanOp::Cut, body, other);
+      }
+    }
+  } catch (const Standard_Failure& f) {
+    throw KernelError(std::string("Shell: ") + f.GetMessageString());
+  } catch (const KernelError&) {
+    r.Nullify();
+  }
+  if (r.IsNull() || !isValid(r))
+    throw KernelError("Shell: could not hollow the body with that thickness (try a smaller thickness)");
+  return r;
+}
+
+std::vector<TopoDS_Shape> splitByPlane(const TopoDS_Shape& body, Vec3 origin, Vec3 normal) {
+  const BoundingBox bb = boundingBox(body);
+  const double diag = std::sqrt(std::pow(bb.max.x - bb.min.x, 2) + std::pow(bb.max.y - bb.min.y, 2) +
+                                std::pow(bb.max.z - bb.min.z, 2));
+  const double half = std::max(1.0, diag) * 2;
+  const gp_Dir n(normal.x, normal.y, normal.z);
+  // Centre the cutting face where the body is.
+  const gp_Pnt c((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2);
+  const gp_Pnt o = pnt(origin);
+  const gp_Pnt onPlane = c.Translated(-gp_Vec(n) * gp_Vec(o, c).Dot(gp_Vec(n)));
+  const gp_Pln pln(onPlane, n);
+  std::vector<TopoDS_Shape> out;
+  try {
+    const TopoDS_Face tool = BRepBuilderAPI_MakeFace(pln, -half, half, -half, half).Face();
+    BRepAlgoAPI_Splitter split;
+    TopTools_ListOfShape args, tools;
+    args.Append(body);
+    tools.Append(tool);
+    split.SetArguments(args);
+    split.SetTools(tools);
+    split.Build();
+    if (!split.IsDone() || split.HasErrors()) throw KernelError("Split: the operation failed");
+    for (TopExp_Explorer it(split.Shape(), TopAbs_SOLID); it.More(); it.Next()) out.push_back(it.Current());
+  } catch (const Standard_Failure& f) {
+    throw KernelError(std::string("Split: ") + f.GetMessageString());
+  }
+  if (out.size() < 2) throw KernelError("Split: the plane does not cross the body");
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Transforms
+
+TopoDS_Shape moved(const TopoDS_Shape& s, Vec3 offset, Vec3 pivot, Vec3 axisDir, double angle) {
+  gp_Trsf rot, tr;
+  if (std::abs(angle) > 1e-12) rot.SetRotation(gp_Ax1(pnt(pivot), gp_Dir(axisDir.x, axisDir.y, axisDir.z)), angle);
+  tr.SetTranslation(gp_Vec(offset.x, offset.y, offset.z));
+  return guarded("Move", [&] { return BRepBuilderAPI_Transform(s, tr * rot, true).Shape(); });
+}
+
+TopoDS_Shape mirrored(const TopoDS_Shape& s, Vec3 origin, Vec3 normal) {
+  gp_Trsf t;
+  t.SetMirror(gp_Ax2(pnt(origin), gp_Dir(normal.x, normal.y, normal.z)));
+  return guarded("Mirror", [&] { return BRepBuilderAPI_Transform(s, t, true).Shape(); });
+}
+
+TopoDS_Shape scaled(const TopoDS_Shape& s, double factor, Vec3 center) {
+  requirePositive(factor, "scale factor");
+  gp_Trsf t;
+  t.SetScale(pnt(center), factor);
+  return guarded("Scale", [&] { return BRepBuilderAPI_Transform(s, t, true).Shape(); });
+}
+
+// ---------------------------------------------------------------------------
+// Measure
+
+Measurement measure(const std::vector<TopoDS_Shape>& picks) {
+  using K = Measurement::Kind;
+  Measurement m;
+  auto add = [&](const std::string& name, double v, K k) { m.values.push_back({name, v, k}); };
+  auto describe = [&](const TopoDS_Shape& s, const std::string& prefix) {
+    switch (s.ShapeType()) {
+      case TopAbs_VERTEX: {
+        const gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(s));
+        add(prefix + "X", p.X(), K::Length);
+        add(prefix + "Y", p.Y(), K::Length);
+        add(prefix + "Z", p.Z(), K::Length);
+        break;
+      }
+      case TopAbs_EDGE: {
+        GProp_GProps g;
+        BRepGProp::LinearProperties(s, g);
+        add(prefix + "Length", g.Mass(), K::Length);
+        BRepAdaptor_Curve c(TopoDS::Edge(s));
+        if (c.GetType() == GeomAbs_Circle) add(prefix + "Radius", c.Circle().Radius(), K::Length);
+        break;
+      }
+      case TopAbs_FACE: {
+        GProp_GProps g;
+        BRepGProp::SurfaceProperties(s, g);
+        add(prefix + "Area", g.Mass(), K::Area);
+        BRepAdaptor_Surface a(TopoDS::Face(s));
+        if (a.GetType() == GeomAbs_Cylinder) add(prefix + "Radius", a.Cylinder().Radius(), K::Length);
+        if (a.GetType() == GeomAbs_Sphere) add(prefix + "Radius", a.Sphere().Radius(), K::Length);
+        break;
+      }
+      default: {
+        const MassProperties mp = massProperties(s);
+        add(prefix + "Volume", mp.volume, K::Volume);
+        add(prefix + "Area", mp.area, K::Area);
+        break;
+      }
+    }
+  };
+  if (picks.empty()) return m;
+  if (picks.size() == 1) {
+    describe(picks[0], "");
+    return m;
+  }
+  const TopoDS_Shape& a = picks[0];
+  const TopoDS_Shape& b = picks[1];
+  BRepExtrema_DistShapeShape d(a, b);
+  if (d.IsDone() && d.NbSolution() > 0) {
+    const gp_Pnt p = d.PointOnShape1(1), q = d.PointOnShape2(1);
+    add("Distance", d.Value(), K::Length);
+    add("dX", std::abs(q.X() - p.X()), K::Length);
+    add("dY", std::abs(q.Y() - p.Y()), K::Length);
+    add("dZ", std::abs(q.Z() - p.Z()), K::Length);
+    m.hasLine = d.Value() > 1e-9;
+    m.from = {p.X(), p.Y(), p.Z()};
+    m.to = {q.X(), q.Y(), q.Z()};
+  }
+  // Angle between two flat faces or two straight edges.
+  auto direction = [](const TopoDS_Shape& s, gp_Dir& out) {
+    if (s.ShapeType() == TopAbs_FACE) {
+      BRepAdaptor_Surface a(TopoDS::Face(s));
+      if (a.GetType() != GeomAbs_Plane) return false;
+      out = a.Plane().Axis().Direction();
+      if (s.Orientation() == TopAbs_REVERSED) out.Reverse();
+      return true;
+    }
+    if (s.ShapeType() == TopAbs_EDGE) {
+      BRepAdaptor_Curve c(TopoDS::Edge(s));
+      if (c.GetType() != GeomAbs_Line) return false;
+      out = c.Line().Direction();
+      return true;
+    }
+    return false;
+  };
+  gp_Dir da, db;
+  if (direction(a, da) && direction(b, db) && a.ShapeType() == b.ShapeType()) {
+    double ang = da.Angle(db);
+    if (a.ShapeType() == TopAbs_EDGE && ang > M_PI / 2) ang = M_PI - ang;
+    add("Angle", ang, K::Angle);
+  }
+  return m;
 }
 
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius) {

@@ -317,6 +317,7 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
     if (f.commandId == d.id) ++n;
   std::string base = d.name;
   base.erase(std::remove(base.begin(), base.end(), ' '), base.end());
+  if (const auto slash = base.find('/'); slash != std::string::npos) base.resize(slash);   // "Move/Copy" -> "Move"
   std::string name = base + std::to_string(n);
   if (!d.nameInput.empty())
     if (auto it = inputs.find(d.nameInput); it != inputs.end())

@@ -626,6 +626,322 @@ private:
   CommandDef def_;
 };
 
+
+// ---------------------------------------------------------------------------
+// Body-level modify features.
+
+InputDef bodyInput(const char* id = "body", const char* label = "Body", bool optional = true) {
+  return InputDef{.id = id, .label = label,
+                  .tooltip = optional ? "Empty: the most recent body. Click a body to choose." : "Click a body.",
+                  .type = InputType::Body, .defaultValue = std::string{}, .optional = optional};
+}
+
+// Resolves the "body" input (empty: most recent) and records it.
+std::string bodyName(const Inputs& in, const Document& doc, const char* id = "body") {
+  std::string name = getString(in, id);
+  if (name.empty()) {
+    const auto bodies = doc.bodies();
+    if (bodies.empty()) throw CommandError("there is no body");
+    name = bodies.back().name;
+  }
+  if (!doc.body(name)) throw CommandError("Body: '" + name + "' does not exist");
+  return name;
+}
+
+std::string checkBody(const Inputs& in, const Document& doc, const char* id = "body") {
+  const std::string name = getString(in, id);
+  if (name.empty() ? doc.bodies().empty() : !doc.body(name))
+    return name.empty() ? "Body: there is no body yet" : "Body: '" + name + "' does not exist";
+  return {};
+}
+
+void defaultBody(Inputs& in, const Document& doc, const char* id = "body") {
+  if (getString(in, id).empty()) {
+    const auto bodies = doc.bodies();
+    if (!bodies.empty()) in[id] = bodies.back().name;
+  }
+}
+
+kernel::Vec3 bodyCentre(const TopoDS_Shape& s) {
+  const auto b = kernel::boundingBox(s);
+  return {(b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, (b.min.z + b.max.z) / 2};
+}
+
+std::vector<std::string> splitNames(const std::string& text) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  while (start <= text.size()) {
+    size_t end = text.find(';', start);
+    if (end == std::string::npos) end = text.size();
+    if (end > start) out.push_back(text.substr(start, end - start));
+    start = end + 1;
+  }
+  return out;
+}
+
+void commonDef(CommandDef& d, const char* id, const char* name, const char* tip, const char* icon, const char* panel = "Modify") {
+  d.id = id;
+  d.name = name;
+  d.tooltip = tip;
+  d.workspace = "Design";
+  d.tab = "Solid";
+  d.panel = panel;
+  d.icon = icon;
+  d.feature = true;
+}
+
+class Shell final : public Command {
+public:
+  Shell() {
+    commonDef(def_, kCmdShell, "Shell", "Hollows a body to a wall thickness. Click faces to leave open; none: a closed hollow.", "shell");
+    def_.inputs = {
+        bodyInput(),
+        {.id = "faces", .label = "Open faces", .tooltip = "Faces to remove. None: closed hollow.",
+         .type = InputType::Faces, .defaultValue = std::string{}, .optional = true},
+        {.id = "thickness", .label = "Thickness", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.2,
+         .unit = Unit::Millimeter, .min = 0.0, .max = std::nullopt, .minExclusive = true},
+        choice("direction", "Direction", {"Inside", "Outside"}, "Where the wall goes relative to the surface."),
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Open faces: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const auto body = doc.body(name);
+    try {
+      const std::string refs = getString(in, "faces");
+      const auto faces = refs.empty() ? std::vector<TopoDS_Shape>{} : kernel::resolveFaces(body->shape, refs);
+      doc.replaceBody(name, kernel::shell(body->shape, faces, getReal(in, "thickness"),
+                                          getString(in, "direction") == "Outside"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class Combine final : public Command {
+public:
+  Combine() {
+    commonDef(def_, kCmdCombine, "Combine", "Joins, cuts or intersects bodies: a target body and one or more tool bodies.", "combine");
+    def_.inputs = {
+        bodyInput("target", "Target body", false),
+        {.id = "tools", .label = "Tool bodies", .tooltip = "Click the tool bodies.", .type = InputType::Bodies,
+         .defaultValue = std::string{}},
+        choice("operation", "Operation", {"Join", "Cut", "Intersect"}, "Join merges, Cut subtracts the tools, Intersect keeps the overlap."),
+        {.id = "keep", .label = "Keep tools", .tooltip = "Keep the tool bodies instead of consuming them.",
+         .type = InputType::Bool, .defaultValue = false},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string target = getString(in, "target");
+    if (!doc.body(target)) return "Target body: '" + target + "' does not exist";
+    for (const auto& t : splitNames(getString(in, "tools"))) {
+      if (t == target) return "Tool bodies: the target cannot also be a tool";
+      if (!doc.body(t)) return "Tool bodies: '" + t + "' does not exist";
+    }
+    return {};
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string target = getString(in, "target");
+    auto shape = doc.body(target);
+    if (!shape) throw CommandError("Target body: '" + target + "' does not exist");
+    const std::string op = getString(in, "operation");
+    const auto kind = op == "Join" ? kernel::BooleanOp::Join : op == "Cut" ? kernel::BooleanOp::Cut : kernel::BooleanOp::Intersect;
+    TopoDS_Shape result = shape->shape;
+    const auto tools = splitNames(getString(in, "tools"));
+    if (tools.empty()) throw CommandError("Tool bodies: select one or more bodies");
+    for (const auto& t : tools) {
+      const auto tb = doc.body(t);
+      if (!tb) throw CommandError("Tool bodies: '" + t + "' does not exist");
+      try {
+        result = kernel::boolean(kind, result, tb->shape);
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+    }
+    doc.replaceBody(target, result);
+    if (!getBool(in, "keep"))
+      for (const auto& t : tools) doc.removeBody(t);
+  }
+
+private:
+  CommandDef def_;
+};
+
+gp_Ax3 planeOf(const Inputs& in) {
+  try {
+    return sketch::planeFrame(getString(in, "plane"), getReal(in, "offset"));
+  } catch (const sketch::SketchError& e) {
+    throw CommandError(e.what());
+  }
+}
+
+InputDef planeChoice(const char* tip) { return choice("plane", "Plane", {"XY", "XZ", "YZ"}, tip); }
+InputDef planeOffset() {
+  return InputDef{.id = "offset", .label = "Offset", .tooltip = "Moves the plane along its normal.",
+                  .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter};
+}
+
+class SplitBody final : public Command {
+public:
+  SplitBody() {
+    commonDef(def_, kCmdSplitBody, "Split Body", "Cuts a body into separate bodies with a plane.", "split");
+    def_.inputs = {bodyInput(), planeChoice("Splitting plane (origin plane, moved by Offset)."), planeOffset()};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const gp_Ax3 f = planeOf(in);
+    const gp_Pnt o = f.Location();
+    const gp_Dir n = f.Direction();
+    std::vector<TopoDS_Shape> parts;
+    try {
+      parts = kernel::splitByPlane(doc.body(name)->shape, {o.X(), o.Y(), o.Z()}, {n.X(), n.Y(), n.Z()});
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+    doc.replaceBody(name, parts[0]);
+    for (size_t i = 1; i < parts.size(); ++i) doc.addBody(doc.nextBodyName(), parts[i]);
+  }
+
+private:
+  CommandDef def_;
+};
+
+class MoveCopy final : public Command {
+public:
+  MoveCopy() {
+    commonDef(def_, kCmdMove, "Move/Copy", "Moves or copies a body: translate, then rotate about an axis through its centre.", "move");
+    def_.shortcut = "M";
+    auto len = [](const char* id, const char* label) {
+      return InputDef{.id = id, .label = label, .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
+                      .unit = Unit::Millimeter};
+    };
+    def_.inputs = {bodyInput(), len("x", "X distance"), len("y", "Y distance"), len("z", "Z distance"),
+                   choice("axis", "Rotate about", {"Z", "Y", "X"}, "Axis through the body centre."),
+                   {.id = "angle", .label = "Angle", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
+                    .unit = Unit::Degree},
+                   {.id = "copy", .label = "Create copy", .tooltip = "Keep the original and add a moved copy.",
+                    .type = InputType::Bool, .defaultValue = false}};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    const std::string a = getString(in, "axis");
+    const kernel::Vec3 dir = a == "X" ? kernel::Vec3{1, 0, 0} : a == "Y" ? kernel::Vec3{0, 1, 0} : kernel::Vec3{0, 0, 1};
+    TopoDS_Shape r;
+    try {
+      r = kernel::moved(s, {getReal(in, "x"), getReal(in, "y"), getReal(in, "z")}, bodyCentre(s), dir, getReal(in, "angle"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+    if (getBool(in, "copy")) doc.addBody(doc.nextBodyName(), r);
+    else doc.replaceBody(name, r);
+  }
+
+private:
+  CommandDef def_;
+};
+
+class Mirror final : public Command {
+public:
+  Mirror() {
+    commonDef(def_, kCmdMirror, "Mirror", "Mirrors a body across a plane, as a new body or joined to the original.", "mirror", "Create");
+    def_.inputs = {bodyInput(), planeChoice("Mirror plane (origin plane, moved by Offset)."), planeOffset(),
+                   choice("operation", "Operation", {"New Body", "Join"}, "Join merges the mirror image with the original.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const gp_Ax3 f = planeOf(in);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    try {
+      const TopoDS_Shape m = kernel::mirrored(s, {f.Location().X(), f.Location().Y(), f.Location().Z()},
+                                              {f.Direction().X(), f.Direction().Y(), f.Direction().Z()});
+      if (getString(in, "operation") == "Join") doc.replaceBody(name, kernel::boolean(kernel::BooleanOp::Join, s, m));
+      else doc.addBody(doc.nextBodyName(), m);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class Scale final : public Command {
+public:
+  Scale() {
+    commonDef(def_, kCmdScale, "Scale", "Scales a body uniformly.", "scale");
+    def_.inputs = {bodyInput(),
+                   {.id = "factor", .label = "Scale factor", .tooltip = "2 doubles every size.", .type = InputType::Real,
+                    .defaultValue = 1.0, .unit = Unit::None, .min = 0.0, .max = std::nullopt, .minExclusive = true},
+                   choice("about", "About", {"Body centre", "Origin"}, "Point that stays fixed.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape s = doc.body(name)->shape;
+    try {
+      const kernel::Vec3 c = getString(in, "about") == "Origin" ? kernel::Vec3{} : bodyCentre(s);
+      doc.replaceBody(name, kernel::scaled(s, getReal(in, "factor"), c));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+class RemoveBody final : public Command {
+public:
+  RemoveBody() {
+    commonDef(def_, kCmdRemove, "Remove", "Removes a body from the design (as a timeline step, so it can be undone or edited).", "remove");
+    def_.inputs = {bodyInput()};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    doc.removeBody(bodyName(in, doc));
+  }
+
+private:
+  CommandDef def_;
+};
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
@@ -637,8 +953,15 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(makeSphere());
   registry.add(makeTorus());
   registry.add(makeCone());
+  registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));
+  registry.add(std::make_unique<Shell>());
+  registry.add(std::make_unique<Scale>());
+  registry.add(std::make_unique<Combine>());
+  registry.add(std::make_unique<SplitBody>());
+  registry.add(std::make_unique<MoveCopy>());
+  registry.add(std::make_unique<RemoveBody>());
   registry.add(std::make_unique<AddUserParameter>());
 }
 

@@ -14,7 +14,10 @@
 #include <AIS_ViewCube.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
+#include <Graphic3d_ClipPlane.hxx>
+#include <TopAbs_ShapeEnum.hxx>
 #include <gp_Ax3.hxx>
+#include <gp_Pln.hxx>
 
 #include <QOpenGLWidget>
 #include <QStringList>
@@ -91,9 +94,22 @@ public:
   // Origin planes and flat body faces become clickable (Create Sketch).
   void setPlanePicking(bool on);
   bool planePicking() const { return planePicking_; }
-  // Body edges become clickable (Fillet, Chamfer); picked ones are highlighted.
-  void setEdgePicking(bool on);
-  void setPickedEdges(const std::vector<TopoDS_Shape>& edges);
+  // Parts of bodies become clickable (edges for Fillet, faces for Shell,
+  // vertices/edges/faces for Measure); picked ones are highlighted.
+  void setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types);
+  void setEdgePicking(bool on) { setSubShapePicking(on ? std::vector<TopAbs_ShapeEnum>{TopAbs_EDGE} : std::vector<TopAbs_ShapeEnum>{}); }
+  void setPickedShapes(const std::vector<TopoDS_Shape>& shapes);
+  void setPickedEdges(const std::vector<TopoDS_Shape>& edges) { setPickedShapes(edges); }
+
+  // Section analysis: bodies are cut by the plane (the side the normal points
+  // to is removed) and the cut faces are filled with a hatch.
+  void setSection(bool on, const gp_Pln& plane = gp_Pln());
+  bool sectionOn() const { return sectionOn_; }
+
+  // Measure overlay: a line between two points with a label; none to clear.
+  void setMeasureLine(bool on, const gp_Pnt& from = gp_Pnt(), const gp_Pnt& to = gp_Pnt(), const QString& label = QString());
+  // A marker with a label at a point (Center of Mass); none to clear.
+  void setMarker(bool on, const gp_Pnt& at = gp_Pnt(), const QString& label = QString());
   // The current shape of a displayed body (what the user sees and clicks).
   TopoDS_Shape bodyShape(const QString& name) const;
 
@@ -109,7 +125,7 @@ public:
 
 signals:
   void profileClicked(const QString& sketch, int index);
-  void edgeClicked(const QString& body, const TopoDS_Shape& edge);
+  void subShapeClicked(const QString& body, const TopoDS_Shape& shape);
   void planePicked(const QString& spec, const QString& label);
   void bodyClicked(const QString& name);
   void selectionChanged();
@@ -171,9 +187,13 @@ private:
   std::vector<ProfileObject> profileObjects_;
   std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
   bool profilePicking_ = false;
-  bool edgePicking_ = false;
+  std::vector<TopAbs_ShapeEnum> pickTypes_;
+  bool sectionOn_ = false;
+  Handle(Graphic3d_ClipPlane) clip_;
+  std::vector<Handle(AIS_InteractiveObject)> measureObjects_;
+  std::vector<Handle(AIS_InteractiveObject)> markerObjects_;
   bool ghosted_ = false;
-  std::vector<Handle(AIS_Shape)> pickedEdgeObjects_;
+  std::vector<Handle(AIS_Shape)> pickedObjects_;
   bool planePicking_ = false;
   std::string pickedSketch_;
   std::vector<int> pickedProfiles_;

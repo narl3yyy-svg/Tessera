@@ -441,6 +441,7 @@ void Viewport::rebuild() {
     Handle(AIS_Shape) s = new AIS_Shape(b.shape);
     s->SetMaterial(bodyMaterial());
     if (ghosted_) s->SetTransparency(0.78);
+    if (sectionOn_ && !clip_.IsNull()) s->AddClipPlane(clip_);
     applyStyle(s);
     shapes_[b.name] = s;
     if (!hidden_[b.name]) {

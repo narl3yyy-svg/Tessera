@@ -73,6 +73,43 @@ Vec3 edgeMidpoint(const TopoDS_Shape& edge);
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius);
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance);
 
+// Face references, same scheme as edges: "x,y,z" (a point on the face) or
+// that plus a signature (surface type, normal, position relative to the
+// body's bounding box, area).
+std::string faceReference(const TopoDS_Shape& body, const TopoDS_Shape& face);
+std::string completeFaceReferences(const TopoDS_Shape& body, const std::string& refs);
+std::vector<TopoDS_Shape> resolveFaces(const TopoDS_Shape& body, const std::string& refs);
+
+// Hollows a body. Faces in `openFaces` are removed (open shell); with none,
+// the body becomes a closed hollow. Thickness goes inside or outside.
+TopoDS_Shape shell(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& openFaces, double thickness, bool outside);
+
+// Splits a body with a plane. Returns the resulting solids (at least two);
+// throws if the plane does not cross the body.
+std::vector<TopoDS_Shape> splitByPlane(const TopoDS_Shape& body, Vec3 origin, Vec3 normal);
+
+// Rigid move: rotate by `angle` radians about the axis through `pivot` along
+// `axisDir`, then translate by `offset`.
+TopoDS_Shape moved(const TopoDS_Shape& s, Vec3 offset, Vec3 pivot, Vec3 axisDir, double angle);
+// Mirror image across the plane through `origin` with normal `normal`.
+TopoDS_Shape mirrored(const TopoDS_Shape& s, Vec3 origin, Vec3 normal);
+// Uniform scale about `center`; factor > 0.
+TopoDS_Shape scaled(const TopoDS_Shape& s, double factor, Vec3 center);
+
+// Measurement of one or two picked shapes (vertex, edge, face or solid).
+struct Measurement {
+  enum class Kind { Length, Area, Volume, Angle };
+  struct Value {
+    std::string name;
+    double value = 0;   // internal units: cm, cm^2, cm^3, radians
+    Kind kind = Kind::Length;
+  };
+  std::vector<Value> values;
+  bool hasLine = false;   // closest points between two picks
+  Vec3 from, to;
+};
+Measurement measure(const std::vector<TopoDS_Shape>& picks);
+
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError
 // if OCCT fails or the result is empty (e.g. a cut that removes everything).

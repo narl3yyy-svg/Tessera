@@ -11,6 +11,13 @@ inline constexpr const char* kCmdExtrude = "tsr.feature.extrude";
 inline constexpr const char* kCmdRevolve = "tsr.feature.revolve";
 inline constexpr const char* kCmdFillet = "tsr.feature.fillet";
 inline constexpr const char* kCmdChamfer = "tsr.feature.chamfer";
+inline constexpr const char* kCmdShell = "tsr.feature.shell";
+inline constexpr const char* kCmdCombine = "tsr.feature.combine";
+inline constexpr const char* kCmdSplitBody = "tsr.feature.splitBody";
+inline constexpr const char* kCmdMove = "tsr.feature.move";
+inline constexpr const char* kCmdMirror = "tsr.feature.mirror";
+inline constexpr const char* kCmdScale = "tsr.feature.scale";
+inline constexpr const char* kCmdRemove = "tsr.feature.remove";
 inline constexpr const char* kCmdCylinder = "tsr.primitive.cylinder";
 inline constexpr const char* kCmdSphere = "tsr.primitive.sphere";
 inline constexpr const char* kCmdTorus = "tsr.primitive.torus";
@@ -32,6 +39,13 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 //   tsr.feature.fillet       body (empty: latest), edges ("x,y,z;..." points on
 //                            the edges), radius
 //   tsr.feature.chamfer      body, edges, distance
+//   tsr.feature.shell        body, faces (open faces; empty: closed hollow), thickness, direction
+//   tsr.feature.combine      target, tools ("Body2;Body3"), operation, keep (tools)
+//   tsr.feature.splitBody    body, plane ("XY"/"XZ"/"YZ"), offset
+//   tsr.feature.move         body, x/y/z, axis, angle (rad), copy
+//   tsr.feature.mirror       body, plane, offset, operation ("New Body"/"Join")
+//   tsr.feature.scale        body, factor, about ("Body centre"/"Origin")
+//   tsr.feature.remove       body
 // All of these except the parameter command are timeline features.
 void registerDocCommands(CommandRegistry& registry);
 

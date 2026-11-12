@@ -78,12 +78,16 @@ std::string CommandSession::checkInput(const InputDef& d, const Value& v) const 
     case InputType::Body:
     case InputType::Sketch:
     case InputType::Profiles:
-    case InputType::Edges: {
+    case InputType::Edges:
+    case InputType::Faces:
+    case InputType::Bodies: {
       auto p = std::get_if<std::string>(&v);
       if (!p) return d.label + ": expected text";
       if (p->empty() && !d.optional)
         return d.label + (d.type == InputType::Body    ? ": select a body"
                           : d.type == InputType::Edges ? ": select one or more edges in the canvas"
+                          : d.type == InputType::Faces ? ": select one or more faces in the canvas"
+                          : d.type == InputType::Bodies ? ": select one or more bodies in the canvas"
                                                        : ": required");
       return {};
     }

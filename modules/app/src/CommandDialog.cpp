@@ -99,17 +99,34 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
-      case InputType::Edges: {
+      case InputType::Edges:
+      case InputType::Faces:
+      case InputType::Bodies: {
+        // Filled by clicking in the 3D view.
         auto* box = new QWidget;
         auto* row = new QHBoxLayout(box);
         row->setContentsMargins(0, 0, 0, 0);
-        edgesLabel_ = new QLabel;
+        auto* label = new QLabel;
         auto* clear = new QPushButton(tr("Clear"));
-        clear->setObjectName(QStringLiteral("clearEdges"));
-        row->addWidget(edgesLabel_, 1);
+        row->addWidget(label, 1);
         row->addWidget(clear);
-        edgesId_ = id;
-        connect(clear, &QPushButton::clicked, this, [this] { setEdges(QString()); });
+        if (in.type == InputType::Edges) {
+          edgesLabel_ = label;
+          edgesId_ = id;
+          clear->setObjectName(QStringLiteral("clearEdges"));
+        } else if (in.type == InputType::Faces) {
+          facesLabel_ = label;
+          facesId_ = id;
+          clear->setObjectName(QStringLiteral("clearFaces"));
+        } else {
+          bodiesLabel_ = label;
+          bodiesId_ = id;
+          clear->setObjectName(QStringLiteral("clearBodies"));
+        }
+        connect(clear, &QPushButton::clicked, this, [this, id] {
+          onInputChanged(id, std::string());
+          updateProfilesLabel();
+        });
         w = box;
         break;
       }
@@ -143,6 +160,9 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           onInputChanged(id, combo->currentData().toString().toStdString());
         });
         if (!bodyInput_) bodyInput_ = combo;
+        // A required body starts as the first one listed.
+        if (!in.optional && combo->count() > 0 && std::get_if<std::string>(&cur) && std::get<std::string>(cur).empty())
+          (void)cmd_->setInput(id, combo->currentData().toString().toStdString());
         w = combo;
         break;
       }
@@ -215,6 +235,26 @@ void CommandDialog::reject() {
 
 bool CommandDialog::hasProfilesInput() const { return !profilesId_.empty(); }
 bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
+bool CommandDialog::hasFacesInput() const { return !facesId_.empty(); }
+bool CommandDialog::hasBodiesInput() const { return !bodiesId_.empty(); }
+
+QString CommandDialog::stringInput(const std::string& id) const {
+  if (id.empty()) return {};
+  if (auto s = std::get_if<std::string>(&cmd_->inputs().at(id))) return QString::fromStdString(*s);
+  return {};
+}
+QString CommandDialog::currentFaces() const { return stringInput(facesId_); }
+QString CommandDialog::currentTools() const { return stringInput(bodiesId_); }
+
+void CommandDialog::setFaces(const QString& faces) {
+  if (!facesId_.empty()) onInputChanged(facesId_, faces.toStdString());
+  updateProfilesLabel();
+}
+
+void CommandDialog::setTools(const QString& bodies) {
+  if (!bodiesId_.empty()) onInputChanged(bodiesId_, bodies.toStdString());
+  updateProfilesLabel();
+}
 
 QString CommandDialog::currentEdges() const {
   if (edgesId_.empty()) return {};
@@ -264,10 +304,18 @@ void CommandDialog::setProfiles(const QString& sketch, const QString& profiles) 
 }
 
 void CommandDialog::updateProfilesLabel() {
+  auto count = [](const QString& s) { return s.isEmpty() ? 0 : static_cast<int>(s.count(QLatin1Char(';'))) + 1; };
   if (edgesLabel_) {
-    const QString e = currentEdges();
-    const int n = e.isEmpty() ? 0 : e.count(QLatin1Char(';')) + 1;
+    const int n = count(currentEdges());
     edgesLabel_->setText(n == 0 ? tr("Click edges in the canvas") : tr("%n edge(s)", nullptr, n));
+  }
+  if (facesLabel_) {
+    const int n = count(currentFaces());
+    facesLabel_->setText(n == 0 ? tr("None (click faces to open)") : tr("%n face(s)", nullptr, n));
+  }
+  if (bodiesLabel_) {
+    const QString t = currentTools();
+    bodiesLabel_->setText(t.isEmpty() ? tr("Click bodies in the canvas") : t);
   }
   if (!profilesLabel_) return;
   const QString p = currentProfiles();
