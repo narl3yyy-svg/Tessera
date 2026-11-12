@@ -78,6 +78,13 @@ std::vector<TopoDS_Shape> resolveVertices(const TopoDS_Shape& body, const std::s
 // KernelError, e.g. when the size does not fit the adjacent faces.
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius);
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance);
+// Unequal chamfers, as in the familiar Chamfer types. TwoDistances: `first`
+// along one face of each edge, `second` along the other. DistanceAngle:
+// `first` along one face and the chamfer at `second` radians to that face.
+// `flip` swaps which face of each edge is the first.
+enum class ChamferType { TwoDistances, DistanceAngle };
+TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, ChamferType type,
+                       double first, double second, bool flip);
 
 // Face references, same scheme as edges: "x,y,z" (a point on the face) or
 // that plus a signature (surface type, normal, position relative to the

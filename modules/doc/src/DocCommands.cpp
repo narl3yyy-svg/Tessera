@@ -747,7 +747,7 @@ public:
     def_.id = f ? kCmdFillet : kCmdChamfer;
     def_.name = f ? "Fillet" : "Chamfer";
     def_.tooltip = f ? "Rounds the selected edges of a body. Connected smooth edges are included."
-                     : "Bevels the selected edges of a body with an equal-distance chamfer.";
+                     : "Bevels the selected edges: equal distance, two distances, or a distance and an angle.";
     def_.workspace = "Design";
     def_.tab = "Solid";
     def_.panel = "Modify";
@@ -763,6 +763,22 @@ public:
          .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0, .max = std::nullopt,
          .minExclusive = true},
     };
+    if (!f) {
+      // The familiar Chamfer Type; the panel shows its two extra fields.
+      def_.inputs.insert(def_.inputs.begin() + 2,
+                         choice("chamferType", "Chamfer Type", {"Equal Distance", "Two Distances", "Distance and Angle"},
+                                "Equal Distance: the same on both faces. Two Distances: one per face. "
+                                "Distance and Angle: a distance and the angle to that face."));
+      def_.inputs.push_back({.id = "distance2", .label = "Distance 2", .tooltip = "Along the other face.",
+                             .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0,
+                             .max = std::nullopt, .minExclusive = true, .visibleWhen = "chamferType=Two Distances"});
+      def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = "Between the chamfer and the first face.",
+                             .type = InputType::Real, .defaultValue = 3.14159265358979323846 / 4, .unit = Unit::Degree,
+                             .visibleWhen = "chamferType=Distance and Angle"});
+      def_.inputs.push_back({.id = "flip", .label = "Flip", .tooltip = "Swaps which face takes the first distance.",
+                             .type = InputType::Bool, .defaultValue = false,
+                             .visibleWhen = "chamferType=Two Distances|Distance and Angle"});
+    }
   }
   const CommandDef& def() const override { return def_; }
 
@@ -803,8 +819,24 @@ public:
     if (!body) throw CommandError("Body: '" + name + "' does not exist");
     try {
       const auto edges = kernel::resolveEdges(body->shape, getString(in, "edges"));
-      const TopoDS_Shape result = kind_ == Kind::Fillet ? kernel::fillet(body->shape, edges, getReal(in, "radius"))
-                                                        : kernel::chamfer(body->shape, edges, getReal(in, "distance"));
+      TopoDS_Shape result;
+      if (kind_ == Kind::Fillet) {
+        result = kernel::fillet(body->shape, edges, getReal(in, "radius"));
+      } else {
+        // Chamfers made before the Chamfer Type existed are equal distance.
+        std::string type = "Equal Distance";
+        if (auto it = in.find("chamferType"); it != in.end())
+          if (auto s = std::get_if<std::string>(&it->second)) type = *s;
+        const bool flip = in.count("flip") && getBool(in, "flip");
+        if (type == "Two Distances")
+          result = kernel::chamferEx(body->shape, edges, kernel::ChamferType::TwoDistances, getReal(in, "distance"),
+                                     getReal(in, "distance2"), flip);
+        else if (type == "Distance and Angle")
+          result = kernel::chamferEx(body->shape, edges, kernel::ChamferType::DistanceAngle, getReal(in, "distance"),
+                                     getReal(in, "angle"), flip);
+        else
+          result = kernel::chamfer(body->shape, edges, getReal(in, "distance"));
+      }
       doc.replaceBody(name, result);
     } catch (const kernel::KernelError& e) {
       throw CommandError(e.what());

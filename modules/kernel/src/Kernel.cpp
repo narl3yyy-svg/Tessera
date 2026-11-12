@@ -906,6 +906,37 @@ TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>&
   return r;
 }
 
+TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, ChamferType type,
+                       double first, double second, bool flip) {
+  requirePositive(first, "chamfer distance");
+  if (type == ChamferType::TwoDistances) requirePositive(second, "second chamfer distance");
+  if (type == ChamferType::DistanceAngle && !(second > 1e-9 && second < M_PI / 2 - 1e-9))
+    throw KernelError("Chamfer: the angle must be between 0 and 90 degrees");
+  if (edges.empty()) throw KernelError("Chamfer: select at least one edge");
+  TopTools_IndexedDataMapOfShapeListOfShape faces;
+  TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, faces);
+  TopoDS_Shape r;
+  try {
+    r = guarded("Chamfer", [&]() -> TopoDS_Shape {
+      BRepFilletAPI_MakeChamfer mk(shape);
+      for (const auto& e : edges) {
+        const int i = faces.FindIndex(e);
+        if (i == 0 || faces(i).Extent() < 2) throw KernelError("Chamfer: an edge is not between two faces");
+        const TopoDS_Face f = TopoDS::Face(flip ? faces(i).Last() : faces(i).First());
+        if (type == ChamferType::TwoDistances) mk.Add(first, second, TopoDS::Edge(e), f);
+        else mk.AddDA(first, second, TopoDS::Edge(e), f);
+      }
+      mk.Build();
+      return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
+    });
+  } catch (const KernelError& e) {
+    throw KernelError(std::string("Chamfer: the size is too large for the selected edges, or they cannot be bevelled (") +
+                      e.what() + ")");
+  }
+  if (!isValid(r)) throw KernelError("Chamfer: the size is too large for the selected edges");
+  return r;
+}
+
 TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
                        double startOffset) {
   if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");

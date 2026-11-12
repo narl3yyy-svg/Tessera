@@ -104,7 +104,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Right-click an origin or construction plane in the Browser > Create Sketch (Days 2, 3, 6).
 - [ ] Thread: Full Length on by default; off gives a length arrow and an offset arrow (Days 4, 9); Modeled checkbox.
 - [ ] Hole: click a face, then drag the hole centre; it snaps to circle centres (Day 6).
-- [ ] Chamfer types: Equal Distance, Two Distances, Distance and Angle (Day 8).
+- [x] Chamfer types: Equal Distance, Two Distances, Distance and Angle, with Flip (Day 8).
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).
 - [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).
 - [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
