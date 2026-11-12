@@ -413,6 +413,12 @@ void CommandDialog::reject() {
 bool CommandDialog::hasProfilesInput() const { return !profilesId_.empty(); }
 bool CommandDialog::hasPlaneInput() const { return planeInput_ != nullptr; }
 
+bool CommandDialog::planeInputShown() const {
+  if (!planeInput_) return false;
+  const InputDef* d = cmd_->def().input(planeInput_->objectName().toStdString());
+  return !d || isInputVisible(*d, cmd_->inputs());
+}
+
 void CommandDialog::pickPlane(const QString& spec, const QString& label) {
   if (!planeInput_) return;
   int i = planeInput_->findData(spec);

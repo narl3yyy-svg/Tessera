@@ -1,0 +1,13 @@
+# Live: Extrude, Extent Type = To Object, click the box's top face, OK.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 400
+choose extent 2
+wait 600
+wclick 70 10 25
+wait 600
+shot /tmp/live_to_object.png
+click panelOk
+wait 500

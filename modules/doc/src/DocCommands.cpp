@@ -411,7 +411,10 @@ public:
          .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "start=Offset"},
         choice("direction", "Direction", {"One Side", "Two Sides", "Symmetric"},
                "Symmetric: the distance both ways. Two Sides: a distance each way."),
-        choice("extent", "Extent Type", {"Distance", "All"}, "All: through everything in the design."),
+        choice("extent", "Extent Type", {"Distance", "All", "To Object"},
+               "All: through everything. To Object: up to a flat face or a plane (click it)."),
+        {.id = "toObject", .label = "Object", .tooltip = "The flat face or plane to extrude up to: click it.",
+         .type = InputType::Plane, .defaultValue = std::string{}, .optional = true, .visibleWhen = "extent=To Object"},
         {.id = "distance", .label = "Distance", .tooltip = "Negative extrudes the other way.",
          .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "extent=Distance"},
         {.id = "distance2", .label = "Distance (side 2)", .tooltip = "Two Sides only.", .type = InputType::Real,
@@ -441,6 +444,11 @@ public:
                           : "Sketch: '" + name + "' does not exist";
     if (getString(in, "extent") == "Distance" && std::abs(getReal(in, "distance")) < 1e-9)
       return "Distance: must not be zero";
+    if (getString(in, "extent") == "To Object") {
+      const auto it = in.find("toObject");
+      if (it == in.end() || getString(in, "toObject").empty()) return "Object: click the face or plane to extrude up to";
+      if (getString(in, "direction") != "One Side") return "Direction: To Object extrudes one side";
+    }
     if (std::abs(getReal(in, "taper")) > 1e-9 && getString(in, "direction") != "One Side")
       return "Taper Angle: only with Direction One Side";
     return validateOperation(in, doc);
@@ -520,6 +528,24 @@ public:
       auto it = in.find(id);
       return it == in.end() ? std::string(fallback) : getString(in, id);
     };
+    if (str("extent", "Distance") == "To Object") {
+      gp_Ax3 target;
+      try {
+        target = doc.planeFrame(getString(in, "toObject"));
+      } catch (const DocumentError& e) {
+        throw CommandError(std::string("Object: ") + e.what());
+      }
+      TopoDS_Shape tool;
+      try {
+        tool = kernel::extrudeToPlane(faces, {n.X(), n.Y(), n.Z()},
+                                      {target.Location().X(), target.Location().Y(), target.Location().Z()},
+                                      {target.Direction().X(), target.Direction().Y(), target.Direction().Z()});
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+      applyOperation(doc, in, tool, "Extrude");
+      return;
+    }
     double d1 = real("distance", 1.0);
     if (str("extent", "Distance") == "All") {
       // Far enough to pass through every body (and the sketch) in both senses.

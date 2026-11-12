@@ -127,6 +127,11 @@ TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<Top
 // Lofts through closed sections (faces or wires), in order.
 TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled);
 
+// Extrude To Object: the faces (all in one plane, normal `dir`) extruded
+// until they reach the plane through `planeOrigin` with normal `planeNormal`
+// (tilted planes give a slanted end). Goes whichever way the plane is.
+TopoDS_Shape extrudeToPlane(const std::vector<TopoDS_Shape>& faces, Vec3 dir, Vec3 planeOrigin, Vec3 planeNormal);
+
 // Pipe / Coil sections.
 enum class Section { Circular, Square, Triangular };
 

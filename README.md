@@ -26,7 +26,7 @@ scope.
 | **Interface** | Ribbon in the familiar order (CREATE · MODIFY · ASSEMBLE · CONFIGURE · CONSTRUCT · INSPECT · INSERT · SELECT), browser, timeline, ViewCube, navigation bar, command panels inside the canvas, dark and light themes |
 | **Sketch** | Line, 2-Point / Center Rectangle, Circle, Arc, Polygon, Slot, Fit Point Spline, Point, construction lines, Mirror, Fillet, Chamfer, Trim, Extend, Offset (O), Sketch Dimension; Sketch Palette (feature options, linetype, Look At, grid, snap, slice, show/hide profiles, points, dimensions, constraints, construction); on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and grid |
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
-| **Create** | Extrude of sketch profiles or body faces with a drag arrow in the canvas (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (modeled ISO metric, shaft or hole), Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
+| **Create** | Extrude of sketch profiles or body faces with a drag arrow in the canvas (one side / two sides / symmetric, distance, through all or to an object, start offset, taper), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (modeled ISO metric, shaft or hole), Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer, Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical; click a face, edge or point on each part; angle, offset, flip), Drive Joints (slider and Play) |
 | **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
@@ -91,7 +91,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Sketch** | control-point Spline, Ellipse, Conic, Text, Mirror and patterns, Project / Include, 3-point shapes, Tangent Arc |
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, feature patterns |
 | **Modify** | Replace Face, Split Face, Align, Appearance, Physical Material |
-| **Extrude** | To Object / To Face, thin walls; drag arrows for Shell, Hole and Move |
+| **Extrude** | To curved faces, thin walls; drag arrows for Shell, Hole and Move |
 | **Construct** | Tangent Plane, Plane Through Points, Axis, Point |
 | **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Contact Sets |
 | **Inspect** | Curvature Comb, Zebra, Draft and Curvature Map analysis, Minimum Radius |

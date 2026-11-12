@@ -185,7 +185,7 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       emit sectionPlanePicked(spec, label);
       return;
     }
-    if (active_ && active_->hasPlaneInput()) {
+    if (active_ && active_->planeInputShown()) {
       active_->pickPlane(spec, label);
       return;
     }
@@ -764,9 +764,12 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   dlg->setProperty("panel", true);
   dlg->setAutoFillBackground(true);
   active_ = dlg;
-  connect(dlg, &CommandDialog::inputsChanged, this, [this] {
+  connect(dlg, &CommandDialog::inputsChanged, this, [this, dlg] {
     updateProfilePicking();
     updateDragArrow();
+    // Inputs that appear with an option (Extrude: To Object) switch plane picking.
+    if (dlg->hasPlaneInput() && dlg->planeInputShown() != viewport_->planePicking())
+      viewport_->setPlanePicking(dlg->planeInputShown());
   });
   // Embedded panels are not windows, so closing does not delete them: finish
   // here, synchronously, so the next command can start at once.
@@ -786,7 +789,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   placeDialog(dlg);
   refresh();
   updateProfilePicking();
-  if (dlg->hasPlaneInput()) viewport_->setPlanePicking(true);   // click a plane or flat face
+  if (dlg->planeInputShown()) viewport_->setPlanePicking(true);   // click a plane or flat face
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).
   pickedEdges_.clear();

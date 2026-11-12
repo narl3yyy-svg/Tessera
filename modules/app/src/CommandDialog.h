@@ -71,6 +71,7 @@ public:
 
   // A plane clicked in the canvas fills the first plane input.
   bool hasPlaneInput() const;
+  bool planeInputShown() const;   // the plane input exists and is visible
   void pickPlane(const QString& spec, const QString& label);
 
 signals:

@@ -65,6 +65,10 @@
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
 #include <BRepAdaptor_CompCurve.hxx>
+#include <BRepPrimAPI_MakeHalfSpace.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
+#include <TopoDS_Solid.hxx>
+#include <gp_Pln.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
@@ -994,6 +998,43 @@ TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<Top
     if (!isValid(s)) throw KernelError("Sweep: the result is not a valid solid (is the profile at the start of the path?)");
     result = result.IsNull() ? s : boolean(BooleanOp::Join, result, s);
   }
+  return result;
+}
+
+TopoDS_Shape extrudeToPlane(const std::vector<TopoDS_Shape>& faces, Vec3 dirV, Vec3 originV, Vec3 normalV) {
+  if (faces.empty()) throw KernelError("Extrude: no profile selected");
+  gp_Dir dir(dirV.x, dirV.y, dirV.z);
+  const gp_Pnt p0(originV.x, originV.y, originV.z);
+  const gp_Dir np(normalV.x, normalV.y, normalV.z);
+  GProp_GProps g;
+  for (const auto& f : faces) {
+    GProp_GProps one;
+    BRepGProp::SurfaceProperties(f, one);
+    g.Add(one);
+  }
+  const gp_Pnt c = g.CentreOfMass();
+  const double along = gp_Vec(dir).Dot(gp_Vec(np));
+  if (std::abs(along) < 1e-9) throw KernelError("Extrude: the object is parallel to the extrude direction");
+  double t = gp_Vec(c, p0).Dot(gp_Vec(np)) / along;   // distance along dir to the plane
+  if (std::abs(t) < 1e-9) throw KernelError("Extrude: the profile already lies on that object");
+  if (t < 0) {
+    dir.Reverse();
+    t = -t;
+  }
+  Bnd_Box box;
+  for (const auto& f : faces) BRepBndLib::Add(f, box);
+  double x0, y0, z0, x1, y1, z1;
+  box.Get(x0, y0, z0, x1, y1, z1);
+  const double reach = t + 2 * std::hypot(x1 - x0, y1 - y0, z1 - z0) + 1.0;
+  TopoDS_Shape result = guarded("Extrude", [&]() -> TopoDS_Shape {
+    const TopoDS_Shape prism = extrudeEx(faces, {dir.X(), dir.Y(), dir.Z()}, reach, 0, 0, 0);
+    // Keep what lies on the profile's side of the plane.
+    const double big = reach * 4 + 10;
+    const TopoDS_Face cutter = BRepBuilderAPI_MakeFace(gp_Pln(p0, np), -big, big, -big, big).Face();
+    const TopoDS_Solid half = BRepPrimAPI_MakeHalfSpace(cutter, c).Solid();
+    return boolean(BooleanOp::Intersect, prism, half);
+  });
+  if (!isValid(result)) throw KernelError("Extrude: could not reach that object");
   return result;
 }
 
