@@ -140,6 +140,7 @@ private:
   std::vector<QShortcut*> sketchShortcuts_;
   std::map<std::string, bool> sketchVisibility_;   // user overrides from the browser
   std::vector<TopoDS_Shape> pickedEdges_;          // shown highlighted while picking
+  std::map<std::string, bool> constructionVisibility_;
   QString lastCommand_;
 
   struct UiCommand {

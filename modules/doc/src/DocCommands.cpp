@@ -224,8 +224,8 @@ public:
     def_.inputs = {
         {.id = "name", .label = "Name", .tooltip = "Empty: Sketch<n>.", .type = InputType::String,
          .defaultValue = std::string{}, .optional = true},
-        {.id = "plane", .label = "Plane", .tooltip = "XY, XZ, YZ or custom:... (see SketchGeometry.h).",
-         .type = InputType::String, .defaultValue = std::string("XY")},
+        {.id = "plane", .label = "Plane", .tooltip = "XY, XZ, YZ, a construction plane (Plane1) or custom:...",
+         .type = InputType::Plane, .defaultValue = std::string("XY")},
         {.id = "offset", .label = "Offset", .tooltip = "Moves the plane along its normal.", .type = InputType::Real,
          .defaultValue = 0.0, .unit = Unit::Millimeter},
         {.id = "data", .label = "Geometry", .tooltip = "Sketch geometry and constraints (JSON).",
@@ -234,11 +234,13 @@ public:
   }
   const CommandDef& def() const override { return def_; }
 
-  std::string validate(const Inputs& in, CommandContext&) const override {
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
     try {
-      (void)sketch::planeFrame(getString(in, "plane"), getReal(in, "offset"));
+      (void)docOf(ctx).planeFrame(getString(in, "plane"), getReal(in, "offset"));
       (void)sketch::Sketch::fromJson(getString(in, "data"));
     } catch (const sketch::SketchError& e) {
+      return e.what();
+    } catch (const DocumentError& e) {
       return e.what();
     }
     const std::string name = getString(in, "name");
@@ -258,12 +260,14 @@ public:
     rec.plane = getString(in, "plane");
     rec.offset = getReal(in, "offset");
     try {
-      (void)sketch::planeFrame(rec.plane, rec.offset);
+      (void)doc.planeFrame(rec.plane, rec.offset);
       sketch::Sketch s = sketch::Sketch::fromJson(getString(in, "data"));
       const auto res = sketch::solve(s);
       if (!res.ok) throw CommandError(rec.name + ": " + res.message);
       rec.data = s.toJson();
     } catch (const sketch::SketchError& e) {
+      throw CommandError(rec.name + ": " + e.what());
+    } catch (const DocumentError& e) {
       throw CommandError(rec.name + ": " + e.what());
     }
     doc.setSketch(rec);
@@ -279,9 +283,13 @@ struct SketchProfiles {
   std::vector<sketch::Profile> profiles;
 };
 
-SketchProfiles profilesOf(const SketchRecord& rec) {
+SketchProfiles profilesOf(const Document& doc, const SketchRecord& rec) {
   SketchProfiles out;
-  out.frame = sketch::planeFrame(rec.plane, rec.offset);
+  try {
+    out.frame = doc.planeFrame(rec.plane, rec.offset);
+  } catch (const DocumentError& e) {
+    throw sketch::SketchError(e.what());
+  }
   out.profiles = sketch::profiles(sketch::Sketch::fromJson(rec.data), out.frame);
   return out;
 }
@@ -394,7 +402,7 @@ public:
     if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
     SketchProfiles sp;
     try {
-      sp = profilesOf(*rec);
+      sp = profilesOf(doc, *rec);
     } catch (const sketch::SketchError& e) {
       throw CommandError(e.what());
     }
@@ -538,7 +546,7 @@ public:
     SketchProfiles sp;
     sketch::Sketch sk;
     try {
-      sp = profilesOf(*rec);
+      sp = profilesOf(doc, *rec);
       sk = sketch::Sketch::fromJson(rec->data);
     } catch (const sketch::SketchError& e) {
       throw CommandError(e.what());
@@ -829,15 +837,17 @@ private:
   CommandDef def_;
 };
 
-gp_Ax3 planeOf(const Inputs& in) {
+gp_Ax3 planeOf(const Document& doc, const Inputs& in, const char* id = "plane", const char* offsetId = "offset") {
   try {
-    return sketch::planeFrame(getString(in, "plane"), getReal(in, "offset"));
-  } catch (const sketch::SketchError& e) {
+    return doc.planeFrame(getString(in, id), in.count(offsetId) ? getReal(in, offsetId) : 0.0);
+  } catch (const DocumentError& e) {
     throw CommandError(e.what());
   }
 }
 
-InputDef planeChoice(const char* tip) { return choice("plane", "Plane", {"XY", "XZ", "YZ"}, tip); }
+InputDef planeChoice(const char* tip, const char* id = "plane", const char* label = "Plane") {
+  return InputDef{.id = id, .label = label, .tooltip = tip, .type = InputType::Plane, .defaultValue = std::string("XY")};
+}
 InputDef planeOffset() {
   return InputDef{.id = "offset", .label = "Offset", .tooltip = "Moves the plane along its normal.",
                   .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter};
@@ -855,7 +865,7 @@ public:
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const std::string name = bodyName(in, doc);
-    const gp_Ax3 f = planeOf(in);
+    const gp_Ax3 f = planeOf(doc, in);
     const gp_Pnt o = f.Location();
     const gp_Dir n = f.Direction();
     std::vector<TopoDS_Shape> parts;
@@ -924,7 +934,7 @@ public:
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const std::string name = bodyName(in, doc);
-    const gp_Ax3 f = planeOf(in);
+    const gp_Ax3 f = planeOf(doc, in);
     const TopoDS_Shape s = doc.body(name)->shape;
     try {
       const TopoDS_Shape m = kernel::mirrored(s, {f.Location().X(), f.Location().Y(), f.Location().Z()},
@@ -1097,8 +1107,10 @@ public:
     gp_Ax3 frame;
     try {
       sk = sketch::Sketch::fromJson(rec->data);
-      frame = sketch::planeFrame(rec->plane, rec->offset);
+      frame = doc.planeFrame(rec->plane, rec->offset);
     } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    } catch (const DocumentError& e) {
       throw CommandError(e.what());
     }
     std::vector<bool> used(sk.points.size(), false);
@@ -1252,6 +1264,73 @@ public:
 private:
   CommandDef def_;
 };
+
+// ---------------------------------------------------------------------------
+// Construct: named construction planes.
+class ConstructPlane final : public Command {
+public:
+  enum class Kind { Offset, Angle, Mid };
+  explicit ConstructPlane(Kind kind) : kind_(kind) {
+    const char* id = kind == Kind::Offset ? kCmdOffsetPlane : kind == Kind::Angle ? kCmdPlaneAtAngle : kCmdMidplane;
+    const char* name = kind == Kind::Offset ? "Offset Plane" : kind == Kind::Angle ? "Plane at Angle" : "Midplane";
+    const char* tip = kind == Kind::Offset ? "A plane parallel to another, at a distance."
+                    : kind == Kind::Angle  ? "A plane turned about an axis of another plane."
+                                           : "The plane halfway between two parallel planes.";
+    commonDef(def_, id, name, tip, kind == Kind::Offset ? "plane" : kind == Kind::Angle ? "plane-angle" : "plane-mid",
+              "Construct");
+    def_.nameInput = "name";
+    def_.inputs = {{.id = "name", .label = "Name", .tooltip = "Empty: Plane<n>.", .type = InputType::String,
+                    .defaultValue = std::string{}, .optional = true},
+                   planeChoice("Plane to start from.")};
+    if (kind == Kind::Offset)
+      def_.inputs.push_back({.id = "distance", .label = "Distance", .tooltip = {}, .type = InputType::Real,
+                             .defaultValue = 1.0, .unit = Unit::Millimeter});
+    if (kind == Kind::Angle) {
+      def_.inputs.push_back(choice("axis", "Axis", {"Plane X axis", "Plane Y axis"}, "Axis of the plane to turn about."));
+      def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = {}, .type = InputType::Real,
+                             .defaultValue = 0.7853981633974483, .unit = Unit::Degree});
+    }
+    if (kind == Kind::Mid) def_.inputs.push_back(planeChoice("Second plane (parallel to the first).", "plane2", "Plane 2"));
+  }
+  const CommandDef& def() const override { return def_; }
+
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    try {
+      (void)frame(docOf(ctx), in);
+    } catch (const std::exception& e) {
+      return e.what();
+    }
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    if (getString(in, "name").empty()) in["name"] = docOf(ctx).nextPlaneName();
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::string name = getString(in, "name");
+    if (name.empty()) name = doc.nextPlaneName();
+    doc.setPlane({name, sketch::customPlaneSpec(frame(doc, in))});
+  }
+
+private:
+  gp_Ax3 frame(const Document& doc, const Inputs& in) const {
+    gp_Ax3 f = planeOf(doc, in);
+    if (kind_ == Kind::Offset) {
+      f.Translate(gp_Vec(f.Direction()) * getReal(in, "distance"));
+    } else if (kind_ == Kind::Angle) {
+      const gp_Dir axis = getString(in, "axis") == "Plane Y axis" ? f.YDirection() : f.XDirection();
+      f.Rotate(gp_Ax1(f.Location(), axis), getReal(in, "angle"));
+    } else {
+      const gp_Ax3 g = planeOf(doc, in, "plane2");
+      if (!f.Direction().IsParallel(g.Direction(), 1e-6)) throw CommandError("Plane 2: must be parallel to the first plane");
+      const double d = gp_Vec(f.Location(), g.Location()).Dot(gp_Vec(f.Direction()));
+      f.Translate(gp_Vec(f.Direction()) * (d / 2));
+    }
+    return f;
+  }
+  Kind kind_;
+  CommandDef def_;
+};
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
@@ -1275,6 +1354,9 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<SplitBody>());
   registry.add(std::make_unique<MoveCopy>());
   registry.add(std::make_unique<RemoveBody>());
+  registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Offset));
+  registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Angle));
+  registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Mid));
   registry.add(std::make_unique<AddUserParameter>());
   registry.add(std::make_unique<DocumentUnits>());
   registry.add(std::make_unique<InsertGeometry>());

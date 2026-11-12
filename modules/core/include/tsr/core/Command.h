@@ -25,7 +25,8 @@ namespace tsr {
 //         the viewport; each point selects the nearest edge on replay.
 // Faces:  faces of a body, same reference scheme as Edges.
 // Bodies: several body names separated by ';' (e.g. the tools of Combine).
-enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies };
+// Plane:  "XY", "XZ", "YZ" or the name of a construction plane ("Plane1").
+enum class InputType { Real, Integer, Bool, String, Choice, Body, Sketch, Profiles, Edges, Faces, Bodies, Plane };
 
 struct InputDef {
   std::string id;

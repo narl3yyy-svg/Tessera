@@ -84,9 +84,7 @@ void MainWindow::buildUiCommands() {
   planned("Assemble", "ui.driveJoints", "Drive Joints", "motion");
   planned("Assemble", "ui.motionLink", "Motion Link", "motion");
   planned("Configure", "ui.configure", "Configurations", "configure");
-  planned("Construct", "ui.offsetPlane", "Offset Plane", "plane");
-  planned("Construct", "ui.planeAtAngle", "Plane at Angle", "plane");
-  planned("Construct", "ui.midplane", "Midplane", "plane");
+  planned("Construct", "ui.tangentPlane", "Tangent Plane", "plane");
   planned("Construct", "ui.axisCylinder", "Axis Through Cylinder", "axis");
   planned("Construct", "ui.pointVertex", "Point at Vertex", "point");
   add("Inspect", "ui.measure", "Measure", "measure", "Distance, angle, length, area and volume of picked items.", "I",

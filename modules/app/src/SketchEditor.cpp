@@ -84,7 +84,11 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
                            double offset, int featureId, const sketch::Sketch& initial, QObject* parent)
     : QObject(parent), session_(session), view_(viewport), name_(name), plane_(plane), offset_(offset),
       featureId_(featureId), sk_(initial) {
-  frame_ = sketch::planeFrame(plane.toStdString(), offset);
+  try {
+    frame_ = session_.document().planeFrame(plane.toStdString(), offset);
+  } catch (const std::exception&) {
+    frame_ = sketch::planeFrame("XY", offset);
+  }
   unit_ = parseUnit(session_.document().lengthUnit()).value_or(Unit::Millimeter);
   res_ = sketch::solve(sk_);
   view_->setInteractor(this);

@@ -160,6 +160,38 @@ void Viewport::setPickedProfiles(const std::string& sketch, const std::vector<in
   if (glReady_) rebuildSketches();
 }
 
+void Viewport::setConstructionPlanes(const std::vector<std::pair<std::string, gp_Ax3>>& planes) {
+  constructionPlanes_ = planes;
+  rebuildConstruction();
+}
+
+void Viewport::rebuildConstruction() {
+  if (context_.IsNull()) return;
+  for (auto& [o, n] : constructionObjects_) context_->Remove(o, false);
+  constructionObjects_.clear();
+  Standard_Real vw = 10, vh = 10;
+  if (!view_.IsNull()) view_->Size(vw, vh);
+  const double half = std::max(2.0, std::min(vw, vh) * 0.22);
+  for (const auto& [name, frame] : constructionPlanes_) {
+    const TopoDS_Face face = BRepBuilderAPI_MakeFace(gp_Pln(frame), -half, half, -half, half).Face();
+    Handle(AIS_Shape) s = new AIS_Shape(face);
+    faceStyle(s, rgb(240, 160, 60), 0.75);
+    s->Attributes()->SetFaceBoundaryDraw(true);
+    s->Attributes()->SetFaceBoundaryAspect(new Prs3d_LineAspect(rgb(240, 160, 60), Aspect_TOL_SOLID, 1.5));
+    context_->Display(s, AIS_Shaded, 0, false);
+    if (!planePicking_) context_->Deactivate(s);
+    constructionObjects_.emplace_back(s, name);
+    Handle(AIS_TextLabel) t = new AIS_TextLabel();
+    t->SetText(TCollection_ExtendedString(name.c_str()));
+    t->SetPosition(frame.Location().Translated(gp_Vec(frame.XDirection()) * half + gp_Vec(frame.YDirection()) * half));
+    t->SetHeight(12);
+    t->SetColor(rgb(240, 170, 80));
+    context_->Display(t, 0, -1, false);
+    constructionObjects_.emplace_back(t, std::string());
+  }
+  updateView();
+}
+
 void Viewport::setPlanePicking(bool on) {
   planePicking_ = on;
   if (context_.IsNull()) return;
@@ -189,6 +221,11 @@ void Viewport::setPlanePicking(bool on) {
       context_->Display(s, AIS_Shaded, 0, false);
       planeObjects_.emplace_back(s, p.spec);
     }
+  }
+  for (auto& [o, n] : constructionObjects_) {
+    if (n.empty()) continue;
+    context_->Deactivate(o);
+    if (on) context_->Activate(o, 0);
   }
   applyPickModes();
   updateView();
@@ -340,6 +377,12 @@ bool Viewport::handlePickSelection() {
     }
   }
   if (!planePicking_) return false;
+  for (const auto& [o, name] : constructionObjects_)
+    if (o == obj && !name.empty()) {
+      context_->ClearSelected(false);
+      emit planePicked(QString::fromStdString(name), QString::fromStdString(name));
+      return true;
+    }
   for (const auto& [shape, spec] : planeObjects_)
     if (shape == obj) {
       context_->ClearSelected(false);

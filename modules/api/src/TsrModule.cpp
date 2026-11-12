@@ -28,6 +28,7 @@ const char* typeName(InputType t) {
     case InputType::Edges: return "edges";
     case InputType::Faces: return "faces";
     case InputType::Bodies: return "bodies";
+    case InputType::Plane: return "plane";
   }
   return "?";
 }

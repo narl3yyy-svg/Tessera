@@ -791,6 +791,16 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("motion")) motionIcon(p);
   else if (name == QLatin1String("configure")) configureIcon(p);
   else if (name == QLatin1String("plane")) planeIcon(p);
+  else if (name == QLatin1String("plane-angle")) {
+    planeIcon(p);
+    p.setPen(QPen(kAccent, 3));
+    p.setBrush(Qt::NoBrush);
+    p.drawArc(QRectF(36, 30, 24, 24), 0, 90 * 16);
+  } else if (name == QLatin1String("plane-mid")) {
+    face(p, {QPointF(4, 50), QPointF(30, 34), QPointF(60, 40), QPointF(34, 56)}, kTop);
+    face(p, {QPointF(4, 34), QPointF(30, 18), QPointF(60, 24), QPointF(34, 40)}, QColor(240, 160, 60, 220));
+    face(p, {QPointF(4, 18), QPointF(30, 2), QPointF(60, 8), QPointF(34, 24)}, kTop);
+  }
   else if (name == QLatin1String("axis")) axisIcon(p);
   else if (name == QLatin1String("curvature")) curvatureIcon(p);
   else if (name == QLatin1String("zebra")) zebraIcon(p);

@@ -61,8 +61,8 @@ void MainWindow::beginSketch() {
 SketchEditor* MainWindow::startSketch(const QString& planeSpec) {
   if (editor_ || active_) return nullptr;
   try {
-    (void)sketch::planeFrame(planeSpec.toStdString());
-  } catch (const sketch::SketchError& e) {
+    (void)session_.document().planeFrame(planeSpec.toStdString());
+  } catch (const std::exception& e) {
     statusBar()->showMessage(qs(e.what()), 5000);
     return nullptr;
   }
@@ -303,7 +303,7 @@ void MainWindow::updateProfilePicking() {
   if (!rec) return;
   std::vector<int> indices;
   try {
-    const gp_Ax3 frame = sketch::planeFrame(rec->plane, rec->offset);
+    const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
     const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
     for (const QString& item : active_->currentProfiles().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
       const auto xy = item.split(QLatin1Char(','));
@@ -311,7 +311,7 @@ void MainWindow::updateProfilePicking() {
       const int i = sketch::profileAt(profiles, frame, xy[0].toDouble(), xy[1].toDouble());
       if (i >= 0) indices.push_back(i);
     }
-  } catch (const sketch::SketchError&) {
+  } catch (const std::exception&) {
     return;
   }
   viewport_->setPickedProfiles(sketchName.toStdString(), indices);
@@ -385,7 +385,7 @@ void MainWindow::onProfileClicked(const QString& sketchName, int index) {
   const auto rec = session_.document().sketch(sketchName.toStdString());
   if (!rec) return;
   try {
-    const gp_Ax3 frame = sketch::planeFrame(rec->plane, rec->offset);
+    const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
     const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
     if (index < 0 || index >= static_cast<int>(profiles.size())) return;
     // Current picks on this sketch (picks on another sketch are replaced).
@@ -408,7 +408,7 @@ void MainWindow::onProfileClicked(const QString& sketchName, int index) {
     for (int i : picked)
       items << QStringLiteral("%1,%2").arg(profiles[i].x, 0, 'g', 12).arg(profiles[i].y, 0, 'g', 12);
     active_->setProfiles(sketchName, items.join(QLatin1Char(';')));
-  } catch (const sketch::SketchError&) {
+  } catch (const std::exception&) {
   }
   updateProfilePicking();
 }

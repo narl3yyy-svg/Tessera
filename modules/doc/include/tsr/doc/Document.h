@@ -12,6 +12,7 @@
 //   0:1:4      Sketches (results of sketch features); one child per sketch:
 //                TDataStd_Name       sketch name ("Sketch1")
 //                TDataStd_NamedData  "plane" (spec), "offset" (real), "data" (solved sketch JSON)
+//   0:1:5      Construction planes; one child per plane: TDataStd_Name, NamedData "spec"
 //   0:1:3      Features (the timeline), in order; one child per feature:
 //                TDataStd_Name       feature name ("Box1")
 //                TDataStd_NamedData  "command" (id), "inputs" (JSON), "error" (last recompute), "suppressed" (int)
@@ -27,6 +28,7 @@
 
 #include <TDocStd_Document.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Ax3.hxx>
 
 #include <filesystem>
 #include <memory>
@@ -59,6 +61,11 @@ struct SketchRecord {
   std::string plane;   // tsr::sketch::planeFrame spec
   double offset = 0;
   std::string data;    // solved sketch JSON
+};
+
+struct ConstructionPlane {
+  std::string name;   // "Plane1"
+  std::string spec;   // custom:... frame (tsr::sketch::planeFrame)
 };
 
 struct Feature {
@@ -110,6 +117,15 @@ public:
   std::optional<SketchRecord> sketch(const std::string& name) const;
   void setSketch(const SketchRecord& s);   // adds, or replaces the one with that name
   std::string nextSketchName() const;
+
+  // Construction planes (results of Construct features).
+  std::vector<ConstructionPlane> planes() const;
+  std::optional<ConstructionPlane> plane(const std::string& name) const;
+  void setPlane(const ConstructionPlane& p);   // adds, or replaces the one with that name
+  std::string nextPlaneName() const;
+  // Resolves "XY"/"XZ"/"YZ"/"custom:..." or a construction plane's name,
+  // moved by `offset` along its normal. Throws DocumentError.
+  gp_Ax3 planeFrame(const std::string& spec, double offset = 0) const;
 
   // Design history.
   std::vector<Feature> features() const;

@@ -91,6 +91,23 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         w = combo;
         break;
       }
+      case InputType::Plane: {
+        auto* combo = new QComboBox;
+        for (const char* o : {"XY", "XZ", "YZ"}) combo->addItem(QString::fromLatin1(o), QString::fromLatin1(o));
+        for (const auto& pl : session_.document().planes())
+          combo->addItem(QString::fromStdString(pl.name), QString::fromStdString(pl.name));
+        if (auto p = std::get_if<std::string>(&cur); p && !p->empty()) {
+          const QString name = QString::fromStdString(*p);
+          if (combo->findData(name) < 0) combo->addItem(name.startsWith(QLatin1String("custom:")) ? tr("Picked face") : name, name);
+          combo->setCurrentIndex(combo->findData(name));
+        }
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
+          onInputChanged(id, combo->currentData().toString().toStdString());
+        });
+        if (!planeInput_) planeInput_ = combo;
+        w = combo;
+        break;
+      }
       case InputType::Sketch: {
         auto* combo = new QComboBox;
         if (in.optional) combo->addItem(tr("(most recent sketch)"), QString());
@@ -278,6 +295,17 @@ void CommandDialog::reject() {
 }
 
 bool CommandDialog::hasProfilesInput() const { return !profilesId_.empty(); }
+bool CommandDialog::hasPlaneInput() const { return planeInput_ != nullptr; }
+
+void CommandDialog::pickPlane(const QString& spec, const QString& label) {
+  if (!planeInput_) return;
+  int i = planeInput_->findData(spec);
+  if (i < 0) {
+    planeInput_->addItem(spec.startsWith(QLatin1String("custom:")) ? tr("Picked %1").arg(label) : label, spec);
+    i = planeInput_->count() - 1;
+  }
+  planeInput_->setCurrentIndex(i);
+}
 bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
 bool CommandDialog::hasFacesInput() const { return !facesId_.empty(); }
 bool CommandDialog::hasBodiesInput() const { return !bodiesId_.empty(); }

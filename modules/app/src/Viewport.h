@@ -113,6 +113,9 @@ public:
   // Origin planes and flat body faces become clickable (Create Sketch).
   void setPlanePicking(bool on);
   bool planePicking() const { return planePicking_; }
+  // Construction planes (name, frame), drawn as translucent squares; they are
+  // clickable while plane picking is on.
+  void setConstructionPlanes(const std::vector<std::pair<std::string, gp_Ax3>>& planes);
   // Parts of bodies become clickable (edges for Fillet, faces for Shell,
   // vertices/edges/faces for Measure); picked ones are highlighted.
   void setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types);
@@ -206,6 +209,9 @@ private:
   std::vector<Handle(AIS_Shape)> sketchCurves_;
   std::vector<ProfileObject> profileObjects_;
   std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
+  std::vector<std::pair<std::string, gp_Ax3>> constructionPlanes_;
+  std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> constructionObjects_;
+  void rebuildConstruction();
   bool profilePicking_ = false;
   std::vector<TopAbs_ShapeEnum> pickTypes_;
   bool sectionOn_ = false;

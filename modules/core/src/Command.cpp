@@ -80,7 +80,8 @@ std::string CommandSession::checkInput(const InputDef& d, const Value& v) const 
     case InputType::Profiles:
     case InputType::Edges:
     case InputType::Faces:
-    case InputType::Bodies: {
+    case InputType::Bodies:
+    case InputType::Plane: {
       auto p = std::get_if<std::string>(&v);
       if (!p) return d.label + ": expected text";
       if (p->empty() && !d.optional)

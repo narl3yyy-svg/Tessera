@@ -34,7 +34,8 @@ Sketching works the way Fusion users expect: after the first click the size boxe
 a value, **Tab** to the next box, **Enter** to create it (typed sizes become dimensions). Tools: Line, 2-Point and
 Center Rectangle, Circle, Arc, Polygon, Slot, Point, Trim, Sketch Dimension and 11 constraints (including Collinear
 and Symmetry). CREATE also has **Hole** (H; simple, counterbore, countersink, at sketch points) and **Rectangular /
-Circular Pattern**.
+Circular Pattern**. CONSTRUCT has **Offset Plane, Plane at Angle and Midplane**: named planes you can sketch on and
+use for Split Body and Mirror; editing a plane moves everything built on it.
 
 ## Planned
 
@@ -42,7 +43,7 @@ Not built yet (menus show these greyed out). Order is roughly the order of work;
 
 | Area | Planned |
 |---|---|
-| Construct | Offset Plane, Plane at Angle, Midplane, Tangent Plane, Axis (cylinder / edge / two points), Point — usable for sketches, Split and Mirror |
+| Construct | Tangent Plane, Plane Through Points, Axis (cylinder / edge / two points), Point (Offset Plane, Plane at Angle and Midplane are done) |
 | Create | Sweep, Loft, Coil, Pipe, Thread, Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, feature patterns |
 | Modify | Press Pull (Q), Draft, Offset Face, Replace Face, Split Face, Align, Appearance (A), Physical Material, Change Parameters table |
 | Sketch | Extend, Offset (O), sketch Fillet/Chamfer, Spline, Ellipse, Conic, Text, Mirror, Circular/Rectangular sketch patterns, Project/Include (P), Midpoint Line, 3-Point Rectangle/Circle/Arc, Tangent Arc, Sketch Palette (show/hide options, slice), Curvature/Polygon constraints |

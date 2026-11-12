@@ -10,6 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "tsr/sketch/SketchGeometry.h"
+
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -22,6 +24,7 @@ constexpr int kParamsTag = 1;
 constexpr int kBodiesTag = 2;
 constexpr int kFeaturesTag = 3;
 constexpr int kSketchesTag = 4;
+constexpr int kPlanesTag = 5;
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in SPEC/DIVERGENCES.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -119,6 +122,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kBodiesTag, true);
   doc_->Main().FindChild(kFeaturesTag, true);
   doc_->Main().FindChild(kSketchesTag, true);
+  doc_->Main().FindChild(kPlanesTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -302,6 +306,51 @@ std::string Document::nextSketchName() const {
   }
 }
 
+std::vector<ConstructionPlane> Document::planes() const {
+  std::vector<ConstructionPlane> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kPlanesTag, false)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;
+    out.push_back({nameOf(it.Value()), stringOf(nd, "spec")});
+  }
+  return out;
+}
+
+std::optional<ConstructionPlane> Document::plane(const std::string& name) const {
+  for (auto& p : planes())
+    if (p.name == name) return p;
+  return std::nullopt;
+}
+
+void Document::setPlane(const ConstructionPlane& p) {
+  requireTransaction("setPlane");
+  TDF_Label l;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kPlanesTag, false)); it.More(); it.Next())
+    if (it.Value().IsAttribute(TDataStd_NamedData::GetID()) && nameOf(it.Value()) == p.name) l = it.Value();
+  if (l.IsNull()) l = doc_->Main().FindChild(kPlanesTag, false).NewChild();
+  TDataStd_Name::Set(l, ext(p.name));
+  TDataStd_NamedData::Set(l)->SetString("spec", ext(p.spec));
+}
+
+std::string Document::nextPlaneName() const {
+  const auto fs = features();
+  for (int n = 1;; ++n) {
+    const std::string name = "Plane" + std::to_string(n);
+    if (plane(name)) continue;
+    if (std::any_of(fs.begin(), fs.end(), [&](const Feature& f) { return f.name == name; })) continue;
+    return name;
+  }
+}
+
+gp_Ax3 Document::planeFrame(const std::string& spec, double offset) const {
+  try {
+    if (const auto p = plane(spec)) return sketch::planeFrame(p->spec, offset);
+    return sketch::planeFrame(spec, offset);
+  } catch (const sketch::SketchError& e) {
+    throw DocumentError(e.what());
+  }
+}
+
 std::vector<Feature> Document::features() const {
   std::vector<Feature> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kFeaturesTag, false)); it.More(); it.Next()) {
@@ -365,7 +414,7 @@ void Document::removeFeature(int id) {
 
 void Document::recompute(const CommandRegistry& registry) {
   requireTransaction("recompute");
-  for (int tag : {kBodiesTag, kSketchesTag})
+  for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag})
     for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
       if (it.Value().HasAttribute()) it.Value().ForgetAllAttributes(true);
 

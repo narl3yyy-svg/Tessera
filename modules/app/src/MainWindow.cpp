@@ -48,6 +48,7 @@ constexpr int kBodyRole = Qt::UserRole + 2;
 constexpr int kSketchRole = Qt::UserRole + 3;
 constexpr int kUnitsRole = Qt::UserRole + 4;
 constexpr int kAnalysisRole = Qt::UserRole + 5;
+constexpr int kPlaneRole = Qt::UserRole + 6;
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -93,6 +94,11 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     if (item->data(0, kAnalysisRole).toBool()) {
       section_.visible = item->checkState(0) == Qt::Checked;
       QTimer::singleShot(0, this, [this] { applySection(); });
+    }
+    const QString plane = item->data(0, kPlaneRole).toString();
+    if (!plane.isEmpty()) {
+      constructionVisibility_[plane.toStdString()] = item->checkState(0) == Qt::Checked;
+      QTimer::singleShot(0, this, [this] { refresh(); });
     }
   });
   connect(browser_, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
@@ -151,6 +157,10 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     else onEdgeClicked(body, shape);
   });
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
+    if (active_ && active_->hasPlaneInput()) {
+      active_->pickPlane(spec, label);
+      return;
+    }
     viewport_->setPlanePicking(false);
     if (startSketch(spec)) statusBar()->showMessage(tr("Sketching on %1.").arg(label), 4000);
   });
@@ -694,6 +704,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     dlg->deleteLater();
     viewport_->setProfilePicking(false);
     viewport_->setSubShapePicking({});
+    viewport_->setPlanePicking(false);
     pickedEdges_.clear();
     refresh();
   });
@@ -701,6 +712,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   placeDialog(dlg);
   refresh();
   updateProfilePicking();
+  if (dlg->hasPlaneInput()) viewport_->setPlanePicking(true);   // click a plane or flat face
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).
   pickedEdges_.clear();
@@ -796,18 +808,28 @@ void MainWindow::refresh() {
     sd.visible = sketchVisible(rec.name) && !(editor_ && editor_->name().toStdString() == rec.name);
     if (sd.visible) {
       try {
-        sd.frame = sketch::planeFrame(rec.plane, rec.offset);
+        sd.frame = d.planeFrame(rec.plane, rec.offset);
         const auto s = sketch::Sketch::fromJson(rec.data);
         sd.curves = sketch::curves(s, sd.frame, false);
         sd.construction = sketch::curves(s, sd.frame, true);
         sd.profiles = sketch::profiles(s, sd.frame);
-      } catch (const sketch::SketchError&) {
+      } catch (const std::exception&) {
         sd.visible = false;
       }
     }
     sketches.push_back(std::move(sd));
   }
   viewport_->setSketches(std::move(sketches));
+  std::vector<std::pair<std::string, gp_Ax3>> planes;
+  for (const auto& pl : d.planes()) {
+    auto vis = constructionVisibility_.find(pl.name);
+    if (vis != constructionVisibility_.end() && !vis->second) continue;
+    try {
+      planes.emplace_back(pl.name, d.planeFrame(pl.name));
+    } catch (const std::exception&) {
+    }
+  }
+  viewport_->setConstructionPlanes(planes);
   refreshBrowser(name);
   refreshTimeline();
 }
@@ -868,6 +890,22 @@ void MainWindow::refreshBrowser(const QString& docName) {
       it->setCheckState(0, sketchVisible(s.name) ? Qt::Checked : Qt::Unchecked);
     }
     sk->setExpanded(true);
+  }
+
+  const auto planes = d.planes();
+  if (!planes.empty()) {
+    auto* cons = new QTreeWidgetItem(root, {tr("Construction (%1)").arg(planes.size())});
+    cons->setIcon(0, icon(QStringLiteral("plane")));
+    for (const auto& pl : planes) {
+      const QString n = qs(pl.name);
+      auto* it = new QTreeWidgetItem(cons, {n});
+      it->setIcon(0, icon(QStringLiteral("plane")));
+      it->setData(0, kPlaneRole, n);
+      it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+      const auto vis = constructionVisibility_.find(pl.name);
+      it->setCheckState(0, vis == constructionVisibility_.end() || vis->second ? Qt::Checked : Qt::Unchecked);
+    }
+    cons->setExpanded(true);
   }
 
   auto* params = new QTreeWidgetItem(root, {tr("User Parameters")});

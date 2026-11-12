@@ -34,7 +34,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P3-3 | Revolve axis: sketch X/Y axis, the sketch's first construction line, or a world axis; no picking an arbitrary edge as the axis | P3 scope | P4 |
 | P3-4 | While a Fillet/Chamfer dialog previews, edges are picked on the previewed body | Preview replaces the body | when the preview uses an overlay |
 | P4-1 | Extrude: no in-canvas drag arrow yet (values are typed in the panel); extents are Distance and All (no To Object / To Face); taper works on one-sided extrudes | P4 scope | P5 |
-| P4-2 | Split Body and Mirror use origin planes plus an offset, not picked faces or construction planes | Construction planes not built yet | P5 (CONSTRUCT) |
+| P4-2 | ~~Split Body and Mirror use origin planes only~~ Closed: they take origin planes, construction planes or a picked flat face | | closed |
 | P4-3 | Section Analysis and the units choice for new designs are app settings; section analysis is not saved in the document | P4 scope | later |
 | P4-4 | Export writes mm for mesh and STEP/IGES files; F3D, IPT, SKP, SAT, DWG, USD are not available (proprietary or unsupported by the kernel) | Formats | accepted |
 | P4-5 | ASSEMBLE, CONFIGURE, CONSTRUCT and several INSPECT/INSERT entries, and the SURFACE/MESH/SHEET METAL/PLASTIC/MANAGE/UTILITIES tabs, are shown disabled | Not built yet | see ROADMAP.md |
@@ -42,3 +42,5 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P5-2 | Patterns copy whole bodies (not features or faces); circular patterns turn about a world axis through the origin | P5 scope | P6 |
 | P5-3 | Trim removes up to the nearest crossings; trimmed pieces do not get coincident constraints to the crossing curves | P5 scope | P6 |
 | P5-4 | Size boxes exist for Line (length, angle), Rectangle, Center Rectangle (width, height), Circle (diameter), Polygon (diameter, sides) and Slot (length, width); not yet for arcs | P5 scope | P6 |
+| P5-5 | Construction planes are built from origin or other construction planes (offset, angle about the plane's X/Y axis, midplane of two parallel planes); not yet tangent to faces or through points/edges | P5 scope | P6 |
+| P5-6 | A plane picked from a body face is copied when picked (not associative to the face) | Needs topological naming | P6 |

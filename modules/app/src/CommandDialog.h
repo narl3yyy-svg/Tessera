@@ -49,6 +49,10 @@ public:
   void setFaces(const QString& faces);
   void setTools(const QString& bodies);
 
+  // A plane clicked in the canvas fills the first plane input.
+  bool hasPlaneInput() const;
+  void pickPlane(const QString& spec, const QString& label);
+
 signals:
   void inputsChanged();
 
@@ -67,6 +71,7 @@ private:
   QDialogButtonBox* buttons_ = nullptr;
   QComboBox* bodyInput_ = nullptr;
   QComboBox* sketchInput_ = nullptr;
+  QComboBox* planeInput_ = nullptr;
   QLabel* profilesLabel_ = nullptr;
   std::string profilesId_;
   QLabel* edgesLabel_ = nullptr;
