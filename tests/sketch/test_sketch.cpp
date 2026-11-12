@@ -310,3 +310,51 @@ TEST(sketch_tangent_at_shared_end_is_a_real_constraint) {
                      (s.points[c].y - s.points[b].y) * (s.points[b].y - s.points[a].y);
   CHECK_NEAR(dot, 0.0, 1e-7);
 }
+
+TEST(sketch_chamfer_corner) {
+  Sketch s;
+  const Rect r = rect(s, 0, 0, 4, 3);
+  CHECK(solve(s).ok);
+  int line = -1;
+  CHECK_EQ(chamferCorner(s, r.l[0], r.l[1], 0.5, &line), std::string());
+  CHECK(line >= 0);
+  const auto ps = profiles(s, planeFrame("XY"));
+  CHECK_EQ(ps.size(), size_t(1));
+  CHECK_NEAR(ps[0].area, 12 - 0.125, 1e-6);
+  CHECK(!chamferCorner(s, r.l[2], r.l[3], 9.0).empty());
+}
+
+TEST(sketch_extend_line) {
+  Sketch s;
+  const int wall = s.addLine(5, -1, 5, 5);   // a vertical line at x = 5
+  const int l = s.addLine(0, 1, 2, 1);       // stops short of it
+  const int c = s.addCircle(-3, 1, 1);       // a circle on the other side
+  CHECK(solve(s).ok);
+  CHECK_EQ(extendLine(s, l, 1.9, 1), std::string());
+  CHECK_NEAR(s.points[s.entities[l].b].x, 5.0, 1e-7);
+  CHECK_EQ(extendLine(s, l, 0.1, 1), std::string());   // the other end reaches the circle
+  CHECK_NEAR(s.points[s.entities[l].a].x, -2.0, 1e-7);
+  (void)wall;
+  (void)c;
+}
+
+TEST(sketch_mirror) {
+  Sketch s;
+  const int axis = s.addLine(0, -5, 0, 5, true);   // the Y axis, construction, held in place
+  for (int q : {s.entities[axis].a, s.entities[axis].b}) s.addConstraint(C(ConstraintType::Fix, {q}, {}, 0));
+  s.constraints[0].value2 = -5;
+  s.constraints[1].value2 = 5;
+  const int a = s.addLine(1, 0, 3, 2);
+  const int arc = s.addArc(s.addPoint(2, -2), s.addPoint(3, -2), s.addPoint(2, -1));
+  std::vector<int> made;
+  CHECK_EQ(mirrorEntities(s, {a, arc}, axis, &made), std::string());
+  CHECK_EQ(made.size(), size_t(2));
+  const auto& m = s.entities[made[0]];
+  CHECK_NEAR(s.points[m.a].x, -1.0, 1e-7);
+  CHECK_NEAR(s.points[m.b].x, -3.0, 1e-7);
+  CHECK_NEAR(s.points[m.b].y, 2.0, 1e-7);
+  // Moving an original moves its mirror.
+  s.points[s.entities[a].b] = {4, 2};
+  CHECK(solve(s, {s.entities[a].b}).ok);
+  CHECK_NEAR(s.points[m.b].x, -4.0, 1e-6);
+}

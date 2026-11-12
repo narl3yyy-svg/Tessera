@@ -145,9 +145,16 @@ SketchEditor::~SketchEditor() {
 
 // ---------------------------------------------------------------------------
 void SketchEditor::setTool(Tool t) {
+  // Mirror can start from curves already selected.
+  std::vector<Hit> keep;
+  if (t == Tool::Mirror)
+    for (const auto& h : selection_)
+      if (h.kind == Hit::Entity) keep.push_back(h);
   resetSteps();
   tool_ = t;
   selection_.clear();
+  for (const auto& h : keep) picks_.push_back({h, 0, 0});
+  if (!keep.empty()) mirrorLineStage_ = true;
   clearPreview();
   emit toolChanged();
   switch (t) {
@@ -160,6 +167,12 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Spline: emit message(tr("Spline: click the points the curve passes through; Enter, double-click or Esc finishes, clicking the first point closes it.")); break;
     case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
     case Tool::Offset: emit message(tr("Offset: click a curve; its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
+    case Tool::Chamfer: emit message(tr("Chamfer: click a corner (or two lines), then type the distance and press Enter (or click).")); break;
+    case Tool::Extend: emit message(tr("Extend: click a line near the end to lengthen it to the next curve.")); break;
+    case Tool::Mirror:
+      emit message(selection_.empty() ? tr("Mirror: click the curves to mirror, press Enter, then click the mirror line.")
+                                      : tr("Mirror: click the mirror line."));
+      break;
     case Tool::Dimension: emit message(tr("Dimension: click a line, circle or arc; or two points/lines. Type the value, Enter.")); break;
     case Tool::Coincident: emit message(tr("Coincident: click two points, or a point and a curve.")); break;
     case Tool::HorizontalVertical: emit message(tr("Horizontal/Vertical: click a line.")); break;
@@ -188,6 +201,7 @@ void SketchEditor::resetSteps() {
   filletLines_ = {-1, -1};
   firstFilletLine_ = -1;
   offsetEntity_ = -1;
+  mirrorLineStage_ = false;
   clearPreview();
 }
 
@@ -1117,7 +1131,24 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       updatePreview(x, y);
       return;
     }
-    case Tool::Fillet: {
+    case Tool::Extend: {
+      const Hit h = hitEntity(x, y);
+      if (h.kind != Hit::Entity) return;
+      checkpoint();
+      const std::string err = sketch::extendLine(sk_, h.index, x, y);
+      if (!err.empty()) {
+        undo_.pop_back();
+        emit message(QString::fromStdString(err));
+        return;
+      }
+      solveAndShow();
+      return;
+    }
+    case Tool::Mirror:
+      mirrorPick(x, y);
+      return;
+    case Tool::Fillet:
+    case Tool::Chamfer: {
       if (steps_.empty()) {
         const Hit h = hitTest(x, y);
         std::optional<std::pair<int, int>> corner;
@@ -1154,7 +1185,9 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       }
       const double r = hudLocked(0) ? hudValue(0) : filletRadiusAt(x, y);
       checkpoint();
-      const std::string err = sketch::filletCorner(sk_, filletLines_.first, filletLines_.second, r);
+      const std::string err = tool_ == Tool::Chamfer
+                                  ? sketch::chamferCorner(sk_, filletLines_.first, filletLines_.second, r)
+                                  : sketch::filletCorner(sk_, filletLines_.first, filletLines_.second, r);
       resetSteps();
       if (!err.empty()) {
         undo_.pop_back();
@@ -1678,6 +1711,7 @@ bool SketchEditor::hudTool() const {
     case Tool::Polygon:
     case Tool::Slot:
     case Tool::Fillet:
+    case Tool::Chamfer:
     case Tool::Offset:
       return true;
     default:
@@ -1721,6 +1755,7 @@ void SketchEditor::ensureHud() {
     case Tool::Polygon: fields = {{HudField::Length, tr("Diameter")}, {HudField::Count, tr("Sides")}}; break;
     case Tool::Slot: fields = {{HudField::Length, tr("Length")}, {HudField::Length, tr("Width")}}; break;
     case Tool::Fillet: fields = {{HudField::Length, tr("Radius")}}; break;
+    case Tool::Chamfer: fields = {{HudField::Length, tr("Distance")}}; break;
     case Tool::Offset: fields = {{HudField::Length, tr("Offset")}}; break;
     default: return;
   }
@@ -1850,6 +1885,7 @@ void SketchEditor::updateHud(double x, double y) {
               {hudLocked(1) ? hudValue(1) : dist / 3, {x + off * 3, y}}};
       break;
     case Tool::Fillet:
+    case Tool::Chamfer:
       live = {{filletRadiusAt(x, y), {x + off * 3, y - off}}};
       break;
     case Tool::Offset:
@@ -1913,7 +1949,41 @@ bool SketchEditor::eventFilter(QObject* watched, QEvent* e) {
   }
 }
 
+void SketchEditor::mirrorPick(double x, double y) {
+  const Hit h = hitEntity(x, y);
+  if (h.kind != Hit::Entity) return;
+  if (!mirrorLineStage_) {
+    // Objects: clicking toggles a curve in or out.
+    auto it = std::find_if(picks_.begin(), picks_.end(), [&](const Pick& p) { return p.hit.index == h.index; });
+    if (it != picks_.end()) picks_.erase(it);
+    else picks_.push_back({h, x, y});
+    emit message(tr("Mirror: %n curve(s) picked. Press Enter, then click the mirror line.", nullptr,
+                    static_cast<int>(picks_.size())));
+    rebuild();
+    return;
+  }
+  std::vector<int> objects;
+  for (const auto& p : picks_) objects.push_back(p.hit.index);
+  checkpoint();
+  const std::string err = sketch::mirrorEntities(sk_, objects, h.index);
+  if (!err.empty()) {
+    undo_.pop_back();
+    emit message(QString::fromStdString(err));
+    return;
+  }
+  picks_.clear();
+  mirrorLineStage_ = false;
+  solveAndShow();
+  emit message(tr("Mirrored. Click more curves to mirror again."));
+}
+
 bool SketchEditor::keyPress(QKeyEvent* e) {
+  if (tool_ == Tool::Mirror && !mirrorLineStage_ && !picks_.empty() &&
+      (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Tab)) {
+    mirrorLineStage_ = true;
+    emit message(tr("Mirror: click the mirror line."));
+    return true;
+  }
   if (tool_ == Tool::Spline && steps_.size() >= 2 && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
     finishSpline(false);
     return true;
@@ -2477,7 +2547,7 @@ void SketchEditor::updatePreview(double x, double y) {
   if (hudTool()) {
     ensureHud();
     std::tie(x, y) = hudTarget(x, y);
-    if (!hudAnyLocked() && tool_ != Tool::Fillet && tool_ != Tool::Offset) {
+    if (!hudAnyLocked() && tool_ != Tool::Fillet && tool_ != Tool::Chamfer && tool_ != Tool::Offset) {
       const Pick snap = pickPoint(x, y);
       x = snap.x;
       y = snap.y;
@@ -2513,6 +2583,14 @@ void SketchEditor::updatePreview(double x, double y) {
       const double r = hudLocked(0) ? hudValue(0) : filletRadiusAt(x, y);
       if (filletLines_.first >= 0 && sketch::filletCorner(trial, filletLines_.first, filletLines_.second, r, &arc).empty())
         trialCurves(trial, {arc, filletLines_.first, filletLines_.second});
+      break;
+    }
+    case Tool::Chamfer: {
+      sketch::Sketch trial = sk_;
+      int line = -1;
+      const double d = hudLocked(0) ? hudValue(0) : filletRadiusAt(x, y);
+      if (filletLines_.first >= 0 && sketch::chamferCorner(trial, filletLines_.first, filletLines_.second, d, &line).empty())
+        trialCurves(trial, {line, filletLines_.first, filletLines_.second});
       break;
     }
     case Tool::Offset: {

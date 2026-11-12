@@ -137,6 +137,193 @@ std::string filletCorner(Sketch& s, int la, int lb, double radius, int* arcOut) 
   return {};
 }
 
+std::string chamferCorner(Sketch& s, int la, int lb, double distance, int* lineOut) {
+  if (!isLine(s, la) || !isLine(s, lb) || la == lb) return "Chamfer: pick two lines that meet at a corner";
+  if (!(distance > 0)) return "Chamfer: the distance must be greater than zero";
+  Joints j(s);
+  const Entity A = s.entities[la], B = s.entities[lb];
+  int ea = -1, eb = -1;
+  for (int pa : {A.a, A.b})
+    for (int pb : {B.a, B.b})
+      if (ea < 0 && j.same(pa, pb)) {
+        ea = pa;
+        eb = pb;
+      }
+  if (ea < 0) return "Chamfer: the two lines do not meet at a corner";
+  const int fa = ea == A.a ? A.b : A.a, fb = eb == B.a ? B.b : B.a;
+  const V p = at(s, ea);
+  const V u1 = unit(at(s, fa) - p), u2 = unit(at(s, fb) - p);
+  if (std::abs(cross(u1, u2)) < 1e-6) return "Chamfer: the lines are parallel";
+  if (distance >= len(at(s, fa) - p) - 1e-9 || distance >= len(at(s, fb) - p) - 1e-9)
+    return "Chamfer: the distance is too large for these lines";
+  const V t1 = p + u1 * distance, t2 = p + u2 * distance;
+  const Sketch backup = s;
+  int pt1 = ea, pt2 = eb;
+  if (ea == eb) {
+    pt1 = s.addPoint(t1.x, t1.y);
+    pt2 = s.addPoint(t2.x, t2.y);
+    Entity& ra = s.entities[la];
+    Entity& rb = s.entities[lb];
+    (ra.a == ea ? ra.a : ra.b) = pt1;
+    (rb.a == eb ? rb.a : rb.b) = pt2;
+  } else {
+    s.points[ea] = {t1.x, t1.y};
+    s.points[eb] = {t2.x, t2.y};
+  }
+  std::vector<Constraint> kept;
+  for (const auto& k : s.constraints) {
+    const bool joinsEnds = k.type == ConstraintType::Coincident && k.points.size() == 2 &&
+                           j.same(k.points[0], ea) && j.same(k.points[1], ea);
+    const bool lengthDim = (k.type == ConstraintType::Distance || k.type == ConstraintType::HorizontalDistance ||
+                            k.type == ConstraintType::VerticalDistance) &&
+                           k.points.empty() && k.entities.size() == 1 && (k.entities[0] == la || k.entities[0] == lb);
+    if (!joinsEnds && !lengthDim) kept.push_back(k);
+  }
+  s.constraints = std::move(kept);
+  const int line = s.addLine(pt1, pt2, A.construction);
+  if (ea == eb) {
+    bool used = false;
+    for (int i = 0; i < static_cast<int>(s.entities.size()); ++i)
+      for (int q : s.entityPoints(i)) used = used || q == ea;
+    if (!used) s.removePoints({ea});
+  }
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return "Chamfer: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+  }
+  if (lineOut) *lineOut = line;
+  return {};
+}
+
+std::string extendLine(Sketch& s, int line, double x, double y) {
+  if (!isLine(s, line)) return "Extend: click a line near the end to extend";
+  const Entity e = s.entities[line];
+  const V pa = at(s, e.a), pb = at(s, e.b);
+  // The end nearest the click, pointing outward.
+  const bool atB = len(V{x, y} - pb) < len(V{x, y} - pa);
+  const int endPt = atB ? e.b : e.a;
+  for (int i = 0; i < static_cast<int>(s.entities.size()); ++i)
+    if (i != line)
+      for (int q : s.entityPoints(i))
+        if (q == endPt) return "Extend: that end is connected to another curve";
+  const V from = atB ? pb : pa, dir = unit(atB ? pb - pa : pa - pb);
+  double best = 1e300;
+  int target = -1;
+  for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
+    if (i == line) continue;
+    const Entity& o = s.entities[i];
+    if (o.type == EntityType::Line) {
+      const V c = at(s, o.a), d = at(s, o.b) - at(s, o.a);
+      const double den = cross(dir, d);
+      if (std::abs(den) < 1e-12) continue;
+      const double t = cross(c - from, d) / den, u = cross(c - from, dir) / den;
+      if (t > 1e-9 && u >= -1e-9 && u <= 1 + 1e-9 && t < best) {
+        best = t;
+        target = i;
+      }
+    } else if (isRound(o.type)) {
+      const V c = at(s, o.center);
+      const V f = from - c;
+      const double B = 2 * dot(f, dir), C = dot(f, f) - o.radius * o.radius, disc = B * B - 4 * C;
+      if (disc < 0) continue;
+      for (double sg : {-1.0, 1.0}) {
+        const double t = (-B + sg * std::sqrt(disc)) / 2;
+        if (t <= 1e-9 || t >= best) continue;
+        if (o.type == EntityType::Arc) {
+          const V q = from + dir * t;
+          const double ang = std::atan2(q.y - c.y, q.x - c.x);
+          const double a0 = std::atan2(at(s, o.a).y - c.y, at(s, o.a).x - c.x);
+          double a1 = std::atan2(at(s, o.b).y - c.y, at(s, o.b).x - c.x), aa = ang;
+          while (a1 <= a0) a1 += 2 * kPi;
+          while (aa < a0) aa += 2 * kPi;
+          if (aa > a1 + 1e-9) continue;
+        }
+        best = t;
+        target = i;
+      }
+    }
+  }
+  if (target < 0) return "Extend: nothing to extend to in that direction";
+  const Sketch backup = s;
+  const V to = from + dir * best;
+  s.points[endPt] = {to.x, to.y};
+  // Remove a length dimension on the line (it changes), keep the end on the target.
+  std::erase_if(s.constraints, [&](const Constraint& k) {
+    return k.type == ConstraintType::Distance && k.points.empty() && k.entities.size() == 1 && k.entities[0] == line;
+  });
+  s.addConstraint({ConstraintType::PointOnEntity, {endPt}, {target}});
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return "Extend: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+  }
+  return {};
+}
+
+std::string mirrorEntities(Sketch& s, const std::vector<int>& entities, int mirrorLine, std::vector<int>* created) {
+  if (!isLine(s, mirrorLine)) return "Mirror: pick a line to mirror across";
+  if (entities.empty()) return "Mirror: pick the curves to mirror";
+  const V m0 = at(s, s.entities[mirrorLine].a), md = unit(at(s, s.entities[mirrorLine].b) - m0);
+  auto reflect = [&](V p) {
+    const V v = p - m0;
+    const V along = md * dot(v, md);
+    return m0 + along * 2 - v;
+  };
+  const Sketch backup = s;
+  std::map<int, int> twin;   // original point -> mirrored point
+  auto mirrored = [&](int p) {
+    if (auto it = twin.find(p); it != twin.end()) return it->second;
+    const V q = at(s, p);
+    const V v = q - m0;
+    if (std::abs(cross(md, v)) < 1e-9) return twin[p] = p;   // on the mirror line: shared
+    const V r = reflect(q);
+    const int n = s.addPoint(r.x, r.y);
+    s.addConstraint({ConstraintType::Symmetry, {p, n}, {mirrorLine}});
+    return twin[p] = n;
+  };
+  std::vector<int> made;
+  for (int id : entities) {
+    if (id == mirrorLine || id < 0 || id >= static_cast<int>(s.entities.size())) continue;
+    const Entity e = s.entities[id];
+    Entity c = e;
+    switch (e.type) {
+      case EntityType::Line:
+        c.a = mirrored(e.a);
+        c.b = mirrored(e.b);
+        break;
+      case EntityType::Circle:
+        c.center = mirrored(e.center);
+        break;
+      case EntityType::Arc:
+        // A mirror turns anticlockwise into clockwise: swap the ends.
+        c.center = mirrored(e.center);
+        c.a = mirrored(e.b);
+        c.b = mirrored(e.a);
+        break;
+      case EntityType::Spline:
+        for (int& f : c.fit) f = mirrored(f);
+        c.a = c.fit.front();
+        c.b = c.fit.back();
+        break;
+    }
+    c.projected = false;
+    s.entities.push_back(c);
+    const int ni = static_cast<int>(s.entities.size()) - 1;
+    made.push_back(ni);
+    if (e.type == EntityType::Circle || e.type == EntityType::Arc)
+      s.addConstraint({ConstraintType::Equal, {}, {id, ni}});
+  }
+  if (made.empty()) return "Mirror: pick the curves to mirror (not the mirror line itself)";
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return "Mirror: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+  }
+  if (created) *created = made;
+  return {};
+}
+
 std::vector<ChainSegment> chainOf(const Sketch& s, int entity, bool* closed) {
   if (closed) *closed = false;
   if (entity < 0 || entity >= static_cast<int>(s.entities.size())) return {};

@@ -43,7 +43,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
 
-**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Ellipse · Spline ✅ (fit point) · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet ✅ · Chamfer · Offset ✅ · Extend · Break · Sketch Scale · Move/Copy
+**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Ellipse · Spline ✅ (fit point) · Conic · Text · Mirror ✅ · Circular/Rectangular Pattern · Project/Include · Fillet ✅ · Chamfer ✅ · Offset ✅ · Extend ✅ · Break · Sketch Scale · Move/Copy
 
 **Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear ✅ · Symmetry ✅ · Curvature · Polygon; Sketch Palette ✅ (feature options, linetype, Look At, grid, snap, slice, show profiles/points/dimensions/constraints/construction)
 

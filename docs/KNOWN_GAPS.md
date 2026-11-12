@@ -24,7 +24,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P1-7 | Right click opens a plain context menu, not a radial marking menu | P1 scope | R2 |
 | P2-1 | A sketch on a body face copies the face's plane when created; it does not follow the face if the body changes | Associative references need topological naming | P3 |
 | P2-2 | Extrude remembers each picked profile by a point inside it; a large sketch edit can make it pick a different or no region (reported as an error) | No persistent profile identity yet | P3 |
-| P2-3 | Sketch tools: ~~trim, offset, fillet, spline, polygon, slot~~ done; still no extend, chamfer, mirror/pattern, text, or projecting body edges | P2 scope | P8 |
+| P2-3 | Sketch tools: ~~trim, offset, fillet, spline, polygon, slot, extend, chamfer, mirror~~ done; still no sketch patterns, text, Project / Include, Break, Sketch Scale. Extend works on lines (not arcs); Chamfer is equal-distance; Mirror ties copies with symmetry constraints | P2 scope | P13 |
 | P9-1 | Spline: fit-point splines only (no control-point splines, tangency handles or curvature constraints); constraints act on its points, not the curve; Trim and Offset skip splines | P9 scope | later |
 | P9-2 | Sketch Fillet: line-line corners only (not line-arc or arc-arc); the two lines' length dimensions are removed because the corner they measured is gone | P9 scope | later |
 | P9-3 | Sketch Offset: the copy of a line chain gets parallel constraints and one offset dimension (not Fusion's offset constraint that keeps every curve at the distance); offset arcs share their originals' centres; the side is chosen by where the cursor is | P9 scope | later |

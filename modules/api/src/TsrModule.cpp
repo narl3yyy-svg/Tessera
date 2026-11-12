@@ -164,6 +164,21 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("line_a"), py::arg("line_b"), py::arg("radius"),
      "Round the corner between two lines (cm); returns the new sketch JSON.");
+  m.def("sketch_chamfer", [](const std::string& data, int lineA, int lineB, double distance) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::chamferCorner(s, lineA, lineB, distance); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("line_a"), py::arg("line_b"), py::arg("distance"));
+  m.def("sketch_extend", [](const std::string& data, int line, double x, double y) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::extendLine(s, line, x, y); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("line"), py::arg("x"), py::arg("y"), "Extend the line's end nearest (x, y) (cm).");
+  m.def("sketch_mirror", [](const std::string& data, const std::vector<int>& entities, int mirrorLine) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::mirrorEntities(s, entities, mirrorLine); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entities"), py::arg("mirror_line"));
   m.def("sketch_offset", [](const std::string& data, int entity, double distance) {
     sketch::Sketch s = sketch::Sketch::fromJson(data);
     if (auto err = sketch::offsetChain(s, entity, distance); !err.empty()) throw std::runtime_error(err);

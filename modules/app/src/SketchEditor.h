@@ -34,7 +34,7 @@ public:
     Select, Line, Rectangle, Circle, Arc, Point, Dimension,
     Coincident, HorizontalVertical, Parallel, Perpendicular, Equal, Tangent, Fix, Midpoint, Concentric,
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
-    Spline, Fillet, Offset,
+    Spline, Fillet, Offset, Chamfer, Extend, Mirror,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -172,6 +172,8 @@ private:
 public:
   // Tests: a click-and-drag from the line chain's last point to (x, y).
   bool dragTangentArcForTest(double x, double y);
+  // Tests: Mirror's Enter (objects picked, now the mirror line).
+  void mirrorObjectsDoneForTest() { if (!picks_.empty()) mirrorLineStage_ = true; }
 
 private:
 
@@ -233,6 +235,8 @@ private:
   std::pair<int, int> filletLines_{-1, -1};
   int firstFilletLine_ = -1;
   int offsetEntity_ = -1;
+  bool mirrorLineStage_ = false;      // Mirror: objects picked, now the mirror line
+  void mirrorPick(double x, double y);
   QString lengthText(double cm) const;
 
   doc::Session& session_;

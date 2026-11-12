@@ -38,4 +38,18 @@ std::vector<ChainSegment> chainOf(const Sketch& s, int entity, bool* closed = nu
 // `created` receives the new entities.
 std::string offsetChain(Sketch& s, int entity, double distance, std::vector<int>* created = nullptr);
 
+// Bevels the corner where two lines meet: both lines are shortened by
+// `distance` and joined by a new line. Line length dimensions on the two are
+// dropped. Returns empty on success (lineOut: the new line), else why not.
+std::string chamferCorner(Sketch& s, int lineA, int lineB, double distance, int* lineOut = nullptr);
+
+// Extends a line's free end nearest (x, y) to the first curve it meets,
+// leaving the new end on that curve. Returns empty on success, else why not.
+std::string extendLine(Sketch& s, int line, double x, double y);
+
+// Mirror copies of `entities` across the line `mirrorLine`, tied to the
+// originals with symmetry constraints (points on the mirror line are
+// shared). Returns empty on success (`created`: the new entities).
+std::string mirrorEntities(Sketch& s, const std::vector<int>& entities, int mirrorLine, std::vector<int>* created = nullptr);
+
 } // namespace tsr::sketch

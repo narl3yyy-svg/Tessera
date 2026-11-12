@@ -1,0 +1,34 @@
+# Live: Chamfer (corner click + typed size), Extend, and Mirror (pick curves,
+# Enter, pick the mirror line) with real mouse and keyboard.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.rectangle
+sclick 0 0
+sclick 40 30
+click sketch.sketch-chamfer
+sclick 40 30            # the corner
+wait 200
+type 5
+key Return
+click sketch.line
+click palette.linetypeConstruction
+sclick 70 -10
+sclick 70 60            # a construction line at x = 70
+key Escape
+click palette.linetypeNormal
+sclick 0 50
+sclick 20 50
+key Escape
+click sketch.extend
+sclick 19 50            # near the end: reaches x = 70
+click sketch.sketch-mirror
+sclick 20 0
+sclick 0 15
+key Return
+sclick 70 20            # the mirror line
+shot /tmp/live_sketch_modify.png
+click palette.finish
+wait 600

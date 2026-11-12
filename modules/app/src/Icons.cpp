@@ -774,6 +774,37 @@ void sketchFilletIcon(QPainter& p) {
   p.drawLine(QPointF(10, 10), QPointF(24, 24));
 }
 
+void sketchChamferIcon(QPainter& p) {
+  stroke(p);
+  p.setBrush(Qt::NoBrush);
+  p.drawLine(QPointF(10, 56), QPointF(10, 30));
+  p.drawLine(QPointF(30, 10), QPointF(56, 10));
+  p.setPen(QPen(kAccent, 4, Qt::SolidLine, Qt::RoundCap));
+  p.drawLine(QPointF(10, 30), QPointF(30, 10));
+}
+
+void extendIcon(QPainter& p) {
+  stroke(p);
+  p.drawLine(QPointF(6, 40), QPointF(30, 40));
+  p.setPen(QPen(kAccent, 3, Qt::DashLine));
+  p.drawLine(QPointF(30, 40), QPointF(50, 40));
+  p.setPen(QPen(kLine, 4));
+  p.drawLine(QPointF(54, 12), QPointF(54, 58));
+  p.setBrush(kAccent);
+  p.setPen(Qt::NoPen);
+  p.drawPolygon(QPolygonF({QPointF(52, 40), QPointF(42, 34), QPointF(42, 46)}));
+}
+
+void sketchMirrorIcon(QPainter& p) {
+  p.setPen(QPen(kAccent, 2.5, Qt::DashDotLine));
+  p.drawLine(QPointF(32, 4), QPointF(32, 60));
+  stroke(p);
+  p.setBrush(Qt::NoBrush);
+  p.drawPolyline(QPolygonF({QPointF(26, 14), QPointF(8, 30), QPointF(26, 50)}));
+  p.setPen(QPen(kLeft, 3, Qt::DashLine));
+  p.drawPolyline(QPolygonF({QPointF(38, 14), QPointF(56, 30), QPointF(38, 50)}));
+}
+
 void offsetIcon(QPainter& p) {
   stroke(p);
   p.setBrush(Qt::NoBrush);
@@ -894,6 +925,9 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("offset-face")) offsetFaceIcon(p);
   else if (name == QLatin1String("sketch-fillet")) sketchFilletIcon(p);
   else if (name == QLatin1String("offset")) offsetIcon(p);
+  else if (name == QLatin1String("sketch-chamfer")) sketchChamferIcon(p);
+  else if (name == QLatin1String("extend")) extendIcon(p);
+  else if (name == QLatin1String("sketch-mirror")) sketchMirrorIcon(p);
   else if (name == QLatin1String("hole")) holeIcon(p);
   else if (name == QLatin1String("pattern-rect")) patternIcon(p, false);
   else if (name == QLatin1String("pattern-circ")) patternIcon(p, true);
