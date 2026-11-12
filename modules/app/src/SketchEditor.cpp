@@ -1,6 +1,7 @@
 #include "SketchEditor.h"
 #include "Theme.h"
 
+#include "tsr/core/Expression.h"
 #include "tsr/core/Units.h"
 #include "tsr/doc/DocCommands.h"
 
@@ -915,22 +916,31 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
   auto* box = new QLineEdit(view_);
   valueBox_ = box;
   box->setObjectName(QStringLiteral("dimensionValue"));
-  box->setText(QString::number(fromInternal(v, unit), 'f', angle ? 2 : 3) + QStringLiteral(" ") +
-               QString::fromUtf8(unitSymbol(unit).data()));
+  if (editIndex >= 0 && !c.expression.empty())
+    box->setText(QString::fromStdString(c.expression));
+  else
+    box->setText(QString::number(fromInternal(v, unit), 'f', angle ? 2 : 3) + QStringLiteral(" ") +
+                 QString::fromUtf8(unitSymbol(unit).data()));
   box->setFixedWidth(120);
   box->move(widgetPos.toPoint() + QPoint(12, -12));
   box->show();
   box->setFocus();
   box->selectAll();
-  emit message(tr("Type the value (units optional) and press Enter; Esc cancels."));
+  emit message(tr("Type a value or an expression such as width / 2 (units optional) and press Enter; Esc cancels."));
 
   const Constraint base = c;
   connect(box, &QLineEdit::returnPressed, this, [this, box, base, unit, editIndex] {
-    const auto value = parseQuantity(box->text().toStdString(), unit);
-    if (!value) {
-      emit message(tr("'%1' is not a valid value.").arg(box->text()));
+    const std::string text = box->text().trimmed().toStdString();
+    std::optional<double> value;
+    try {
+      value = session_.document().evaluate(text, unit == Unit::Degree ? Unit::Degree : Unit::Millimeter);
+    } catch (const std::exception& e) {
+      emit message(tr("'%1': %2").arg(box->text(), QString::fromUtf8(e.what())));
       return;
     }
+    // Plain numbers are stored as values; anything else keeps its expression
+    // so the dimension follows the parameters it names.
+    const std::string expression = isPlainQuantity(text) ? std::string() : text;
     if (base.type != ConstraintType::Angle && base.type != ConstraintType::HorizontalDistance &&
         base.type != ConstraintType::VerticalDistance && *value <= 0) {
       emit message(tr("The value must be greater than zero."));
@@ -941,6 +951,7 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
     if (editIndex >= 0) {
       checkpoint();
       sk_.constraints[editIndex].value = *value;
+      sk_.constraints[editIndex].expression = expression;
       const auto r = sketch::solve(sk_);
       if (!r.ok) {
         sk_ = undo_.back();
@@ -954,6 +965,7 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
     }
     Constraint c2 = base;
     c2.value = *value;
+    c2.expression = expression;
     constrain(c2);
   });
   connect(box, &QLineEdit::editingFinished, this, [this, box] {
@@ -1049,7 +1061,10 @@ bool SketchEditor::lockField(size_t i) {
     } catch (...) {
     }
   } else {
-    v = parseQuantity(text, f.kind == HudField::Angle ? Unit::Degree : unit_);
+    try {
+      v = session_.document().evaluate(text, f.kind == HudField::Angle ? Unit::Degree : Unit::Millimeter);
+    } catch (const std::exception&) {
+    }
   }
   f.editing = false;
   if (!v || (f.kind != HudField::Angle && *v <= 0)) {

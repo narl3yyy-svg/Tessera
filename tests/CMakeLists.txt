@@ -1,6 +1,7 @@
 add_executable(tsr_unit_tests
   unit/main.cpp
   unit/test_units.cpp
+  unit/test_expression.cpp
   unit/test_command.cpp
   unit/test_zip.cpp)
 target_include_directories(tsr_unit_tests PRIVATE .)
@@ -45,6 +46,11 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_construct.py)
   add_test(NAME api_sweep_loft_presspull
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sweep_loft_presspull.py)
+  add_test(NAME api_parameters_expressions
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_parameters_expressions.py
+                               --save ${CMAKE_CURRENT_BINARY_DIR}/api_params.tsr
+                               --open ${CMAKE_CURRENT_BINARY_DIR}/api_params.tsr
+                               --script ${CMAKE_CURRENT_SOURCE_DIR}/api/check_parameters_reopened.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()

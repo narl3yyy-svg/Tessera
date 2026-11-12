@@ -4,6 +4,7 @@
 #include "CommandDialog.h"
 #include "Icons.h"
 #include "MainWindow.h"
+#include "ParametersDialog.h"
 #include "SketchEditor.h"
 #include "Theme.h"
 #include "Viewport.h"
@@ -76,6 +77,9 @@ void MainWindow::buildUiCommands() {
   auto planned = [&](const char* panel, const char* id, const char* name, const char* icon, const char* shortcut = "") {
     add(panel, id, name, icon, "Planned: see docs/ROADMAP.md.", shortcut, nullptr);
   };
+  add("Modify", "ui.changeParameters", "Change Parameters", "parameters",
+      "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
+      [this] { showParameters(); });
   planned("Assemble", "ui.newComponent", "New Component", "component");
   planned("Assemble", "ui.joint", "Joint", "joint", "J");
   planned("Assemble", "ui.asBuiltJoint", "As-Built Joint", "joint", "Shift+J");
@@ -113,6 +117,14 @@ void MainWindow::buildUiCommands() {
       [this] { setSelectionFilter({TopAbs_EDGE}); });
   add("Select", "ui.filterVertices", "Select Vertices", "vertex", "Selection filter: vertices.", "",
       [this] { setSelectionFilter({TopAbs_VERTEX}); });
+}
+
+ParametersDialog* MainWindow::showParameters() {
+  if (!parameters_) parameters_ = new ParametersDialog(session_, this);
+  parameters_->show();
+  parameters_->raise();
+  parameters_->activateWindow();
+  return parameters_;
 }
 
 void MainWindow::setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types) {

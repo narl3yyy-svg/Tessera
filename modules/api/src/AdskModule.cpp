@@ -91,10 +91,26 @@ void bindAdsk(py::module_& adsk) {
   // ---- adsk.fusion ----
   py::class_<UserParameter>(fusion, "UserParameter")
       .def_property_readonly("name", [](const UserParameter& p) { return p.get().name; })
-      .def_property_readonly("expression", [](const UserParameter& p) { return p.get().expression; })
+      .def_property("expression", [](const UserParameter& p) { return p.get().expression; },
+                    [](const UserParameter& p, const std::string& e) {
+                      raiseIfError(activeSession().setParameter(p.name, e, p.get().comment));
+                    })
       .def_property_readonly("unit", [](const UserParameter& p) { return p.get().unit; })
-      .def_property_readonly("comment", [](const UserParameter& p) { return p.get().comment; })
-      .def_property_readonly("value", [](const UserParameter& p) { return p.get().value; });
+      .def_property("comment", [](const UserParameter& p) { return p.get().comment; },
+                    [](const UserParameter& p, const std::string& c) {
+                      raiseIfError(activeSession().setParameter(p.name, p.get().expression, c));
+                    })
+      .def_property("value", [](const UserParameter& p) { return p.get().value; },
+                    [](const UserParameter& p, double v) {
+                      const auto cur = p.get();
+                      const std::string e = formatQuantity(v, parseUnit(cur.unit).value_or(Unit::None));
+                      raiseIfError(activeSession().setParameter(p.name, e, cur.comment));
+                    })
+      .def_property_readonly("isDeletable",
+                             [](const UserParameter& p) {
+                               return activeSession().document().parameterUsers(p.name).empty();
+                             })
+      .def("deleteMe", [](const UserParameter& p) { return activeSession().deleteParameter(p.name).empty(); });
 
   py::class_<UserParameters>(fusion, "UserParameters")
       .def("add",

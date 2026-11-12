@@ -118,6 +118,40 @@ void bindTsr(py::module_& m) {
     if (auto err = activeSession().setFeatureSuppressed(id, suppressed); !err.empty()) throw std::runtime_error(err);
   }, py::arg("feature_id"), py::arg("suppressed") = true);
 
+  m.def("parameters", [] {
+    py::list out;
+    for (const auto& p : activeSession().document().userParameters()) {
+      py::dict d;
+      d["name"] = p.name;
+      d["expression"] = p.expression;
+      d["unit"] = p.unit;
+      d["value"] = p.value;
+      d["comment"] = p.comment;
+      out.append(d);
+    }
+    return out;
+  }, "User parameters (values in internal units: cm, rad).");
+  m.def("set_parameter", [](const std::string& name, const std::string& expression, py::object comment) {
+    auto p = activeSession().document().userParameter(name);
+    if (!p) throw std::runtime_error("no parameter named '" + name + "'");
+    const std::string c = comment.is_none() ? p->comment : comment.cast<std::string>();
+    if (auto err = activeSession().setParameter(name, expression, c); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("expression"), py::arg("comment") = py::none(),
+     "Change a parameter's expression; dependent parameters and features update.");
+  m.def("delete_parameter", [](const std::string& name) {
+    if (auto err = activeSession().deleteParameter(name); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"));
+  m.def("evaluate", [](const std::string& text, const std::string& unit) {
+    const auto u = parseUnit(unit);
+    if (!u) throw std::runtime_error("unknown unit '" + unit + "'");
+    try {
+      return activeSession().document().evaluate(text, *u);
+    } catch (const std::exception& e) {
+      throw std::runtime_error(e.what());
+    }
+  }, py::arg("expression"), py::arg("unit") = "mm",
+     "Evaluate an expression as an input in `unit` would (internal units out; lengths use the document unit).");
+
   m.def("export", [](const std::string& path, int refinement) {
     const auto format = kernel::formatForPath(path);
     if (!format) throw std::runtime_error("unsupported export type: " + path);

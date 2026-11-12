@@ -125,6 +125,20 @@ std::string Session::setFeatureSuppressed(int featureId, bool suppressed) {
   return err;
 }
 
+std::string Session::setParameter(const std::string& name, const std::string& expression,
+                                  const std::string& comment) {
+  auto err = historyEdit(*doc_, commands_, "Change parameter",
+                         [&] { doc_->setUserParameter(name, expression, comment); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::deleteParameter(const std::string& name) {
+  auto err = historyEdit(*doc_, commands_, "Delete parameter", [&] { doc_->removeUserParameter(name); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
 bool Session::undo() {
   const bool ok = doc_->undo();
   if (ok) notifyChanged();

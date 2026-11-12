@@ -247,6 +247,7 @@ std::string Sketch::toJson() const {
     if (!c.entities.empty()) jc["e"] = c.entities;
     if (c.value != 0) jc["v"] = c.value;
     if (c.value2 != 0) jc["v2"] = c.value2;
+    if (!c.expression.empty()) jc["expr"] = c.expression;
     cons.push_back(jc);
   }
   return j.dump();
@@ -292,6 +293,7 @@ Sketch Sketch::fromJson(const std::string& text) {
       c.entities = jc.value("e", std::vector<int>{});
       c.value = jc.value("v", 0.0);
       c.value2 = jc.value("v2", 0.0);
+      c.expression = jc.value("expr", std::string{});
       s.constraints.push_back(c);
     }
   } catch (const nlohmann::json::exception& e) {

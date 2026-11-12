@@ -10,10 +10,16 @@
 
 #include <nlohmann/json.hpp>
 
+#include "tsr/doc/DocCommands.h"
+#include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <functional>
+#include <map>
+#include <memory>
 #include <sstream>
 #include <vector>
 
@@ -97,6 +103,11 @@ TDF_Label findBodyLabel(const Handle(TDocStd_Document)& doc, const std::string& 
     if (it.Value().FindAttribute(TNaming_NamedShape::GetID(), ns) && !ns->IsEmpty() && nameOf(it.Value()) == name)
       return it.Value();
   }
+  return {};
+}
+TDF_Label findParameterLabel(const Handle(TDocStd_Document)& doc, const std::string& name) {
+  for (TDF_ChildIterator it(doc->Main().FindChild(kParamsTag, false)); it.More(); it.Next())
+    if (it.Value().IsAttribute(TDataStd_NamedData::GetID()) && nameOf(it.Value()) == name) return it.Value();
   return {};
 }
 } // namespace
@@ -198,6 +209,147 @@ void Document::addUserParameter(const UserParameter& p) {
   nd->SetString("unit", ext(p.unit));
   nd->SetString("comment", ext(p.comment));
   nd->SetReal("value", p.value);
+}
+
+void Document::setUserParameter(const std::string& name, const std::string& expression, const std::string& comment) {
+  requireTransaction("setUserParameter");
+  const TDF_Label l = findParameterLabel(doc_, name);
+  if (l.IsNull()) throw DocumentError("no parameter named '" + name + "'");
+  Handle(TDataStd_NamedData) nd;
+  l.FindAttribute(TDataStd_NamedData::GetID(), nd);
+  nd->SetString("expression", ext(expression));
+  nd->SetString("comment", ext(comment));
+  reevaluateParameters();
+}
+
+void Document::removeUserParameter(const std::string& name) {
+  requireTransaction("removeUserParameter");
+  const TDF_Label l = findParameterLabel(doc_, name);
+  if (l.IsNull()) throw DocumentError("no parameter named '" + name + "'");
+  const auto users = parameterUsers(name);
+  if (!users.empty()) {
+    std::string list;
+    for (const auto& u : users) list += (list.empty() ? "" : ", ") + u;
+    throw DocumentError("'" + name + "' is still used by " + list);
+  }
+  l.ForgetAllAttributes(true);
+}
+
+std::vector<std::string> Document::parameterUsers(const std::string& name) const {
+  auto refersTo = [&](const std::string& text) {
+    try {
+      const auto refs = expressionReferences(text);
+      return std::find(refs.begin(), refs.end(), name) != refs.end();
+    } catch (const ExpressionError&) {
+      return false;
+    }
+  };
+  std::vector<std::string> out;
+  for (const auto& p : userParameters())
+    if (p.name != name && refersTo(p.expression)) out.push_back("parameter " + p.name);
+  for (const auto& f : features()) {
+    bool used = false;
+    for (const auto& [k, v] : f.inputs)
+      if (auto t = std::get_if<std::string>(&v); t && k.size() > 1 && k[0] == '=') used = used || refersTo(*t);
+    if (!used && f.commandId == kCmdSketch)
+      if (auto it = f.inputs.find("data"); it != f.inputs.end())
+        if (auto data = std::get_if<std::string>(&it->second)) {
+          try {
+            for (const auto& c : sketch::Sketch::fromJson(*data).constraints)
+              used = used || (!c.expression.empty() && refersTo(c.expression));
+          } catch (const sketch::SketchError&) {
+          }
+        }
+    if (used) out.push_back(f.name);
+  }
+  return out;
+}
+
+ExpressionEnv Document::expressionEnv() const {
+  ExpressionEnv env;
+  env.lengthUnit = parseUnit(lengthUnit()).value_or(Unit::Millimeter);
+  // Copy the values so the lookup does not walk OCAF per name.
+  auto values = std::make_shared<std::map<std::string, Quantity>>();
+  for (const auto& p : userParameters())
+    (*values)[p.name] = quantityOf(p.value, parseUnit(p.unit).value_or(Unit::None));
+  env.lookup = [values](const std::string& n) -> std::optional<Quantity> {
+    auto it = values->find(n);
+    if (it == values->end()) return std::nullopt;
+    return it->second;
+  };
+  return env;
+}
+
+double Document::evaluate(const std::string& text, Unit unit) const {
+  const ExpressionEnv env = expressionEnv();
+  const Unit expected = dimensionOf(unit) == Dimension::Length ? env.lengthUnit : unit;
+  try {
+    return tsr::evaluateExpression(text, expected, env);
+  } catch (const ExpressionError& e) {
+    throw DocumentError(e.what());
+  }
+}
+
+void Document::reevaluateParameters() {
+  const auto params = userParameters();
+  std::map<std::string, size_t> index;
+  for (size_t i = 0; i < params.size(); ++i) index[params[i].name] = i;
+  std::vector<int> state(params.size(), 0);   // 0 new, 1 evaluating, 2 done
+  std::vector<double> values(params.size(), 0.0);
+  const Unit docLength = parseUnit(lengthUnit()).value_or(Unit::Millimeter);
+  auto unitOf = [&](size_t i) { return parseUnit(params[i].unit).value_or(Unit::None); };
+
+  std::function<Quantity(size_t)> eval = [&](size_t i) -> Quantity {
+    if (state[i] == 2) return quantityOf(values[i], unitOf(i));
+    if (state[i] == 1) throw DocumentError("parameter '" + params[i].name + "' refers to itself");
+    state[i] = 1;
+    ExpressionEnv env;
+    env.lengthUnit = docLength;
+    env.lookup = [&](const std::string& n) -> std::optional<Quantity> {
+      auto it = index.find(n);
+      if (it == index.end()) return std::nullopt;
+      return eval(it->second);
+    };
+    try {
+      values[i] = tsr::evaluateExpression(params[i].expression, unitOf(i), env);
+    } catch (const ExpressionError& e) {
+      throw DocumentError(params[i].name + ": " + e.what());
+    }
+    state[i] = 2;
+    return quantityOf(values[i], unitOf(i));
+  };
+  for (size_t i = 0; i < params.size(); ++i) (void)eval(i);
+
+  for (size_t i = 0; i < params.size(); ++i) {
+    if (params[i].value == values[i]) continue;
+    Handle(TDataStd_NamedData) nd;
+    if (findParameterLabel(doc_, params[i].name).FindAttribute(TDataStd_NamedData::GetID(), nd))
+      nd->SetReal("value", values[i]);
+  }
+}
+
+void Document::evaluateFeatureExpressions(const Command& cmd, Inputs& in) const {
+  const Inputs original = in;
+  for (const auto& [k, v] : original) {
+    if (k.size() < 2 || k[0] != '=') continue;
+    const auto* text = std::get_if<std::string>(&v);
+    const InputDef* d = cmd.def().input(k.substr(1));
+    if (!text || !d || (d->type != InputType::Real && d->type != InputType::Integer)) continue;
+    double x = 0;
+    try {
+      x = evaluate(*text, d->unit);
+    } catch (const DocumentError& e) {
+      throw DocumentError(d->label + ": " + e.what());
+    }
+    Value value = x;
+    if (d->type == InputType::Integer) {
+      const double n = std::round(x);
+      if (std::abs(n - x) > 1e-9) throw DocumentError(d->label + ": must be a whole number");
+      value = static_cast<std::int64_t>(n);
+    }
+    if (auto err = checkInputValue(*d, value); !err.empty()) throw DocumentError(err);
+    in[d->id] = value;
+  }
 }
 
 std::vector<Body> Document::bodies() const {
@@ -423,7 +575,10 @@ void Document::recompute(const CommandRegistry& registry) {
     if (!f.suppressed) {
       if (const Command* cmd = registry.find(f.commandId)) {
         try {
-          cmd->apply(f.inputs, *this);
+          Inputs in = f.inputs;
+          evaluateFeatureExpressions(*cmd, in);
+          if (in != f.inputs) featureData(doc_, f.id)->SetString("inputs", ext(toJson(in).dump()));
+          cmd->apply(in, *this);
         } catch (const std::exception& e) {
           error = e.what();
         }

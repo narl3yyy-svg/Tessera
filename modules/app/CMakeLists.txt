@@ -11,6 +11,8 @@ add_executable(tessera
   src/ViewportSketch.cpp
   src/CommandDialog.cpp
   src/CommandDialog.h
+  src/ParametersDialog.cpp
+  src/ParametersDialog.h
   src/Icons.cpp
   src/Theme.cpp
   src/Theme.h

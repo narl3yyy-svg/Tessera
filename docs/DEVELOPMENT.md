@@ -22,7 +22,7 @@ The build must have **zero compiler warnings**. Only the dependency-free core:
 
 | Test | What it covers |
 |---|---|
-| `unit` | units, command framework, ZIP |
+| `unit` | units, expressions, command framework, ZIP |
 | `sketch` | solver, constraints, profiles, sketch editing operations |
 | `integration` | document, features, kernel operations, `.tsr` round trips |
 | `api_*` | Python scripts in `tests/api/` run through `tessera-cli`, one per feature area |

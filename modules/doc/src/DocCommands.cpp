@@ -30,6 +30,19 @@ Document& docOf(CommandContext& ctx) {
   return *d;
 }
 
+// Gives every dimension that carries an expression its current value.
+void evaluateDimensions(const Document& doc, sketch::Sketch& s) {
+  for (auto& c : s.constraints) {
+    if (c.expression.empty() || !sketch::isDimension(c.type)) continue;
+    const Unit unit = c.type == sketch::ConstraintType::Angle ? Unit::Degree : Unit::Millimeter;
+    try {
+      c.value = doc.evaluate(c.expression, unit);
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string(sketch::typeName(c.type)) + " dimension '" + c.expression + "': " + e.what());
+    }
+  }
+}
+
 bool isIdentifier(const std::string& s) {
   if (s.empty() || !(std::isalpha(static_cast<unsigned char>(s[0])) || s[0] == '_')) return false;
   for (char c : s)
@@ -46,7 +59,7 @@ public:
     def_.tooltip = "Creates a named parameter that other features can reference.";
     def_.workspace = "Design";
     def_.tab = "Solid";
-    def_.panel = "Modify";
+    def_.panel = "";   // reached through Modify > Change Parameters
     def_.icon = "parameters";
     def_.inputs = {
         {.id = "name", .label = "Name", .tooltip = "Parameter name (letters, digits, underscore).",
@@ -65,12 +78,15 @@ public:
     const std::string name = getString(in, "name");
     if (!isIdentifier(name)) return "Name: must start with a letter or underscore and contain only letters, digits and underscores";
     if (parseUnit(name)) return "Name: '" + name + "' is a unit name";
+    if (!isValidParameterName(name)) return "Name: '" + name + "' is a function or constant name";
     if (docOf(ctx).userParameter(name)) return "Name: a parameter named '" + name + "' already exists";
     const auto unit = parseUnit(getString(in, "unit"));
     if (!unit) return "Unit: unknown unit '" + getString(in, "unit") + "'";
-    if (!parseQuantity(getString(in, "expression"), *unit))
-      return "Expression: cannot evaluate '" + getString(in, "expression") + "' as " +
-             (*unit == Unit::None ? std::string("a unitless number") : "a value in " + std::string(unitSymbol(*unit)));
+    try {
+      (void)evaluateFor(docOf(ctx), getString(in, "expression"), *unit);
+    } catch (const std::exception& e) {
+      return std::string("Expression: ") + e.what();
+    }
     return {};
   }
 
@@ -81,11 +97,21 @@ public:
     p.unit = std::string(unitSymbol(unit));
     p.expression = getString(in, "expression");
     p.comment = getString(in, "comment");
-    p.value = *parseQuantity(p.expression, unit);
+    p.value = evaluateFor(docOf(ctx), p.expression, unit);
     docOf(ctx).addUserParameter(p);
   }
 
 private:
+  // A parameter's bare numbers take the parameter's own unit.
+  static double evaluateFor(const Document& doc, const std::string& text, Unit unit) {
+    ExpressionEnv env = doc.expressionEnv();
+    try {
+      return tsr::evaluateExpression(text, unit, env);
+    } catch (const ExpressionError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
   CommandDef def_;
 };
 
@@ -262,6 +288,7 @@ public:
     try {
       (void)doc.planeFrame(rec.plane, rec.offset);
       sketch::Sketch s = sketch::Sketch::fromJson(getString(in, "data"));
+      evaluateDimensions(doc, s);
       const auto res = sketch::solve(s);
       if (!res.ok) throw CommandError(rec.name + ": " + res.message);
       rec.data = s.toJson();

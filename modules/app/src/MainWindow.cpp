@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
+#include "ParametersDialog.h"
 #include "Icons.h"
 #include "Theme.h"
 #include "SketchEditor.h"
@@ -48,6 +49,7 @@ constexpr int kBodyRole = Qt::UserRole + 2;
 constexpr int kSketchRole = Qt::UserRole + 3;
 constexpr int kUnitsRole = Qt::UserRole + 4;
 constexpr int kAnalysisRole = Qt::UserRole + 5;
+constexpr int kParametersRole = Qt::UserRole + 6;
 constexpr int kPlaneRole = Qt::UserRole + 6;
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
@@ -108,6 +110,10 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   connect(browser_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
     if (item->data(0, kAnalysisRole).toBool()) {
       QTimer::singleShot(0, this, [this] { openSection(); });
+      return;
+    }
+    if (item->data(0, kParametersRole).toBool()) {
+      QTimer::singleShot(0, this, [this] { showParameters(); });
       return;
     }
     const QString sketch = item->data(0, kSketchRole).toString();
@@ -910,7 +916,13 @@ void MainWindow::refreshBrowser(const QString& docName) {
 
   auto* params = new QTreeWidgetItem(root, {tr("User Parameters")});
   params->setIcon(0, icon(QStringLiteral("parameters")));
-  for (const auto& p : d.userParameters()) new QTreeWidgetItem(params, {qs(p.name + " = " + p.expression)});
+  params->setData(0, kParametersRole, true);
+  params->setToolTip(0, tr("Double-click to change parameters"));
+  for (const auto& p : d.userParameters()) {
+    auto* it = new QTreeWidgetItem(params, {qs(p.name + " = " + p.expression)});
+    it->setData(0, kParametersRole, true);
+    it->setToolTip(0, qs(p.comment.empty() ? p.unit : p.comment));
+  }
 
   root->setExpanded(true);
   bodiesItem->setExpanded(true);

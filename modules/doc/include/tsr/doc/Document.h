@@ -6,6 +6,8 @@
 //   0:1:1      User parameters; one child per parameter:
 //                TDataStd_Name       parameter name
 //                TDataStd_NamedData  "expression", "unit", "comment" (strings), "value" (real, internal units)
+//              Expressions may refer to other parameters; values are re-evaluated
+//              whenever one changes (cycles are rejected).
 //   0:1:2      Bodies; one child per body:
 //                TDataStd_Name       body name
 //                TNaming_NamedShape  the B-rep
@@ -16,6 +18,8 @@
 //   0:1:3      Features (the timeline), in order; one child per feature:
 //                TDataStd_Name       feature name ("Box1")
 //                TDataStd_NamedData  "command" (id), "inputs" (JSON), "error" (last recompute), "suppressed" (int)
+//              Inputs given as expressions keep the text under "=<input id>"
+//              (tsr::expressionKey); recompute evaluates them before replay.
 //
 // Bodies are the result of replaying the features in order (recompute()).
 // Removed entries keep their label with no attributes, so label tags stay
@@ -25,6 +29,7 @@
 // transaction is one undo step.
 #include "tsr/core/Command.h"
 #include "tsr/core/CommandRegistry.h"
+#include "tsr/core/Expression.h"
 
 #include <TDocStd_Document.hxx>
 #include <TopoDS_Shape.hxx>
@@ -105,6 +110,22 @@ public:
   std::vector<UserParameter> userParameters() const;
   std::optional<UserParameter> userParameter(const std::string& name) const;
   void addUserParameter(const UserParameter& p);
+  // Changes a parameter's expression and comment and re-evaluates every
+  // parameter. Throws DocumentError (unknown name, bad expression, cycle).
+  // Features are not replayed; call recompute() afterwards.
+  void setUserParameter(const std::string& name, const std::string& expression, const std::string& comment);
+  // Throws DocumentError if anything still refers to the parameter.
+  void removeUserParameter(const std::string& name);
+  // What refers to a parameter: "parameter <name>" or a feature name.
+  std::vector<std::string> parameterUsers(const std::string& name) const;
+
+  // Expressions. Names resolve to user parameters; bare numbers in a length
+  // take the document's length unit.
+  ExpressionEnv expressionEnv() const;
+  // `unit` is an input's display unit: a length unit stands for the
+  // document's length unit. Throws DocumentError.
+  double evaluate(const std::string& text, Unit unit) const;
+  double evaluateExpression(const std::string& text, Unit unit) override { return evaluate(text, unit); }
 
   std::vector<Body> bodies() const;
   std::optional<Body> body(const std::string& name) const;
@@ -153,6 +174,9 @@ private:
   Document(FromOcaf, Handle(TDocStd_Document) doc);
   void initLayout();
   void requireTransaction(const char* what) const;
+  void reevaluateParameters();
+  // Evaluates the "=<id>" expressions of a feature's inputs into their values.
+  void evaluateFeatureExpressions(const Command& cmd, Inputs& in) const;
 
   Handle(TDocStd_Document) doc_;
   bool modified_ = false;

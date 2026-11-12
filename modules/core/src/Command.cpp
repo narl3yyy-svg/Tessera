@@ -1,4 +1,5 @@
 #include "tsr/core/Command.h"
+#include "tsr/core/Expression.h"
 
 #include <cmath>
 #include <sstream>
@@ -31,6 +32,36 @@ std::int64_t getInt(const Inputs& in, const std::string& id) { return get<std::i
 bool getBool(const Inputs& in, const std::string& id) { return get<bool>(in, id, "a bool"); }
 const std::string& getString(const Inputs& in, const std::string& id) { return get<std::string>(in, id, "a string"); }
 
+std::string inputExpression(const Inputs& in, const std::string& inputId) {
+  auto it = in.find(expressionKey(inputId));
+  if (it == in.end()) return {};
+  if (auto s = std::get_if<std::string>(&it->second)) return *s;
+  return {};
+}
+
+bool isInputVisible(const InputDef& d, const Inputs& in) {
+  const std::string& rule = d.visibleWhen;
+  const auto eq = rule.find('=');
+  if (rule.empty() || eq == std::string::npos) return true;
+  std::string value;
+  if (auto it = in.find(rule.substr(0, eq)); it != in.end())
+    if (auto s = std::get_if<std::string>(&it->second)) value = *s;
+  size_t start = eq + 1;
+  while (start <= rule.size()) {
+    size_t end = rule.find('|', start);
+    if (end == std::string::npos) end = rule.size();
+    if (rule.compare(start, end - start, value) == 0) return true;
+    start = end + 1;
+  }
+  return false;
+}
+
+double CommandContext::evaluateExpression(const std::string& text, Unit unit) {
+  ExpressionEnv env;
+  if (dimensionOf(unit) == Dimension::Length) env.lengthUnit = unit;
+  return tsr::evaluateExpression(text, unit, env);
+}
+
 CommandSession::CommandSession(const Command& cmd, CommandContext& ctx) : cmd_(cmd), ctx_(ctx) {
   for (const auto& d : cmd_.def().inputs) inputs_[d.id] = d.defaultValue;
 }
@@ -38,14 +69,14 @@ CommandSession::CommandSession(const Command& cmd, CommandContext& ctx) : cmd_(c
 CommandSession::CommandSession(const Command& cmd, CommandContext& ctx, const Inputs& initial)
     : CommandSession(cmd, ctx) {
   for (const auto& [k, v] : initial)
-    if (cmd_.def().input(k)) inputs_[k] = v;
+    if (cmd_.def().input(k) || (k.size() > 1 && k[0] == '=' && cmd_.def().input(k.substr(1)))) inputs_[k] = v;
 }
 
 CommandSession::~CommandSession() {
   if (!finished_) cancel();
 }
 
-std::string CommandSession::checkInput(const InputDef& d, const Value& v) const {
+std::string checkInputValue(const InputDef& d, const Value& v) {
   switch (d.type) {
     case InputType::Real: {
       double x;
@@ -108,17 +139,40 @@ std::string CommandSession::checkInput(const InputDef& d, const Value& v) const 
 std::string CommandSession::setInput(const std::string& id, const Value& v) {
   const InputDef* d = cmd_.def().input(id);
   if (!d) return "unknown input '" + id + "'";
-  if (auto err = checkInput(*d, v); !err.empty()) return err;
+  const bool numeric = d->type == InputType::Real || d->type == InputType::Integer;
+  if (numeric && std::holds_alternative<std::string>(v)) {
+    const std::string& text = std::get<std::string>(v);
+    double x = 0;
+    try {
+      x = ctx_.evaluateExpression(text, d->unit);
+    } catch (const std::exception& e) {
+      return d->label + ": " + e.what();
+    }
+    Value value = x;
+    if (d->type == InputType::Integer) {
+      const double n = std::round(x);
+      if (std::abs(n - x) > 1e-9) return d->label + ": must be a whole number";
+      value = static_cast<std::int64_t>(n);
+    }
+    if (auto err = checkInputValue(*d, value); !err.empty()) return err;
+    dropPreview();
+    inputs_[id] = value;
+    if (isPlainQuantity(text)) inputs_.erase(expressionKey(id));
+    else inputs_[expressionKey(id)] = text;
+    return {};
+  }
+  if (auto err = checkInputValue(*d, v); !err.empty()) return err;
   dropPreview();
   inputs_[id] = (d->type == InputType::Real && std::holds_alternative<std::int64_t>(v))
                     ? Value(static_cast<double>(std::get<std::int64_t>(v)))
                     : v;
+  if (numeric) inputs_.erase(expressionKey(id));
   return {};
 }
 
 std::string CommandSession::validate() {
   for (const auto& d : cmd_.def().inputs)
-    if (auto err = checkInput(d, inputs_.at(d.id)); !err.empty()) return err;
+    if (auto err = checkInputValue(d, inputs_.at(d.id)); !err.empty()) return err;
   try {
     return cmd_.validate(inputs_, ctx_);
   } catch (const std::exception& e) {

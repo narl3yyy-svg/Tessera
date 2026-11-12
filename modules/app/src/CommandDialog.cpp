@@ -12,10 +12,73 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include "tsr/core/Expression.h"
+
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <optional>
 
 namespace tsr::app {
+
+namespace {
+
+// "10 mm" with trailing zeros dropped.
+QString formatNumber(double v, int decimals, Unit u) {
+  QString t = QString::number(v, 'f', decimals);
+  if (t.contains(QLatin1Char('.'))) {
+    while (t.endsWith(QLatin1Char('0'))) t.chop(1);
+    if (t.endsWith(QLatin1Char('.'))) t.chop(1);
+  }
+  if (t == QLatin1String("-0")) t = QStringLiteral("0");
+  if (u != Unit::None) t += QStringLiteral(" ") + QString::fromUtf8(unitSymbol(u).data());
+  return t;
+}
+
+} // namespace
+
+// A spin box that also takes expressions ("width / 2 + 3 mm"). Arrows and the
+// wheel step the number; typed text is evaluated against the document's
+// parameters, and an expression stays visible once entered.
+class ExpressionSpinBox final : public QDoubleSpinBox {
+public:
+  using Evaluate = std::function<std::optional<double>(const QString&)>;   // display units out
+  ExpressionSpinBox(Unit shown, Evaluate eval) : shown_(shown), eval_(std::move(eval)) {
+    setKeyboardTracking(false);
+    setCorrectionMode(QAbstractSpinBox::CorrectToPreviousValue);
+  }
+  const QString& expression() const { return expression_; }
+  void setExpression(const QString& e) {
+    expression_ = e;
+    lineEdit()->setText(textFromValue(value()));
+  }
+  QString typedText() const { return lineEdit()->text().trimmed(); }
+  std::optional<double> evaluate(const QString& t) const { return eval_(t); }
+  // Types text and finishes the edit, as a user pressing Enter would.
+  void typeText(const QString& t) {
+    lineEdit()->setText(t);
+    emit editingFinished();
+  }
+
+protected:
+  QValidator::State validate(QString& text, int&) const override {
+    return eval_(text) ? QValidator::Acceptable : QValidator::Intermediate;
+  }
+  double valueFromText(const QString& text) const override { return eval_(text).value_or(value()); }
+  QString textFromValue(double v) const override {
+    return expression_.isEmpty() ? formatNumber(v, decimals(), shown_) : expression_;
+  }
+  void fixup(QString&) const override {}
+  void stepBy(int steps) override {
+    expression_.clear();
+    QDoubleSpinBox::stepBy(steps);
+  }
+
+private:
+  Unit shown_;
+  Evaluate eval_;
+  QString expression_;
+};
 
 CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSession> cmd, QWidget* parent)
     : QDialog(parent), session_(session), cmd_(std::move(cmd)) {
@@ -39,21 +102,46 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
 
     switch (in.type) {
       case InputType::Real: {
-        auto* sb = new QDoubleSpinBox;
         // Lengths are shown in the document's unit (Document Settings).
         const Unit shown = dimensionOf(in.unit) == Dimension::Length ? lengthUnit : in.unit;
+        const Unit evalUnit = in.unit;
+        auto* sb = new ExpressionSpinBox(shown, [this, evalUnit, shown](const QString& t) -> std::optional<double> {
+          try {
+            return fromInternal(session_.document().evaluate(t.toStdString(), evalUnit), shown);
+          } catch (const std::exception&) {
+            return std::nullopt;
+          }
+        });
         sb->setDecimals(shown == Unit::Inch ? 4 : 3);
         const double step = shown == Unit::Inch ? 0.0625 : shown == Unit::Degree ? 1.0 : fromInternal(0.1, shown);
         sb->setSingleStep(step > 0 ? step : 1.0);
-        double lo = in.min ? fromInternal(*in.min, shown) : -1e9;
-        if (in.min && in.minExclusive) lo += std::pow(10.0, -sb->decimals());
-        sb->setRange(lo, in.max ? fromInternal(*in.max, shown) : 1e9);
-        if (shown != Unit::None) sb->setSuffix(QStringLiteral(" ") + QString::fromUtf8(unitSymbol(shown).data()));
+        // Out-of-range values are reported by the command (expressions can
+        // produce any value), so the box itself does not clamp.
+        sb->setRange(-1e9, 1e9);
         if (auto p = std::get_if<double>(&cur)) sb->setValue(fromInternal(*p, shown));
+        if (const std::string e = inputExpression(cmd_->inputs(), id); !e.empty())
+          sb->setExpression(QString::fromStdString(e));
         sb->setAccelerated(true);
-        const Unit unit = shown;
-        connect(sb, &QDoubleSpinBox::valueChanged, this,
-                [this, id, unit](double v) { onInputChanged(id, toInternal(v, unit)); });
+        // Sends the typed expression, or the number after stepping / typing a
+        // plain value. Both signals can fire for one edit; send it once.
+        auto commit = [this, id, sb, shown] {
+          const QString t = sb->typedText();
+          const std::optional<double> typed = sb->evaluate(t);
+          const bool expression = typed && !isPlainQuantity(t.toStdString());
+          const Value v = expression ? Value(t.toStdString()) : Value(toInternal(sb->value(), shown));
+          if (lastSent_[id] == v) return;
+          lastSent_[id] = v;
+          if (expression) {
+            sb->setExpression(t);
+            const QSignalBlocker block(sb);
+            sb->setValue(*typed);
+          } else if (!sb->expression().isEmpty()) {
+            sb->setExpression(QString());
+          }
+          onInputChanged(id, v);
+        };
+        connect(sb, &QDoubleSpinBox::valueChanged, this, commit);
+        connect(sb, &QAbstractSpinBox::editingFinished, this, commit);
         w = sb;
         break;
       }
@@ -244,21 +332,9 @@ void CommandDialog::adjustAfterResize() {
 
 void CommandDialog::updateVisibility() {
   for (const auto& [w, rule] : conditional_) {
-    const auto eq = rule.find('=');
-    if (eq == std::string::npos) continue;
-    const std::string id = rule.substr(0, eq);
-    std::string value;
-    if (auto it = cmd_->inputs().find(id); it != cmd_->inputs().end())
-      if (auto s = std::get_if<std::string>(&it->second)) value = *s;
-    bool show = false;
-    size_t start = eq + 1;
-    while (start <= rule.size()) {
-      size_t end = rule.find('|', start);
-      if (end == std::string::npos) end = rule.size();
-      show = show || rule.substr(start, end - start) == value;
-      start = end + 1;
-    }
-    form_->setRowVisible(w, show);
+    InputDef d;
+    d.visibleWhen = rule;
+    form_->setRowVisible(w, isInputVisible(d, cmd_->inputs()));
   }
   adjustSize();
   adjustAfterResize();
@@ -410,6 +486,10 @@ bool CommandDialog::setInputForTest(const QString& id, const QVariant& value) {
     if (i < 0) i = combo->findData(value.toString());
     if (i < 0) return false;
     combo->setCurrentIndex(i);
+    return true;
+  }
+  if (auto* sb = dynamic_cast<ExpressionSpinBox*>(w); sb && value.typeId() == QMetaType::QString) {
+    sb->typeText(value.toString());
     return true;
   }
   if (auto* sb = qobject_cast<QDoubleSpinBox*>(w)) { sb->setValue(value.toDouble()); return true; }

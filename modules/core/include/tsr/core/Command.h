@@ -67,6 +67,19 @@ struct CommandDef {
 
 using Inputs = std::map<std::string, Value>;
 
+// A Real or Integer input given as an expression ("width / 2") keeps the text
+// next to its evaluated value under the key "=<id>", so it is recorded with a
+// feature and evaluated again whenever the design recomputes.
+inline std::string expressionKey(const std::string& inputId) { return "=" + inputId; }
+// The expression stored for an input, or empty.
+std::string inputExpression(const Inputs& in, const std::string& inputId);
+
+// Whether an input is shown for these values (InputDef::visibleWhen).
+bool isInputVisible(const InputDef& d, const Inputs& in);
+
+// Type and range check of one input value; empty if it is acceptable.
+std::string checkInputValue(const InputDef& d, const Value& v);
+
 // Typed accessors; throw std::invalid_argument on a missing/mistyped input.
 double getReal(const Inputs& in, const std::string& id);
 std::int64_t getInt(const Inputs& in, const std::string& id);
@@ -89,6 +102,10 @@ public:
   // Called inside the command's transaction after a successful apply() of a
   // feature command (CommandDef::feature).
   virtual void recordFeature(const Command&, const Inputs&) {}
+  // Evaluates an expression typed into a Real/Integer input whose display
+  // unit is `unit` (internal units out). Throws std::exception with a
+  // user-facing message. The default knows no parameters.
+  virtual double evaluateExpression(const std::string& text, Unit unit);
 };
 
 class CommandError : public std::runtime_error {
@@ -135,6 +152,8 @@ public:
 
   // Sets an input. Returns an error message for a wrong type/out-of-range
   // value (and leaves the input unchanged), else empty. Drops the preview.
+  // Real and Integer inputs also take text: an expression evaluated by the
+  // context and kept with the value (see expressionKey).
   std::string setInput(const std::string& id, const Value& v);
 
   // Empty if all inputs are valid and the command's validate() passes.
@@ -153,7 +172,6 @@ public:
 private:
   void dropPreview();
   std::string applyInTransaction(const std::string& name);
-  std::string checkInput(const InputDef& d, const Value& v) const;
 
   const Command& cmd_;
   CommandContext& ctx_;

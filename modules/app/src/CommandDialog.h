@@ -4,7 +4,9 @@
 
 #include <QDialog>
 
+#include <map>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -86,6 +88,7 @@ private:
   QFormLayout* form_ = nullptr;
   std::vector<std::pair<QWidget*, std::string>> conditional_;
   void updateProfilesLabel();
+  std::map<std::string, Value> lastSent_;   // last value each numeric field sent
 };
 
 } // namespace tsr::app

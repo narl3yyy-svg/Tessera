@@ -64,6 +64,9 @@ struct Constraint {
   std::vector<int> entities;
   double value = 0;
   double value2 = 0;
+  // Dimensions only: the expression the value came from ("width / 2"), empty
+  // for a plain number. Evaluated again when the design recomputes.
+  std::string expression;
 };
 
 bool isDimension(ConstraintType t);

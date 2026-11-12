@@ -1,5 +1,6 @@
 #include "CommandDialog.h"
 #include "MainWindow.h"
+#include "ParametersDialog.h"
 #include "SketchEditor.h"
 #include "Theme.h"
 #include "Viewport.h"
@@ -10,6 +11,8 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QListWidget>
+#include <QPainter>
+#include <QPixmap>
 #include <QTabWidget>
 #include <QTimer>
 #include <QToolButton>
@@ -187,6 +190,46 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   QApplication::processEvents();
   if (std::abs(volume() - (8 - (0.25 - pi * 0.25 / 4) * 2)) > 1e-6) return fail("fillet volume");
   if (s.document().features().back().name != "Fillet1") return fail("fillet feature");
+
+  // Parameters: expressions typed into a panel's fields, Change Parameters
+  // driving the model, and a sketch dimension given as an expression.
+  s.newDocument();
+  auto* pd = w.showParameters();
+  if (!pd) return fail("parameters dialog");
+  if (!pd->addParameter(QStringLiteral("size"), QStringLiteral("mm"), QStringLiteral("20 mm"), QString()).isEmpty())
+    return fail("add parameter");
+  QApplication::processEvents();
+  auto* bx = w.startCommand(QStringLiteral("tsr.primitive.box"));
+  if (!bx || !bx->setInputForTest(QStringLiteral("length"), QStringLiteral("size * 2")) ||
+      !bx->setInputForTest(QStringLiteral("width"), QStringLiteral("size")) ||
+      !bx->setInputForTest(QStringLiteral("height"), QStringLiteral("size / 2")))
+    return fail("box expressions");
+  bx->accept();
+  QApplication::processEvents();
+  if (std::abs(volume() - 4 * 2 * 1) > 1e-9) return fail("box from expressions");
+  if (tsr::inputExpression(s.document().features()[0].inputs, "length") != "size * 2")
+    return fail("expression not recorded");
+  if (!pd->setExpressionForTest(QStringLiteral("size"), QStringLiteral("30 mm"))) return fail("parameter row");
+  QApplication::processEvents();
+  if (std::abs(volume() - 6 * 3 * 1.5) > 1e-9) return fail("box did not follow the parameter");
+  if (!pd->setExpressionForTest(QStringLiteral("Box1.height"), QStringLiteral("size"))) return fail("model parameter row");
+  QApplication::processEvents();
+  if (std::abs(volume() - 6 * 3 * 3) > 1e-9) return fail("model parameter edit");
+  pd->setExpressionForTest(QStringLiteral("size"), QStringLiteral("size + 1"));
+  if (pd->errorText().isEmpty()) return fail("circular parameter accepted");
+  QApplication::processEvents();
+  pd->close();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Rectangle);
+  ed->clickAt(0, 0);
+  ed->clickAt(4, 3);
+  ed->setTool(Tool::Dimension);
+  ed->clickAt(2, 0);
+  ed->clickAt(9, 9);
+  if (!ed->submitValue(QStringLiteral("size * 2"))) return fail("dimension expression box");
+  if (std::abs(ed->sketch().points[2].x - 6.0) > 1e-6) return fail("dimension expression did not drive the geometry");
+  if (ed->sketch().constraints.back().expression != "size * 2") return fail("dimension expression not kept");
+  w.cancelSketch();
   std::puts("smoke: OK");
   return 0;
 }
@@ -272,7 +315,14 @@ int main(int argc, char** argv) {
   }
   if (parser.isSet(commandOpt)) {
     const QString id = parser.value(commandOpt);
-    QTimer::singleShot(400, &window, [&window, id] { window.startCommand(id); });
+    QTimer::singleShot(400, &window, [&window, id] {
+      // Ribbon tools that are not document commands ("ui.changeParameters").
+      if (id.startsWith(QLatin1String("ui."))) {
+        if (auto* a = window.ribbon()->findChild<QAction*>(id)) a->trigger();
+        return;
+      }
+      window.startCommand(id);
+    });
   }
   if (parser.isSet(editSketchOpt)) {
     // After the window is up, as when a user double-clicks the sketch.
@@ -285,7 +335,15 @@ int main(int argc, char** argv) {
   if (parser.isSet(shotOpt)) {
     const QString out = parser.value(shotOpt);
     QTimer::singleShot(1500, &window, [&window, out] {
-      const bool ok = window.grab().save(out);
+      // The window plus any tool windows open over it (Parameters, Measure).
+      QPixmap shot = window.grab();
+      {
+        QPainter p(&shot);
+        for (QWidget* top : QApplication::topLevelWidgets())
+          if (top != &window && top->isVisible() && top->parentWidget() == &window)
+            p.drawPixmap(top->frameGeometry().topLeft() - window.frameGeometry().topLeft(), top->grab());
+      }
+      const bool ok = shot.save(out);
       std::fprintf(ok ? stdout : stderr, "screenshot %s: %s\n", ok ? "saved" : "FAILED", qPrintable(out));
       const bool view3d = window.viewport()->available();
       if (!view3d) std::fprintf(stderr, "screenshot: %s\n", qPrintable(window.viewport()->unavailableReason()));

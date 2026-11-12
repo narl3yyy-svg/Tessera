@@ -41,6 +41,11 @@ public:
   std::string deleteFeature(int featureId);
   std::string setFeatureSuppressed(int featureId, bool suppressed);
 
+  // User parameters (Change Parameters). Each call is one undo step that
+  // re-evaluates the parameters and replays the timeline.
+  std::string setParameter(const std::string& name, const std::string& expression, const std::string& comment);
+  std::string deleteParameter(const std::string& name);
+
   bool undo();
   bool redo();
 

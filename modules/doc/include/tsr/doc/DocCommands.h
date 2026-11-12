@@ -58,6 +58,8 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 //   tsr.feature.scale        body, factor, about ("Body centre"/"Origin")
 //   tsr.feature.remove       body
 // All of these except the parameter command are timeline features.
+// Every Real/Integer input also takes an expression string ("width / 2");
+// see tsr::expressionKey and Document::recompute.
 void registerDocCommands(CommandRegistry& registry);
 
 } // namespace tsr::doc

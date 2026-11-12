@@ -1,5 +1,6 @@
 add_library(tsr_core
   src/Units.cpp
+  src/Expression.cpp
   src/Command.cpp
   src/CommandRegistry.cpp
   src/Zip.cpp

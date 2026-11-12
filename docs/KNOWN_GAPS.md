@@ -6,12 +6,12 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 | Id | Divergence | Reason | Closes in |
 |---|---|---|---|
-| P0-1 | Expressions accept only `number [unit]`: no arithmetic, functions or parameter references | P0 scope | P1 (expression engine) |
+| P0-1 | ~~Expressions accept only `number [unit]`~~ Closed: arithmetic, `^`, parentheses, parameters, `pi`, and sqrt/sin/cos/tan/asin/acos/atan/atan2/abs/sign/floor/ceil/round/min/max/exp/ln/log/pow | | closed (P5) |
 | P0-2 | The ribbon is a `QTabWidget` in a fixed toolbar with code-painted icons; no KDDockWidgets | P0 scope; icons must be rebuilt from spec, not copied | P0 follow-up / R2 |
 | P0-3 | `.tsr` members are all STORED (no deflate) | No compression dependency in core yet | before 1.0 |
 | P0-4 | Undo depth is capped at 1,000,000 steps, not unbounded | OCAF needs a numeric limit | accepted |
 | P0-5 | ~~No 3D viewport~~ Closed: OCCT AIS viewport with ViewCube, grid, selection and standard views | | closed (P1) |
-| P0-6 | adsk shim covers only `Application.get/activeProduct/version`, `ValueInput.createByReal/createByString`, `Design.cast/userParameters/rootComponent`, `UserParameters.add/count/item/itemByName`, `UserParameter` read-only properties, `Component.bRepBodies`, `BRepBody.name/volume/area` | P0 scope | R6 / P10 |
+| P0-6 | adsk shim covers only `Application.get/activeProduct/version`, `ValueInput.createByReal/createByString`, `Design.cast/userParameters/rootComponent`, `UserParameters.add/count/item/itemByName`, `UserParameter` name/unit, settable `expression`/`value`/`comment`, `isDeletable`, `deleteMe()`, `Component.bRepBodies`, `BRepBody.name/volume/area` | P0 scope | R6 / P10 |
 | P0-7 | adsk error behaviour (exception type and text) is assumed to be `RuntimeError` with a message; not yet checked against the reference | Not yet probed in the reference (R6) | R6 |
 | P0-8 | Builds against OCCT 7.9.2 (the Kubuntu 26.04 package), not 8.0 | 8.0 not packaged | when packaged, or a source build |
 | P0-9 | Lab 10.0.60.100 is 4 cores / 15 GB / iGPU, not the plan's 32 cores / 128 GB; it cannot host the Windows reference VM | Hardware | Hardware decision pending |
@@ -25,7 +25,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P2-1 | A sketch on a body face copies the face's plane when created; it does not follow the face if the body changes | Associative references need topological naming | P3 |
 | P2-2 | Extrude remembers each picked profile by a point inside it; a large sketch edit can make it pick a different or no region (reported as an error) | No persistent profile identity yet | P3 |
 | P2-3 | Sketch tools: no trim/extend, offset, fillet, spline, polygon, slot, mirror/pattern, text, or projecting body edges | P2 scope | P3/P4 |
-| P2-4 | Dimension values are numbers with optional units; parameter names and expressions are not accepted yet | Expression engine is P5 | P5 |
+| P2-4 | ~~Dimension values are numbers only~~ Closed: sketch dimensions and size boxes take expressions; a dimension keeps its expression and follows parameter changes (size boxes use the value once) | | closed (P5) |
 | P2-5 | Extrude extents: distance only (one side / symmetric); no To Object, All, taper or thin | P2 scope | P3 |
 | P2-6 | Dimensions show as value labels without arrows/extension lines; constraint glyphs are letters | P2 scope | R2 |
 | P2-7 | While drawing, snapping is to points only (no automatic point-on-curve, tangent or perpendicular inference) | P2 scope | P3 |
@@ -48,3 +48,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P6-1 | Sweep: the path is all curves of one sketch (one connected chain); no guide rails, twist or scaling; the profile must sit at the start of the path | P6 scope | later |
 | P6-2 | Loft: one profile per sketch (its largest region), no rails or centre line, no point sections | P6 scope | later |
 | P6-3 | Press Pull moves flat faces only (offset of curved faces is planned with Offset Face) | P6 scope | P7 |
+| P7-1 | Model parameters (feature values) are listed and editable in Change Parameters but have no names (`d1`, `d2`) that other expressions can use; only user parameters can be referenced | Needs stable per-input names | P8 |
+| P7-2 | Expression rules: a bare number takes the unit of what it meets (the field's unit, the parameter's unit, or the length it is added to); trig functions read bare numbers as degrees; floor/ceil/round work in the display unit. Fusion's exact rules for mixed units are not yet checked against the reference | Not yet probed in the reference (R6) | R6 |
+| P7-3 | In command panels, expressions are typed into numeric fields (Real inputs); whole-number fields (pattern quantities) take expressions from scripts and Change Parameters but the panel's spin box takes digits only | Qt spin box | P8 |
+| P7-4 | Change Parameters has no favourites, filter or search, and parameters cannot be renamed | P7 scope | P8 |

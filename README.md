@@ -27,11 +27,12 @@ scope.
 | **Sketch** | Line, 2-Point / Center Rectangle, Circle, Arc, Polygon, Slot, Point, construction lines, Trim, Sketch Dimension; on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and grid |
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
 | **Create** | Extrude (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
-| **Modify** | Press Pull, Fillet, Chamfer, Shell, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove |
+| **Modify** | Press Pull, Fillet, Chamfer, Shell, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Construct** | Offset Plane, Plane at Angle, Midplane — usable for sketches, Split Body and Mirror |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
 | **Parametric** | Every step is in the timeline: double-click to change it and everything after it rebuilds; suppress, delete, unlimited undo |
+| **Parameters** | User parameters and every feature's values in one table (*Modify → Change Parameters*); every value and sketch dimension takes an expression such as `width / 2 + 3 mm`, `sqrt(a^2 + b^2)` or `atan(h / w)`, and the model follows when a parameter changes |
 | **Settings** | Document units (mm default, inches, cm, m), grid spacing and snap, Fusion / SolidWorks / Tinkercad mouse schemes, zoom direction, free or constrained orbit, orthographic or perspective camera |
 | **Scripting** | Python with a Fusion-style `adsk` API subset and `tsr` helpers; headless `tessera-cli` |
 
@@ -66,6 +67,7 @@ never needs the network.
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
 | Edit a feature | Double-click it in the timeline (or a sketch in the browser) |
+| Drive sizes from parameters | *Modify → Change Parameters* → **Add**; then type the name or an expression (`width / 2`) into any value or dimension |
 | Command search | **S** |
 
 **Shortcuts:** E Extrude · H Hole · Q Press Pull · F Fillet · M Move/Copy · I Measure · Delete · Ctrl+Z / Ctrl+Y.
@@ -80,7 +82,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 
 | Area | Planned |
 |---|---|
-| **Parameters** | Parameters table; expressions in every value (`width / 2 + 3 mm`) |
+| **Parameters** | Model parameter names (`d1`) usable in other expressions, favourites and filtering in the table |
 | **Sketch** | Offset, Extend, Fillet / Chamfer, Spline, Ellipse, Conic, Text, Mirror and patterns, Project / Include, 3-point shapes, Tangent Arc, Sketch Palette options |
 | **Create** | Thread, Coil, Pipe, Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, feature patterns |
 | **Modify** | Draft, Offset Face, Replace Face, Split Face, Align, Appearance, Physical Material |

@@ -31,6 +31,7 @@ class QLabel;
 namespace tsr::app {
 
 class CommandDialog;
+class ParametersDialog;
 class SketchEditor;
 class Viewport;
 
@@ -60,6 +61,9 @@ public:
   SketchEditor* editSketch(int featureId);
   bool finishSketch();
   void cancelSketch();
+
+  // Modify > Change Parameters (non-modal; reuses an open one).
+  ParametersDialog* showParameters();
   SketchEditor* sketchEditor() const { return editor_; }
 
   QTabWidget* ribbon() const { return ribbon_; }
@@ -150,6 +154,7 @@ private:
   };
   std::vector<UiCommand> uiCommands_;
   QPointer<QDialog> measure_;
+  QPointer<ParametersDialog> parameters_;
   QLabel* measureLabel_ = nullptr;
   std::vector<TopoDS_Shape> measurePicks_;
   struct SectionState {
