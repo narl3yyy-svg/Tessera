@@ -96,5 +96,8 @@ if(TSR_WITH_QT)
     add_test(NAME live_assembly
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/assembly.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_assembly.py ${CMAKE_CURRENT_SOURCE_DIR}/live/assembly_check.py)
+    set_tests_properties(live_line_tool live_extrude_section live_sketch_modify live_assembly PROPERTIES
+                         ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
+                         TIMEOUT 240)
   endif()
 endif()
