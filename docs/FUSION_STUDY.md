@@ -102,7 +102,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Two Sides extrude: an arrow per side.
 - [ ] Pattern directions picked as model edges, and an arrow drag before typing values (Day 1).
 - [x] Right-click an origin or construction plane in the Browser > Create Sketch (Days 2, 3, 6).
-- [ ] Thread: Full Length on by default; off gives a length arrow and an offset arrow (Days 4, 9); Modeled checkbox.
+- [x] Thread: Full Length off gives a length arrow and an offset arrow on the cylinder (Days 4, 9).
+- [ ] Thread: Modeled checkbox (cosmetic threads), more thread types.
 - [ ] Hole: click a face, then drag the hole centre; it snaps to circle centres (Day 6).
 - [x] Chamfer types: Equal Distance, Two Distances, Distance and Angle, with Flip (Day 8).
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).

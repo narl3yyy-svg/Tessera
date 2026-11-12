@@ -15,6 +15,8 @@
 
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepGProp.hxx>
+#include <gp_Cylinder.hxx>
+#include <BRepTools.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBndLib.hxx>
 #include <Bnd_Box.hxx>
@@ -160,6 +162,8 @@ void MainWindow::updateDragArrow() {
       hint = active_->currentEdges().isEmpty() ? tr("Select edges") : tr("Specify size, or select more edges");
     else if (cid == QLatin1String(doc::kCmdPressPull))
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to push or pull") : tr("Specify distance");
+    else if (cid == QLatin1String(doc::kCmdThread))
+      hint = active_->currentFaces().isEmpty() ? tr("Select a cylindrical face") : QString();
   }
   viewport_->setCursorHint(hint);
   if (!active_) return off();
@@ -229,6 +233,33 @@ void MainWindow::updateDragArrow() {
       viewport_->clearSecondArrow();
     }
     return;
+  } else if (id == QLatin1String(doc::kCmdThread)) {
+    // Full Length off: an arrow for the offset from the face's end and one for
+    // the threaded length from there, both along the cylinder.
+    if (active_->textInput(QStringLiteral("fullLength")) != QLatin1String("No")) return off();
+    const auto faces = pickedFaces();
+    if (faces.empty() || faces.front().ShapeType() != TopAbs_FACE) return off();
+    const TopoDS_Face face = TopoDS::Face(faces.front());
+    BRepAdaptor_Surface s(face, true);
+    if (s.GetType() != GeomAbs_Cylinder) return off();
+    const gp_Cylinder cyl = s.Cylinder();
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(face, u0, u1, v0, v1);
+    const gp_Dir z = cyl.Axis().Direction();
+    // On the face, on the side the face's middle is.
+    const gp_Pnt mid = s.Value((u0 + u1) / 2, (v0 + v1) / 2);
+    gp_Vec radial(cyl.Axis().Location(), mid);
+    radial -= gp_Vec(z) * radial.Dot(gp_Vec(z));
+    const gp_Pnt end = cyl.Axis().Location().Translated(gp_Vec(z) * v0 + radial);
+    const auto offset = active_->realInput(QStringLiteral("offset"));
+    const auto length = active_->realInput(QStringLiteral("length"));
+    if (!offset || !length) return off();
+    arrowInput_ = QStringLiteral("length");
+    viewport_->setDragArrow(end.Translated(gp_Vec(z) * *offset), z, *length, active_->displayText(arrowInput_));
+    arrowInput2_ = QStringLiteral("offset");
+    viewport_->setDragArrow(end, z, *offset, active_->displayText(arrowInput2_), 1);
+    attachArrowCompleters();
+    return;
   } else if (id == QLatin1String(doc::kCmdPressPull)) {
     input = QStringLiteral("distance");
     place = facesPlacement(pickedFaces());
@@ -277,7 +308,8 @@ void MainWindow::onDragArrow(double value) {
   if (!active_ || arrowInput_.isEmpty()) return;
   const QString id = active_->commandId();
   // Fillet and chamfer sizes, and pattern distances, stay positive.
-  if (id == QLatin1String(doc::kCmdRectPattern)) value = std::max(value, viewport_->modelPerPixel());
+  if (id == QLatin1String(doc::kCmdRectPattern) || id == QLatin1String(doc::kCmdThread))
+    value = std::max(value, viewport_->modelPerPixel());
   if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer))
     value = std::max(value, viewport_->modelPerPixel());
   // Extruding body faces: pulling out joins, pushing in cuts (as Fusion does).

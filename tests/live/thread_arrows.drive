@@ -1,0 +1,20 @@
+# Live: Thread from the command search, click the cylinder's side, turn Full
+# Length off, drag the length arrow and the offset arrow, OK.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Thread
+key Return
+waitfor panelOk
+wait 400
+wclick 10 0 20                # the side of the cylinder
+wait 500
+choose fullLength 1
+wait 600
+a2drag 0 -40                  # offset up from the bottom
+wait 300
+adrag 0 -60                   # length
+wait 300
+shot /tmp/live_thread.png
+click panelOk
+wait 800

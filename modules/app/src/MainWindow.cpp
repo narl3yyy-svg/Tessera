@@ -194,7 +194,12 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   });
   // The second arrow (Two Sides extrude) drives its own input.
   connect(viewport_, &Viewport::secondArrowMoved, this, [this](double value) {
-    if (!active_ || arrowInput2_.isEmpty() || std::abs(value) < 1e-9) return;
+    if (!active_ || arrowInput2_.isEmpty()) return;
+    if (arrowInput2_ == QLatin1String("offset")) {   // thread offset: from the face's end
+      active_->setRealInput(arrowInput2_, std::max(value, 0.0));
+      return;
+    }
+    if (std::abs(value) < 1e-9) return;
     active_->setRealInput(arrowInput2_, value);
   });
   connect(viewport_, &Viewport::secondArrowTyped, this, [this](const QString& text) {
