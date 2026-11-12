@@ -35,7 +35,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Assemble**: New Component · Joint · As-Built Joint · Joint Origin · Rigid Group · Drive Joints · Motion Link · Motion Study · Contact Sets
 
-**Construct**: Offset Plane ✅ · Plane at Angle ✅ · Midplane ✅ · Tangent Plane · Plane through points · Axis (cylinder, edge, two points) · Point (vertex, edge/plane intersection)
+**Construct**: Offset Plane ✅ · Plane at Angle ✅ · Midplane ✅ · Tangent Plane · Plane through points · Axis ✅ (cylinder/cone/torus, edge, two points, two planes) · Point ✅ (vertex, two edges, three planes, centre, edge and plane)
 
 **Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb · Zebra · Draft Analysis · Curvature Map · Isocurve · Minimum Radius · Accessibility
 

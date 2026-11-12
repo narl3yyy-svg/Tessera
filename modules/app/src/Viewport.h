@@ -16,6 +16,7 @@
 #include <V3d_Viewer.hxx>
 #include <Graphic3d_ClipPlane.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Pln.hxx>
 
@@ -118,6 +119,9 @@ public:
   // Construction planes (name, frame), drawn as translucent squares; they are
   // clickable while plane picking is on.
   void setConstructionPlanes(const std::vector<std::pair<std::string, gp_Ax3>>& planes);
+  // Construction axes (dashed lines) and points (small rings), with names.
+  void setConstructionAxesPoints(const std::vector<std::pair<std::string, gp_Ax1>>& axes,
+                                 const std::vector<std::pair<std::string, gp_Pnt>>& points);
   // Parts of bodies become clickable (edges for Fillet, faces for Shell,
   // vertices/edges/faces for Measure); picked ones are highlighted.
   void setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types);
@@ -230,6 +234,8 @@ private:
   std::vector<ProfileObject> profileObjects_;
   std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> planeObjects_;
   std::vector<std::pair<std::string, gp_Ax3>> constructionPlanes_;
+  std::vector<std::pair<std::string, gp_Ax1>> constructionAxes_;
+  std::vector<std::pair<std::string, gp_Pnt>> constructionPoints_;
   std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> constructionObjects_;
   void rebuildConstruction();
   bool profilePicking_ = false;

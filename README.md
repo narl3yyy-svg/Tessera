@@ -28,7 +28,7 @@ scope.
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
 | **Create** | Extrude of sketch profiles or body faces with a drag arrow in the canvas (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull, Fillet, Chamfer, Shell, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
-| **Construct** | Offset Plane, Plane at Angle, Midplane — usable for sketches, Split Body and Mirror |
+| **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
 | **Parametric** | Every step is in the timeline: double-click to change it and everything after it rebuilds; suppress, delete, unlimited undo |

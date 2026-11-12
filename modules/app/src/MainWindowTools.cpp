@@ -89,8 +89,6 @@ void MainWindow::buildUiCommands() {
   planned("Assemble", "ui.motionLink", "Motion Link", "motion");
   planned("Configure", "ui.configure", "Configurations", "configure");
   planned("Construct", "ui.tangentPlane", "Tangent Plane", "plane");
-  planned("Construct", "ui.axisCylinder", "Axis Through Cylinder", "axis");
-  planned("Construct", "ui.pointVertex", "Point at Vertex", "point");
   add("Inspect", "ui.measure", "Measure", "measure", "Distance, angle, length, area and volume of picked items.", "I",
       [this] { openMeasure(); });
   add("Inspect", "ui.interference", "Interference", "interference", "Finds bodies that overlap.", "",

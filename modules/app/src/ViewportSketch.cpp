@@ -165,6 +165,13 @@ void Viewport::setConstructionPlanes(const std::vector<std::pair<std::string, gp
   rebuildConstruction();
 }
 
+void Viewport::setConstructionAxesPoints(const std::vector<std::pair<std::string, gp_Ax1>>& axes,
+                                         const std::vector<std::pair<std::string, gp_Pnt>>& points) {
+  constructionAxes_ = axes;
+  constructionPoints_ = points;
+  rebuildConstruction();
+}
+
 void Viewport::rebuildConstruction() {
   if (context_.IsNull()) return;
   for (auto& [o, n] : constructionObjects_) context_->Remove(o, false);
@@ -188,6 +195,36 @@ void Viewport::rebuildConstruction() {
     t->SetColor(rgb(240, 170, 80));
     context_->Display(t, 0, -1, false);
     constructionObjects_.emplace_back(t, std::string());
+  }
+  const Quantity_Color orange = rgb(240, 160, 60);
+  auto label = [&](const std::string& name, const gp_Pnt& at) {
+    Handle(AIS_TextLabel) t = new AIS_TextLabel();
+    t->SetText(TCollection_ExtendedString(name.c_str()));
+    t->SetPosition(at);
+    t->SetHeight(12);
+    t->SetColor(rgb(240, 170, 80));
+    context_->Display(t, 0, -1, false);
+    constructionObjects_.emplace_back(t, std::string());
+  };
+  // Axes: long dashed lines through their origin.
+  const double reach = half * 2.5;
+  for (const auto& [name, ax] : constructionAxes_) {
+    const gp_Vec d(ax.Direction());
+    const gp_Pnt a = ax.Location().Translated(-d * reach), b = ax.Location().Translated(d * reach);
+    Handle(AIS_Shape) l = new AIS_Shape(BRepBuilderAPI_MakeEdge(a, b).Shape());
+    lineStyle(l, orange, 2.0, Aspect_TOL_DASH);
+    context_->Display(l, AIS_WireFrame, -1, false);
+    constructionObjects_.emplace_back(l, std::string());
+    label(name, b);
+  }
+  // Points: small rings, drawn over the bodies.
+  for (const auto& [name, p] : constructionPoints_) {
+    Handle(AIS_Point) pt = new AIS_Point(new Geom_CartesianPoint(p));
+    pt->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_O_POINT, orange, 2.5));
+    context_->Display(pt, 0, -1, false);
+    context_->SetZLayer(pt, Graphic3d_ZLayerId_Topmost);
+    constructionObjects_.emplace_back(pt, std::string());
+    label(name, p.Translated(gp_Vec(0, 0, modelPerPixel() * 12)));
   }
   redrawAll();
 }

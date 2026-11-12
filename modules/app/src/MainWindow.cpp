@@ -890,6 +890,19 @@ void MainWindow::refresh() {
     }
   }
   viewport_->setConstructionPlanes(planes);
+  {
+    std::vector<std::pair<std::string, gp_Ax1>> axes;
+    std::vector<std::pair<std::string, gp_Pnt>> points;
+    auto shown = [&](const std::string& n) {
+      auto vis = constructionVisibility_.find(n);
+      return vis == constructionVisibility_.end() || vis->second;
+    };
+    for (const auto& a : d.axes())
+      if (shown(a.name)) axes.emplace_back(a.name, a.axis);
+    for (const auto& p : d.points())
+      if (shown(p.name)) points.emplace_back(p.name, p.point);
+    viewport_->setConstructionAxesPoints(axes, points);
+  }
   refreshBrowser(name);
   refreshTimeline();
 }
@@ -952,20 +965,24 @@ void MainWindow::refreshBrowser(const QString& docName) {
     sk->setExpanded(true);
   }
 
-  const auto planes = d.planes();
-  if (!planes.empty()) {
-    auto* cons = new QTreeWidgetItem(root, {tr("Construction (%1)").arg(planes.size())});
-    cons->setIcon(0, icon(QStringLiteral("plane")));
-    for (const auto& pl : planes) {
-      const QString n = qs(pl.name);
-      auto* it = new QTreeWidgetItem(cons, {n});
-      it->setIcon(0, icon(QStringLiteral("plane")));
+  // Construction: planes, axes and points, each with a visibility box.
+  std::vector<std::pair<std::string, const char*>> cons;
+  for (const auto& pl : d.planes()) cons.emplace_back(pl.name, "plane");
+  for (const auto& a : d.axes()) cons.emplace_back(a.name, "axis");
+  for (const auto& p : d.points()) cons.emplace_back(p.name, "point");
+  if (!cons.empty()) {
+    auto* folder = new QTreeWidgetItem(root, {tr("Construction (%1)").arg(cons.size())});
+    folder->setIcon(0, icon(QStringLiteral("plane")));
+    for (const auto& [name, iconName] : cons) {
+      const QString n = qs(name);
+      auto* it = new QTreeWidgetItem(folder, {n});
+      it->setIcon(0, icon(QString::fromLatin1(iconName)));
       it->setData(0, kPlaneRole, n);
       it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
-      const auto vis = constructionVisibility_.find(pl.name);
+      const auto vis = constructionVisibility_.find(name);
       it->setCheckState(0, vis == constructionVisibility_.end() || vis->second ? Qt::Checked : Qt::Unchecked);
     }
-    cons->setExpanded(true);
+    folder->setExpanded(true);
   }
 
   auto* params = new QTreeWidgetItem(root, {tr("User Parameters")});
