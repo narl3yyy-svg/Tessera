@@ -6,9 +6,11 @@ add_executable(tessera
   src/MainWindow.h
   src/MainWindowSketch.cpp
   src/MainWindowTools.cpp
+  src/MainWindowArrow.cpp
   src/SketchEditor.cpp
   src/SketchEditor.h
   src/ViewportSketch.cpp
+  src/ViewportArrow.cpp
   src/CommandDialog.cpp
   src/CommandDialog.h
   src/ParametersDialog.cpp

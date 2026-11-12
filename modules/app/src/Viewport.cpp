@@ -23,6 +23,8 @@
 #include <QOpenGLContext>
 #include <QPainter>
 #include <QSurfaceFormat>
+#include <QLabel>
+#include <QTimer>
 #include <QWheelEvent>
 
 namespace tsr::app {
@@ -171,6 +173,13 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     return;
   }
 
+  pickHint_ = new QLabel(tr("Select a plane or planar face"), this);
+  pickHint_->setObjectName(QStringLiteral("pickHint"));
+  pickHint_->setStyleSheet(QStringLiteral("QLabel { background: rgba(40,44,52,225); color: #e8eaee; border: 1px solid #5b6472;"
+                                          " padding: 2px 6px; }"));
+  pickHint_->setAttribute(Qt::WA_TransparentForMouseEvents);
+  pickHint_->hide();
+
   applyTheme();
   connect(&Theme::instance(), &Theme::changed, this, [this] {
     applyTheme();
@@ -245,7 +254,7 @@ void Viewport::setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types) {
   selectFilter_ = types;
   if (!context_.IsNull()) context_->ClearSelected(false);
   applyPickModes();
-  updateView();
+  redrawAll();
 }
 
 QImage Viewport::capture() {
@@ -365,6 +374,8 @@ void Viewport::paintGL() {
   }
   view_->InvalidateImmediate();
   FlushViewEvents(context_, view_, true);
+  // The camera may have moved: keep the drag arrow's value box beside it.
+  if (arrow_) QTimer::singleShot(0, this, [this] { placeArrowBox(); });
 }
 
 void Viewport::paintEvent(QPaintEvent* e) {
@@ -397,6 +408,7 @@ Aspect_VKeyMouse Viewport::aisButtons(Qt::MouseButtons b) const {
 void Viewport::mousePressEvent(QMouseEvent* e) {
   QOpenGLWidget::mousePressEvent(e);
   pressPos_ = e->position();
+  if (arrowMousePress(e)) return;
   if (interactor_ && e->button() == Qt::LeftButton) {
     interactor_->mousePress(e);
     return;
@@ -414,6 +426,16 @@ void Viewport::mouseDoubleClickEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseDoubleClickEvent(e);
 }
 
+bool Viewport::focusNextPrevChild(bool next) {
+  if (interactor_) return false;   // keyPressEvent then gets the Tab
+  return QOpenGLWidget::focusNextPrevChild(next);
+}
+
+void Viewport::leaveEvent(QEvent* e) {
+  if (pickHint_) pickHint_->hide();
+  QOpenGLWidget::leaveEvent(e);
+}
+
 void Viewport::keyPressEvent(QKeyEvent* e) {
   if (interactor_ && interactor_->keyPress(e)) return;
   QOpenGLWidget::keyPressEvent(e);
@@ -421,6 +443,7 @@ void Viewport::keyPressEvent(QKeyEvent* e) {
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseReleaseEvent(e);
+  if (arrowMouseRelease(e)) return;
   if (e->button() == Qt::RightButton && (e->position() - pressPos_).manhattanLength() < 6) {
     emit contextMenuRequested(e->globalPosition().toPoint());
     return;
@@ -436,6 +459,15 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
 
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
+  if (arrowMouseMove(e)) return;
+  if (pickHint_) {
+    pickHint_->setVisible(planePicking_);
+    if (planePicking_) {
+      pickHint_->adjustSize();
+      pickHint_->move(e->position().toPoint() + QPoint(18, 14));
+      pickHint_->raise();
+    }
+  }
   if (interactor_) interactor_->mouseMove(e);
   if (!glReady_) return;
   if (UpdateMousePosition(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
@@ -447,6 +479,8 @@ void Viewport::wheelEvent(QWheelEvent* e) {
   if (!glReady_) return;
   const double delta = (reverseZoom_ ? -1.0 : 1.0) * e->angleDelta().y() / 8.0;
   if (UpdateZoom(Aspect_ScrollDelta(toPixels(e->position()), delta))) updateView();
+  // The arrow keeps its size on screen; rebuild once the zoom has applied.
+  if (arrow_) QTimer::singleShot(0, this, [this] { if (arrow_) rebuildArrow(); });
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {
@@ -470,7 +504,7 @@ QStringList Viewport::selectedBodies() const {
 void Viewport::clearSelection() {
   if (context_.IsNull()) return;
   context_->ClearSelected(false);
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setBodies(const std::vector<doc::Body>& bodies) {
@@ -509,7 +543,7 @@ void Viewport::rebuild() {
     fittedOnce_ = true;
     fitAll();
   }
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setBodyVisible(const QString& name, bool visible) {
@@ -519,7 +553,7 @@ void Viewport::setBodyVisible(const QString& name, bool visible) {
   if (it == shapes_.end() || context_.IsNull()) return;
   if (visible) context_->Display(it->second, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, 0, false);
   else context_->Erase(it->second, false);
-  updateView();
+  redrawAll();
 }
 
 bool Viewport::isBodyVisible(const QString& name) const {

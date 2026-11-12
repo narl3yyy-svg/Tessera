@@ -115,7 +115,7 @@ void MainWindow::enterSketchMode() {
     redo_->setEnabled(editor_ && editor_->canRedo());
   });
   sketchTab_ = buildSketchTab();
-  ribbon_->insertTab(0, sketchTab_, tr("SKETCH"));
+  ribbon_->insertTab(0, ribbonPage(sketchTab_), tr("SKETCH"));
   ribbon_->setCurrentIndex(0);
   for (int i = 1; i < ribbon_->count(); ++i) ribbon_->setTabEnabled(i, false);
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(true);
@@ -129,7 +129,13 @@ void MainWindow::enterSketchMode() {
 void MainWindow::exitSketchMode() {
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(false);
   if (sketchTab_) {
-    ribbon_->removeTab(ribbon_->indexOf(sketchTab_));
+    for (int i = 0; i < ribbon_->count(); ++i)
+      if (ribbon_->widget(i)->isAncestorOf(sketchTab_)) {
+        QWidget* wrapper = ribbon_->widget(i);
+        ribbon_->removeTab(i);
+        wrapper->deleteLater();
+        break;
+      }
     sketchTab_->deleteLater();
     sketchTab_ = nullptr;
   }
@@ -381,8 +387,13 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
     return;
   }
   pickedEdges_.push_back(edge);
+  // Extruding a body face adds to that body by default.
+  if (isFace && active_->commandId() == QLatin1String(doc::kCmdExtrude) &&
+      active_->textInput(QStringLiteral("operation")) == QLatin1String("New Body"))
+    active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Join"));
   store(refs.join(QLatin1Char(';')));
   updateEdgePicking();
+  updateDragArrow();
 }
 
 void MainWindow::onProfileClicked(const QString& sketchName, int index) {

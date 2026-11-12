@@ -128,7 +128,7 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           const QString t = sb->typedText();
           const std::optional<double> typed = sb->evaluate(t);
           const bool expression = typed && !isPlainQuantity(t.toStdString());
-          const Value v = expression ? Value(t.toStdString()) : Value(toInternal(sb->value(), shown));
+          const Value v = expression ? Value(t.toStdString()) : Value(toInternal(typed ? *typed : sb->value(), shown));
           if (lastSent_[id] == v) return;
           lastSent_[id] = v;
           if (expression) {
@@ -459,7 +459,7 @@ void CommandDialog::updateProfilesLabel() {
   }
   if (facesLabel_) {
     const int n = count(currentFaces());
-    facesLabel_->setText(n == 0 ? tr("None (click faces to open)") : tr("%n face(s)", nullptr, n));
+    facesLabel_->setText(n == 0 ? tr("None (click faces)") : tr("%n face(s)", nullptr, n));
   }
   if (bodiesLabel_) {
     const QString t = currentTools();
@@ -478,6 +478,38 @@ bool CommandDialog::pickBody(const QString& name) {
   bodyInput_->setCurrentIndex(i);
   return true;
 }
+
+std::optional<double> CommandDialog::realInput(const QString& id) const {
+  auto it = cmd_->inputs().find(id.toStdString());
+  if (it == cmd_->inputs().end()) return std::nullopt;
+  if (auto d = std::get_if<double>(&it->second)) return *d;
+  return std::nullopt;
+}
+
+QString CommandDialog::displayText(const QString& id) const {
+  if (const std::string e = inputExpression(cmd_->inputs(), id.toStdString()); !e.empty()) return QString::fromStdString(e);
+  const InputDef* d = cmd_->def().input(id.toStdString());
+  const auto v = realInput(id);
+  if (!d || !v) return {};
+  const Unit length = parseUnit(session_.document().lengthUnit()).value_or(Unit::Millimeter);
+  const Unit shown = dimensionOf(d->unit) == Dimension::Length ? length : d->unit;
+  return formatNumber(fromInternal(*v, shown), shown == Unit::Inch ? 4 : 2, shown);
+}
+
+void CommandDialog::setRealInput(const QString& id, double value) {
+  if (auto* sb = dynamic_cast<ExpressionSpinBox*>(findChild<QDoubleSpinBox*>(id))) {
+    const InputDef* d = cmd_->def().input(id.toStdString());
+    const Unit length = parseUnit(session_.document().lengthUnit()).value_or(Unit::Millimeter);
+    const Unit shown = d && dimensionOf(d->unit) == Dimension::Length ? length : (d ? d->unit : Unit::None);
+    const QSignalBlocker block(sb);
+    sb->setExpression(QString());
+    sb->setValue(fromInternal(value, shown));
+  }
+  lastSent_[id.toStdString()] = value;
+  onInputChanged(id.toStdString(), value);
+}
+
+bool CommandDialog::isEditingFeature() const { return cmd_->def().name.rfind("Edit ", 0) == 0; }
 
 bool CommandDialog::setInputForTest(const QString& id, const QVariant& value) {
   QWidget* w = findChild<QWidget*>(id);

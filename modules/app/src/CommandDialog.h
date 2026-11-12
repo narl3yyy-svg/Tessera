@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -50,6 +51,16 @@ public:
   QString currentTools() const;
   void setFaces(const QString& faces);
   void setTools(const QString& bodies);
+
+  // For the in-canvas drag arrow and other canvas tools.
+  QString commandId() const { return QString::fromStdString(cmd_->def().id); }
+  std::optional<double> realInput(const QString& id) const;
+  QString textInput(const QString& id) const { return stringInput(id.toStdString()); }
+  // What the input's field shows: its expression, else the value with unit.
+  QString displayText(const QString& id) const;
+  // Sets a Real input (internal units) as dragging would: field and preview.
+  void setRealInput(const QString& id, double value);
+  bool isEditingFeature() const;
 
   // A plane clicked in the canvas fills the first plane input.
   bool hasPlaneInput() const;

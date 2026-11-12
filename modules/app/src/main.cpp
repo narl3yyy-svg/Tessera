@@ -9,6 +9,12 @@
 #include "tsr/kernel/Kernel.h"
 
 #include <QApplication>
+#include <QKeyEvent>
+#include <QLineEdit>
+
+#include <BRepGProp.hxx>
+#include <GProp_GProps.hxx>
+#include <TopExp_Explorer.hxx>
 #include <QCommandLineParser>
 #include <QListWidget>
 #include <QPainter>
@@ -230,6 +236,64 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (std::abs(ed->sketch().points[2].x - 6.0) > 1e-6) return fail("dimension expression did not drive the geometry");
   if (ed->sketch().constraints.back().expression != "size * 2") return fail("dimension expression not kept");
   w.cancelSketch();
+
+  // Rectangle size boxes: Tab from the canvas reaches the boxes, Tab moves
+  // from width to height, Enter creates the rectangle.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  ed->setTool(Tool::Rectangle);
+  QApplication::processEvents();   // drop size boxes of earlier sketches (deleteLater)
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  ed->clickAt(0, 0);
+  ed->hoverAt(1, 1);
+  {
+    auto key = [](QObject* to, int k) {
+      QKeyEvent press(QEvent::KeyPress, k, Qt::NoModifier);
+      QCoreApplication::sendEvent(to, &press);
+    };
+    key(w.viewport(), Qt::Key_Tab);   // must not move focus out of the canvas
+    auto* wbox = w.viewport()->findChild<QLineEdit*>(QStringLiteral("hudWidth"));
+    auto* hbox = w.viewport()->findChild<QLineEdit*>(QStringLiteral("hudHeight"));
+    if (!wbox || !hbox) return fail("rectangle size boxes");
+    wbox->setText(QStringLiteral("40"));
+    emit wbox->textEdited(wbox->text());
+    key(wbox, Qt::Key_Tab);
+    hbox->setText(QStringLiteral("20"));
+    emit hbox->textEdited(hbox->text());
+    key(hbox, Qt::Key_Return);
+  }
+  if (ed->sketch().entities.size() != 4) return fail("Tab / Enter in the size boxes did not create the rectangle");
+  if (!w.finishSketch()) return fail("finish rectangle sketch");
+
+  // Extrude by dragging the arrow, then pull a face of the result.
+  auto* ex2 = w.startCommand(QStringLiteral("tsr.feature.extrude"));
+  if (!ex2 || !w.viewport()->dragArrowActive()) return fail("extrude arrow");
+  w.viewport()->dragArrowForTest(1.5);
+  if (std::abs(ex2->realInput(QStringLiteral("distance")).value_or(0) - 1.5) > 1e-9) return fail("arrow did not set the distance");
+  ex2->accept();
+  QApplication::processEvents();
+  if (std::abs(volume() - 4 * 2 * 1.5) > 1e-6) return fail("arrow extrude volume");
+  auto* ex3 = w.startCommand(QStringLiteral("tsr.feature.extrude"));
+  {
+    TopoDS_Shape top;
+    double zmax = -1e9;
+    for (TopExp_Explorer it(s.document().bodies().front().shape, TopAbs_FACE); it.More(); it.Next()) {
+      GProp_GProps g;
+      BRepGProp::SurfaceProperties(it.Current(), g);
+      if (g.CentreOfMass().Z() > zmax) {
+        zmax = g.CentreOfMass().Z();
+        top = it.Current();
+      }
+    }
+    emit w.viewport()->subShapeClicked(QStringLiteral("Body1"), top);   // as a click on the top face
+  }
+  if (ex3->currentFaces().isEmpty() || ex3->textInput(QStringLiteral("operation")) != QLatin1String("Join"))
+    return fail("face pick for extrude");
+  if (!w.viewport()->dragArrowActive()) return fail("face extrude arrow");
+  w.viewport()->dragArrowForTest(0.5);
+  ex3->accept();
+  QApplication::processEvents();
+  if (s.document().bodies().size() != 1 || std::abs(volume() - 4 * 2 * 2.0) > 1e-6) return fail("face extrude volume");
   std::puts("smoke: OK");
   return 0;
 }

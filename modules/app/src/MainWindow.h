@@ -78,6 +78,7 @@ protected:
 private:
   void buildAppBar();
   void buildRibbon();
+  QWidget* ribbonPage(QWidget* page);   // wraps a ribbon tab so it scrolls when the window is narrow
   void buildNavBar();
   void buildShortcuts();
   CommandDialog* showDialog(std::unique_ptr<CommandSession> cmd);
@@ -118,6 +119,11 @@ private:
   void onProfileClicked(const QString& sketch, int index);
   void onEdgeClicked(const QString& body, const TopoDS_Shape& edge);
   void updateEdgePicking();
+  // In-canvas drag arrow for the open panel (MainWindowArrow.cpp).
+  void updateDragArrow();
+  void onDragArrow(double value);
+  QString arrowInput_;
+  std::vector<TopoDS_Shape> pickedFaces() const;   // the Real input the arrow drives, empty when none
   bool sketchVisible(const std::string& name) const;
   bool maybeSave();
   bool saveAs();

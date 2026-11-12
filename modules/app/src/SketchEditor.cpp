@@ -1038,6 +1038,7 @@ void SketchEditor::ensureHud() {
     e->setFixedWidth(kind == HudField::Count ? 60 : 110);
     e->setStyleSheet(QStringLiteral("QLineEdit { background: rgba(30,34,40,215); color: #f0f2f5; border: 1px solid #5b6472;"
                                     " border-radius: 3px; padding: 2px; }"
+                                    "QLineEdit:focus { border: 1px solid #5b6472; border-bottom: 2px solid #3d8ee8; }"
                                     "QLineEdit[locked=\"true\"] { border: 2px solid #3d8ee8; font-weight: bold; }"));
     e->installEventFilter(this);
     const size_t index = hud_.size();
@@ -1047,6 +1048,10 @@ void SketchEditor::ensureHud() {
     e->show();
     f.edit = e;
     hud_.push_back(f);
+  }
+  if (!hud_.empty() && hud_[0].edit) {
+    hud_[0].edit->setFocus();
+    hud_[0].edit->selectAll();
   }
 }
 
@@ -1128,11 +1133,15 @@ void SketchEditor::updateHud(double x, double y) {
     case Tool::Line:
       live = {{dist, {(a.x + x) / 2, (a.y + y) / 2 + off}}, {std::atan2(dy, dx), {a.x + off * 2, a.y - off}}};
       break;
+    // Rectangles: the boxes sit on the dimension lines, width above the top
+    // edge and height left of the left edge (see updatePreview).
     case Tool::Rectangle:
-      live = {{std::abs(dx), {(a.x + x) / 2, std::max(a.y, y) + off}}, {std::abs(dy), {std::max(a.x, x) + off * 3, (a.y + y) / 2}}};
+      live = {{std::abs(dx), {(a.x + x) / 2, std::max(a.y, y) + off * 1.6}},
+              {std::abs(dy), {std::min(a.x, x) - off * 1.6, (a.y + y) / 2}}};
       break;
     case Tool::CenterRectangle:
-      live = {{2 * std::abs(dx), {a.x, a.y + std::abs(dy) + off}}, {2 * std::abs(dy), {a.x + std::abs(dx) + off * 3, a.y}}};
+      live = {{2 * std::abs(dx), {a.x, a.y + std::abs(dy) + off * 1.6}},
+              {2 * std::abs(dy), {a.x - std::abs(dx) - off * 1.6, a.y}}};
       break;
     case Tool::Circle:
       live = {{2 * dist, {a.x + dist * 0.7071 + off, a.y + dist * 0.7071 + off}}};
@@ -1157,6 +1166,8 @@ void SketchEditor::updateHud(double x, double y) {
         f.edit->setText(QString::number(static_cast<int>(live[i].first)));
       else
         f.edit->setText(lengthText(live[i].first));
+      // The focused box keeps its text selected so typing replaces it.
+      if (f.edit->hasFocus()) f.edit->selectAll();
     }
     const QPointF w = view_->toWidget(sketch::toWorld(frame_, live[i].second.first, live[i].second.second));
     f.edit->move(QPoint(static_cast<int>(w.x() - f.edit->width() / 2), static_cast<int>(w.y() - f.edit->height() / 2)));
@@ -1721,6 +1732,37 @@ void SketchEditor::updatePreview(double x, double y) {
     ctx->Display(w, AIS_WireFrame, -1, false);
     ctx->SetZLayer(w, Graphic3d_ZLayerId_Topmost);
     preview_.push_back(w);
+    // Rectangles: dimension lines with extension lines and arrowheads for
+    // width (above) and height (left), where the size boxes sit.
+    if (tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle) {
+      const bool centred = tool_ == Tool::CenterRectangle;
+      const double hx = std::abs(x - a.x), hy = std::abs(y - a.y);
+      const double x0 = centred ? a.x - hx : std::min(a.x, x), x1 = centred ? a.x + hx : std::max(a.x, x);
+      const double y0 = centred ? a.y - hy : std::min(a.y, y), y1 = centred ? a.y + hy : std::max(a.y, y);
+      const double off = view_->modelPerPixel() * 22 * 1.6, ext = off * 1.25, h = off * 0.28;
+      sketch::Sketch dims;
+      dims.addLine(x0, y1, x0, y1 + ext);
+      dims.addLine(x1, y1, x1, y1 + ext);
+      dims.addLine(x0, y1 + off, x1, y1 + off);
+      dims.addLine(x0, y1 + off, x0 + h, y1 + off + h * 0.45);
+      dims.addLine(x0, y1 + off, x0 + h, y1 + off - h * 0.45);
+      dims.addLine(x1, y1 + off, x1 - h, y1 + off + h * 0.45);
+      dims.addLine(x1, y1 + off, x1 - h, y1 + off - h * 0.45);
+      dims.addLine(x0, y0, x0 - ext, y0);
+      dims.addLine(x0, y1, x0 - ext, y1);
+      dims.addLine(x0 - off, y0, x0 - off, y1);
+      dims.addLine(x0 - off, y0, x0 - off + h * 0.45, y0 + h);
+      dims.addLine(x0 - off, y0, x0 - off - h * 0.45, y0 + h);
+      dims.addLine(x0 - off, y1, x0 - off + h * 0.45, y1 - h);
+      dims.addLine(x0 - off, y1, x0 - off - h * 0.45, y1 - h);
+      const TopoDS_Shape ds = hx > 1e-9 && hy > 1e-9 ? sketch::curves(dims, frame_, false) : TopoDS_Shape();
+      if (!ds.IsNull()) {
+        Handle(AIS_Shape) d = wire(ds, Quantity_Color(0.55, 0.85, 0.22, Quantity_TOC_sRGB), 1.2, Aspect_TOL_SOLID);
+        ctx->Display(d, AIS_WireFrame, -1, false);
+        ctx->SetZLayer(d, Graphic3d_ZLayerId_Topmost);
+        preview_.push_back(d);
+      }
+    }
     // Tools with size boxes show their sizes there; the rest get a label.
     QString text;
     double lx = x, ly = y;

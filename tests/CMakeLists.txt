@@ -51,6 +51,8 @@ if(TSR_WITH_PYTHON)
                                --save ${CMAKE_CURRENT_BINARY_DIR}/api_params.tsr
                                --open ${CMAKE_CURRENT_BINARY_DIR}/api_params.tsr
                                --script ${CMAKE_CURRENT_SOURCE_DIR}/api/check_parameters_reopened.py)
+  add_test(NAME api_extrude_faces
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_extrude_faces.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()

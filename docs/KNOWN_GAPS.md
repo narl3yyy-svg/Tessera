@@ -34,7 +34,11 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P3-2 | Fillet: constant radius only (no variable radius, setback or rule-based selection); Chamfer: equal distance only (no two-distance or distance-angle) | P3 scope | P4 |
 | P3-3 | Revolve axis: sketch X/Y axis, the sketch's first construction line, or a world axis; no picking an arbitrary edge as the axis | P3 scope | P4 |
 | P3-4 | While a Fillet/Chamfer dialog previews, edges are picked on the previewed body | Preview replaces the body | when the preview uses an overlay |
-| P4-1 | Extrude: no in-canvas drag arrow yet (values are typed in the panel); extents are Distance and All (no To Object / To Face); taper works on one-sided extrudes | P4 scope | P5 |
+| P4-1 | ~~No in-canvas drag arrow~~ Closed: Extrude, Press Pull, Fillet and Chamfer have a drag arrow and a value box. Still open: extents are Distance and All (no To Object / To Face); taper works on one-sided extrudes; no second arrow for Two Sides | P4 scope | P8 |
+| P8-1 | The drag arrow moves in steps of whatever the mouse gives (no snapping to grid or round values while dragging); Fillet/Chamfer arrows start at the first picked edge and point toward the body's centre, not along the exact fillet bisector | P8 scope | later |
+| P8-2 | Extruding body faces: the faces must be flat and face the same way; the result joins / cuts the body the faces belong to (Fusion can also extrude faces into a new body or other bodies) | P8 scope | later |
+| P8-3 | Create Sketch shows the origin planes, axes and point with hover highlight, but there is no preview of the sketch grid on the hovered plane before clicking | P8 scope | later |
+| P8-4 | A ribbon wider than the window scrolls sideways with the mouse wheel; Fusion instead folds panels into their menus | Simpler | later |
 | P4-2 | ~~Split Body and Mirror use origin planes only~~ Closed: they take origin planes, construction planes or a picked flat face | | closed |
 | P4-3 | Section Analysis and the units choice for new designs are app settings; section analysis is not saved in the document | P4 scope | later |
 | P4-4 | Export writes mm for mesh and STEP/IGES files; F3D, IPT, SKP, SAT, DWG, USD are not available (proprietary or unsupported by the kernel) | Formats | accepted |

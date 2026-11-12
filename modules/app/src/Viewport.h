@@ -29,6 +29,8 @@
 #include <vector>
 
 class QKeyEvent;
+class QLabel;
+class QLineEdit;
 class QMouseEvent;
 
 namespace tsr::app {
@@ -146,6 +148,18 @@ public:
   void setGridPlane(const gp_Ax3& frame);   // the layout grid follows the active sketch
   void redraw() { update(); }
 
+  // In-canvas drag arrow (Extrude distance, Fillet radius, Press Pull ...):
+  // an arrow at base + dir * value. Press and drag it along dir to change the
+  // value; the box beside it shows the value and takes typed values or
+  // expressions. `text` is what the box shows when it is not being edited.
+  void setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value, const QString& text);
+  void clearDragArrow();
+  bool dragArrowActive() const { return arrow_.has_value(); }
+  double dragArrowValue() const { return arrow_ ? arrow_->value : 0.0; }
+  QLineEdit* dragArrowBox() const { return arrowBox_; }
+  // Tests: as if the arrow were dragged to `value` and released.
+  void dragArrowForTest(double value);
+
 signals:
   void profileClicked(const QString& sketch, int index);
   void subShapeClicked(const QString& body, const TopoDS_Shape& shape);
@@ -154,6 +168,9 @@ signals:
   void selectionChanged();
   void contextMenuRequested(const QPoint& globalPos);
   void statusMessage(const QString& text);
+  void dragArrowMoved(double value);      // while the arrow is dragged
+  void dragArrowReleased(double value);   // mouse released
+  void dragArrowTyped(const QString& text);   // Enter in the value box
 
 protected:
   void initializeGL() override;
@@ -165,6 +182,9 @@ protected:
   void wheelEvent(QWheelEvent* e) override;
   void mouseDoubleClickEvent(QMouseEvent* e) override;
   void keyPressEvent(QKeyEvent* e) override;
+  // Tab goes to the sketch editor (size boxes) instead of moving focus.
+  bool focusNextPrevChild(bool next) override;
+  void leaveEvent(QEvent* e) override;
 
   // AIS_ViewController
   void OnSelectionChanged(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
@@ -208,7 +228,7 @@ private:
   std::vector<SketchDisplay> sketches_;
   std::vector<Handle(AIS_Shape)> sketchCurves_;
   std::vector<ProfileObject> profileObjects_;
-  std::vector<std::pair<Handle(AIS_Shape), std::string>> planeObjects_;
+  std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> planeObjects_;
   std::vector<std::pair<std::string, gp_Ax3>> constructionPlanes_;
   std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> constructionObjects_;
   void rebuildConstruction();
@@ -245,6 +265,26 @@ private:
     std::optional<gp_Pnt> center;
   };
   std::optional<PendingLook> pendingLook_;   // lookAt before GL was ready
+
+  struct DragArrow {
+    gp_Pnt base;
+    gp_Dir dir;
+    double value = 0;
+  };
+  std::optional<DragArrow> arrow_;
+  bool arrowDragging_ = false;
+  bool arrowHover_ = false;
+  double arrowGrab_ = 0;   // value minus the cursor's position along the arrow at press
+  std::vector<Handle(AIS_InteractiveObject)> arrowObjects_;
+  QLineEdit* arrowBox_ = nullptr;
+  void rebuildArrow();
+  void placeArrowBox();
+  bool nearArrow(const QPointF& pos) const;
+  std::optional<double> arrowParam(const QPointF& pos) const;
+  bool arrowMousePress(QMouseEvent* e);
+  bool arrowMouseMove(QMouseEvent* e);
+  bool arrowMouseRelease(QMouseEvent* e);
+  QLabel* pickHint_ = nullptr;   // "Select a plane or planar face" beside the cursor
 };
 
 } // namespace tsr::app

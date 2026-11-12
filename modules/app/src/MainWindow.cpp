@@ -1,6 +1,10 @@
 #include "MainWindow.h"
 #include "CommandDialog.h"
 #include "ParametersDialog.h"
+
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QWheelEvent>
 #include "Icons.h"
 #include "Theme.h"
 #include "SketchEditor.h"
@@ -158,6 +162,11 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   setCentralWidget(viewport_);
   connect(viewport_, &Viewport::contextMenuRequested, this, &MainWindow::showContextMenu);
   connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
+  connect(viewport_, &Viewport::dragArrowMoved, this, &MainWindow::onDragArrow);
+  connect(viewport_, &Viewport::dragArrowTyped, this, [this](const QString& text) {
+    if (active_ && !arrowInput_.isEmpty()) active_->setInputForTest(arrowInput_, text);
+    viewport_->setFocus();
+  });
   connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
     if (measure_) measurePick(shape);
     else onEdgeClicked(body, shape);
@@ -429,7 +438,7 @@ void MainWindow::buildRibbon() {
     row->addWidget(sep);
   }
   row->addStretch();
-  ribbon_->addTab(page, QStringLiteral("SOLID"));
+  ribbon_->addTab(ribbonPage(page), QStringLiteral("SOLID"));
   // Workspace tabs that are planned, disabled like the planned panels.
   for (const char* t : {"SURFACE", "MESH", "SHEET METAL", "PLASTIC", "MANAGE", "UTILITIES"}) {
     const int i = ribbon_->addTab(new QWidget, QString::fromLatin1(t));
@@ -443,8 +452,32 @@ void MainWindow::buildRibbon() {
   bar->setFloatable(false);
   bar->addWidget(workspace);
   bar->addSeparator();
+  // The ribbon takes the toolbar's remaining width; a QToolBar would
+  // otherwise move a too-wide ribbon into its overflow menu and show nothing.
+  ribbon_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  ribbon_->setMinimumWidth(240);
   bar->addWidget(ribbon_);
   addToolBar(Qt::TopToolBarArea, bar);
+}
+
+QWidget* MainWindow::ribbonPage(QWidget* page) {
+  // Narrow windows: the panels scroll sideways (mouse wheel) instead of the
+  // whole ribbon disappearing.
+  auto* scroll = new QScrollArea;
+  scroll->setObjectName(page->objectName().isEmpty() ? QStringLiteral("ribbonPage") : page->objectName() + QStringLiteral("Scroll"));
+  scroll->setFrameShape(QFrame::NoFrame);
+  scroll->setWidgetResizable(true);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  scroll->setFixedHeight(page->sizeHint().height());
+  scroll->setMinimumWidth(200);
+  scroll->setWidget(page);
+  scroll->viewport()->setAutoFillBackground(false);
+  page->setAutoFillBackground(false);
+  scroll->installEventFilter(this);
+  scroll->viewport()->installEventFilter(this);
+  return scroll;
 }
 
 void MainWindow::buildNavBar() {
@@ -656,6 +689,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
     navBar_->raise();
     if (active_) placeDialog(active_);
   }
+  if (e->type() == QEvent::Wheel) {
+    // A ribbon too wide for the window scrolls sideways with the wheel.
+    QWidget* w = qobject_cast<QWidget*>(watched);
+    auto* scroll = w ? qobject_cast<QScrollArea*>(w) : nullptr;
+    if (!scroll && w) scroll = qobject_cast<QScrollArea*>(w->parentWidget());
+    if (scroll && scroll->horizontalScrollBar()->maximum() > 0) {
+      auto* we = static_cast<QWheelEvent*>(e);
+      const int delta = we->angleDelta().y() != 0 ? we->angleDelta().y() : we->angleDelta().x();
+      scroll->horizontalScrollBar()->setValue(scroll->horizontalScrollBar()->value() - delta / 2);
+      return true;
+    }
+  }
   return QMainWindow::eventFilter(watched, e);
 }
 
@@ -701,7 +746,10 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   dlg->setProperty("panel", true);
   dlg->setAutoFillBackground(true);
   active_ = dlg;
-  connect(dlg, &CommandDialog::inputsChanged, this, [this] { updateProfilePicking(); });
+  connect(dlg, &CommandDialog::inputsChanged, this, [this] {
+    updateProfilePicking();
+    updateDragArrow();
+  });
   // Embedded panels are not windows, so closing does not delete them: finish
   // here, synchronously, so the next command can start at once.
   connect(dlg, &QDialog::finished, this, [this, dlg] {
@@ -711,6 +759,8 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     viewport_->setProfilePicking(false);
     viewport_->setSubShapePicking({});
     viewport_->setPlanePicking(false);
+    viewport_->clearDragArrow();
+    arrowInput_.clear();
     pickedEdges_.clear();
     refresh();
   });
@@ -734,6 +784,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     }
   }
   updateEdgePicking();
+  updateDragArrow();
   return dlg;
 }
 

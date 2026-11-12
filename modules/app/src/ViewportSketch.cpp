@@ -47,7 +47,7 @@ void faceStyle(const Handle(AIS_Shape)& s, const Quantity_Color& c, double trans
 void Viewport::setInteractor(ViewInteractor* interactor) {
   interactor_ = interactor;
   if (interactor_ && !context_.IsNull()) context_->ClearSelected(false);
-  updateView();
+  redrawAll();
 }
 
 bool Viewport::planePoint(const QPointF& pos, const gp_Ax3& frame, gp_Pnt& out) const {
@@ -141,7 +141,7 @@ void Viewport::rebuildSketches() {
     }
   }
   applyPickModes();
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setProfilePicking(bool on) {
@@ -189,7 +189,7 @@ void Viewport::rebuildConstruction() {
     context_->Display(t, 0, -1, false);
     constructionObjects_.emplace_back(t, std::string());
   }
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setPlanePicking(bool on) {
@@ -198,29 +198,44 @@ void Viewport::setPlanePicking(bool on) {
   for (auto& [shape, spec] : planeObjects_) context_->Remove(shape, false);
   planeObjects_.clear();
   if (on) {
-    // Origin planes as translucent squares, sized to the current view.
+    // Origin planes as small translucent squares in the positive quadrants
+    // (sized to the view), the origin axes and the origin point. The plane
+    // under the cursor lights up before it is clicked.
     Standard_Real vw = 10, vh = 10;
     if (!view_.IsNull()) view_->Size(vw, vh);
-    const double half = std::max(2.0, std::min(vw, vh) * 0.3);
-    struct P {
-      const char* spec;
-      gp_Ax3 frame;
-      Quantity_Color color;
-    };
-    const P planes[] = {
-        {"XY", sketch::planeFrame("XY"), rgb(90, 140, 220)},
-        {"XZ", sketch::planeFrame("XZ"), rgb(90, 190, 120)},
-        {"YZ", sketch::planeFrame("YZ"), rgb(220, 110, 90)},
-    };
-    for (const auto& p : planes) {
-      const TopoDS_Face face = BRepBuilderAPI_MakeFace(gp_Pln(p.frame), 0, half, 0, half).Face();
+    const double size = std::max(1.0, std::min(vw, vh) * 0.2);
+    const double gap = size * 0.08;
+    const Quantity_Color beige = rgb(226, 170, 140);
+    Handle(Prs3d_Drawer) hover = new Prs3d_Drawer();
+    hover->SetColor(rgb(235, 235, 235));
+    hover->SetTransparency(0.15f);
+    hover->SetDisplayMode(AIS_Shaded);
+    hover->SetZLayer(Graphic3d_ZLayerId_Top);
+    for (const char* spec : {"XY", "XZ", "YZ"}) {
+      const gp_Ax3 frame = sketch::planeFrame(spec);
+      // XZ's sketch Y is world Z and its X is world X; YZ's are world Y/Z.
+      const TopoDS_Face face = BRepBuilderAPI_MakeFace(gp_Pln(frame), gap, gap + size, gap, gap + size).Face();
       Handle(AIS_Shape) s = new AIS_Shape(face);
-      faceStyle(s, p.color, 0.55);
+      faceStyle(s, beige, 0.5);
       s->Attributes()->SetFaceBoundaryDraw(true);
-      s->Attributes()->SetFaceBoundaryAspect(new Prs3d_LineAspect(p.color, Aspect_TOL_SOLID, 1.5));
+      s->Attributes()->SetFaceBoundaryAspect(new Prs3d_LineAspect(rgb(200, 140, 110), Aspect_TOL_SOLID, 1.0));
+      s->SetDynamicHilightAttributes(hover);
       context_->Display(s, AIS_Shaded, 0, false);
-      planeObjects_.emplace_back(s, p.spec);
+      planeObjects_.emplace_back(s, spec);
     }
+    const struct { gp_Dir d; Quantity_Color c; } axes[] = {
+        {gp::DX(), rgb(220, 60, 60)}, {gp::DY(), rgb(70, 200, 80)}, {gp::DZ(), rgb(60, 110, 235)}};
+    for (const auto& a : axes) {
+      Handle(AIS_Shape) l = new AIS_Shape(BRepBuilderAPI_MakeEdge(gp::Origin(), gp::Origin().Translated(gp_Vec(a.d) * size * 1.25)).Shape());
+      lineStyle(l, a.c, 3.0, Aspect_TOL_SOLID);
+      context_->Display(l, AIS_WireFrame, -1, false);
+      planeObjects_.emplace_back(l, std::string());
+    }
+    Handle(AIS_Point) origin = new AIS_Point(new Geom_CartesianPoint(gp::Origin()));
+    origin->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, rgb(240, 240, 240), 2.5));
+    context_->Display(origin, 0, -1, false);
+    context_->SetZLayer(origin, Graphic3d_ZLayerId_Topmost);
+    planeObjects_.emplace_back(origin, std::string());
   }
   for (auto& [o, n] : constructionObjects_) {
     if (n.empty()) continue;
@@ -228,7 +243,7 @@ void Viewport::setPlanePicking(bool on) {
     if (on) context_->Activate(o, 0);
   }
   applyPickModes();
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types) {
@@ -257,7 +272,7 @@ void Viewport::setPickedShapes(const std::vector<TopoDS_Shape>& shapes) {
     }
     pickedObjects_.push_back(a);
   }
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setSection(bool on, const gp_Pln& plane) {
@@ -300,7 +315,7 @@ void Viewport::setMeasureLine(bool on, const gp_Pnt& from, const gp_Pnt& to, con
     context_->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
     measureObjects_.push_back(t);
   }
-  updateView();
+  redrawAll();
 }
 
 void Viewport::setMarker(bool on, const gp_Pnt& at, const QString& label) {
@@ -322,7 +337,7 @@ void Viewport::setMarker(bool on, const gp_Pnt& at, const QString& label) {
     context_->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
     markerObjects_.push_back(t);
   }
-  updateView();
+  redrawAll();
 }
 
 TopoDS_Shape Viewport::bodyShape(const QString& name) const {
@@ -384,7 +399,7 @@ bool Viewport::handlePickSelection() {
       return true;
     }
   for (const auto& [shape, spec] : planeObjects_)
-    if (shape == obj) {
+    if (shape == obj && !spec.empty()) {
       context_->ClearSelected(false);
       emit planePicked(QString::fromStdString(spec), tr("%1 plane").arg(QString::fromStdString(spec)));
       return true;

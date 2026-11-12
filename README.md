@@ -26,7 +26,7 @@ scope.
 | **Interface** | Ribbon in the familiar order (CREATE · MODIFY · ASSEMBLE · CONFIGURE · CONSTRUCT · INSPECT · INSERT · SELECT), browser, timeline, ViewCube, navigation bar, command panels inside the canvas, dark and light themes |
 | **Sketch** | Line, 2-Point / Center Rectangle, Circle, Arc, Polygon, Slot, Point, construction lines, Trim, Sketch Dimension; on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and grid |
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
-| **Create** | Extrude (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
+| **Create** | Extrude of sketch profiles or body faces with a drag arrow in the canvas (one side / two sides / symmetric, distance or through all, start offset, taper), Revolve, Sweep, Loft, Hole (simple / counterbore / countersink), Rectangular and Circular Pattern, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull, Fillet, Chamfer, Shell, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Construct** | Offset Plane, Plane at Angle, Midplane — usable for sketches, Split Body and Mirror |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass |
@@ -66,6 +66,8 @@ never needs the network.
 | Standard views | Click the ViewCube, or *Views* on the navigation bar; **F6** fits, **Home** resets |
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
+| Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer: drag the blue arrow, or type into the box beside it |
+| Extrude a face of a body | *Extrude*, click the face (it joins; drag inwards to cut) |
 | Edit a feature | Double-click it in the timeline (or a sketch in the browser) |
 | Drive sizes from parameters | *Modify → Change Parameters* → **Add**; then type the name or an expression (`width / 2`) into any value or dimension |
 | Command search | **S** |
@@ -86,7 +88,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Sketch** | Offset, Extend, Fillet / Chamfer, Spline, Ellipse, Conic, Text, Mirror and patterns, Project / Include, 3-point shapes, Tangent Arc, Sketch Palette options |
 | **Create** | Thread, Coil, Pipe, Rib, Web, Emboss, Thicken, Boundary Fill, Path Pattern, feature patterns |
 | **Modify** | Draft, Offset Face, Replace Face, Split Face, Align, Appearance, Physical Material |
-| **Extrude** | Drag arrow in the canvas, To Object / To Face, thin walls |
+| **Extrude** | To Object / To Face, thin walls; drag arrows for Shell, Hole and Move |
 | **Construct** | Tangent Plane, Plane Through Points, Axis, Point |
 | **Assemble** | Components, Joints, As-Built Joints, Rigid Groups, Drive Joints, Motion Links, Contact Sets |
 | **Inspect** | Curvature Comb, Zebra, Draft and Curvature Map analysis, Minimum Radius |

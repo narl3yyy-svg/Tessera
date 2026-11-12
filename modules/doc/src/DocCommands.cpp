@@ -7,7 +7,9 @@
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <Standard_Failure.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 #include <gp_Ax2.hxx>
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <tuple>
 
 #include <cctype>
 #include <functional>
@@ -372,7 +375,8 @@ public:
   Extrude() {
     def_.id = kCmdExtrude;
     def_.name = "Extrude";
-    def_.tooltip = "Adds depth to sketch profiles. Pick the profiles in the canvas, set the distance.";
+    def_.tooltip = "Adds depth to sketch profiles or flat faces of a body. Pick them in the canvas, then drag the "
+                   "arrow or type the distance.";
     def_.workspace = "Design";
     def_.tab = "Solid";
     def_.panel = "Create";
@@ -384,6 +388,8 @@ public:
          .defaultValue = std::string{}, .optional = true},
         {.id = "profiles", .label = "Profiles", .tooltip = "Click regions of the sketch. None picked: all of them.",
          .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
+        {.id = "faces", .label = "Faces", .tooltip = "Flat faces of the target body to extrude instead of sketch profiles.",
+         .type = InputType::Faces, .defaultValue = std::string{}, .optional = true},
         choice("start", "Start", {"Profile Plane", "Offset"}, "Where the extrude starts."),
         {.id = "startOffset", .label = "Offset", .tooltip = "Distance from the profile plane to the start.",
          .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "start=Offset"},
@@ -401,10 +407,20 @@ public:
   }
   const CommandDef& def() const override { return def_; }
 
+  static std::string facesOf(const Inputs& in) {
+    auto it = in.find("faces");
+    if (it == in.end()) return {};
+    auto s = std::get_if<std::string>(&it->second);
+    return s ? *s : std::string();
+  }
+
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
     const Document& doc = docOf(ctx);
     const std::string name = getString(in, "sketch");
-    if (!sketchFor(doc, name))
+    if (!facesOf(in).empty()) {
+      if (getString(in, "target").empty() ? doc.bodies().empty() : !doc.body(getString(in, "target")))
+        return "Faces: the body they belong to does not exist";
+    } else if (!sketchFor(doc, name))
       return name.empty() ? "Sketch: there is no sketch to extrude; create one first"
                           : "Sketch: '" + name + "' does not exist";
     if (getString(in, "extent") == "Distance" && std::abs(getReal(in, "distance")) < 1e-9)
@@ -418,25 +434,68 @@ public:
     // Inputs added after a feature was created get their defaults.
     for (const auto& d : def_.inputs)
       if (!in.count(d.id)) in[d.id] = d.defaultValue;
+    const Document& doc = docOf(ctx);
+    if (!facesOf(in).empty()) {
+      // Faces belong to the target body; record it and complete the references.
+      if (getString(in, "target").empty() && !doc.bodies().empty()) in["target"] = doc.bodies().back().name;
+      if (const auto b = doc.body(getString(in, "target"))) {
+        try {
+          in["faces"] = kernel::completeFaceReferences(b->shape, facesOf(in));
+        } catch (const kernel::KernelError& e) {
+          throw CommandError(std::string("Faces: ") + e.what());
+        }
+      }
+      return;
+    }
     // Record which sketch was meant, so later sketches do not change it.
     if (getString(in, "sketch").empty())
-      if (auto rec = sketchFor(docOf(ctx), "")) in["sketch"] = rec->name;
+      if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+  }
+
+  // Flat faces of the target body and their common outward normal.
+  static std::pair<std::vector<TopoDS_Shape>, gp_Dir> bodyFaces(const Document& doc, const Inputs& in) {
+    std::string target = getString(in, "target");
+    if (target.empty() && !doc.bodies().empty()) target = doc.bodies().back().name;
+    const auto body = doc.body(target);
+    if (!body) throw CommandError("Faces: body '" + target + "' does not exist");
+    std::vector<TopoDS_Shape> faces;
+    try {
+      faces = kernel::resolveFaces(body->shape, facesOf(in));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(std::string("Faces: ") + e.what());
+    }
+    std::optional<gp_Dir> normal;
+    for (const auto& f : faces) {
+      BRepAdaptor_Surface s(TopoDS::Face(f), true);
+      if (s.GetType() != GeomAbs_Plane) throw CommandError("Faces: only flat faces can be extruded");
+      gp_Dir n = s.Plane().Axis().Direction();
+      if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+      if (!normal) normal = n;
+      else if (!normal->IsParallel(n, 1e-6)) throw CommandError("Faces: the picked faces must face the same way");
+    }
+    if (!normal) throw CommandError("Faces: none picked");
+    return {faces, *normal};
   }
 
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
-    const auto rec = sketchFor(doc, getString(in, "sketch"));
-    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
-    SketchProfiles sp;
-    try {
-      sp = profilesOf(doc, *rec);
-    } catch (const sketch::SketchError& e) {
-      throw CommandError(e.what());
+    std::vector<TopoDS_Shape> faces;
+    gp_Dir n;
+    if (!facesOf(in).empty()) {
+      std::tie(faces, n) = bodyFaces(doc, in);
+    } else {
+      const auto rec = sketchFor(doc, getString(in, "sketch"));
+      if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+      SketchProfiles sp;
+      try {
+        sp = profilesOf(doc, *rec);
+      } catch (const sketch::SketchError& e) {
+        throw CommandError(e.what());
+      }
+      if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
+      faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
+      n = sp.frame.Direction();
     }
-    if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
-
-    const auto faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
-    const gp_Dir n = sp.frame.Direction();
     auto real = [&](const char* id, double fallback) {
       auto it = in.find(id);
       return it == in.end() ? fallback : getReal(in, id);

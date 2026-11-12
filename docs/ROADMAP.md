@@ -12,7 +12,7 @@ Each phase ends with something usable; nothing below is promised by date.
 | P1 | 3D viewport, ViewCube, navigation, primitives with booleans, parametric timeline (edit/suppress/delete) | done |
 | P2 | **Sketching + Extrude**: sketch on a plane or face; line, rectangle, circle, arc, point, construction; constraints and dimensions with our own solver; fully-constrained colouring; Extrude with profile picking | **done (this release)** |
 | P3a | **Revolve, Fillet, Chamfer** with edge picking that survives edits | **done (this release)** |
-| P3b | **More features**: Shell, Hole, Sweep, Loft, Draft; extrude To Object/All/taper; trim/offset/spline/fillet in sketches; in-canvas drag arrows; topological naming | next |
+| P3b | **More features**: Shell, Hole, Sweep, Loft, Draft; extrude To Object/All/taper; trim/offset/spline/fillet in sketches; in-canvas drag arrows ✅ (Extrude, Press Pull, Fillet, Chamfer); topological naming | next |
 | P4 | **Construction and patterns**: offset/angle/midplane planes, axes, points; rectangular/circular/path patterns; mirror; Combine, Split Body, Move/Copy, Press Pull | |
 | P5 | **Parameters and expressions**: `d1 = width/2 + 3 mm`, parameter table, every input accepts expressions | **done** (model parameter names `d1` still to come) |
 | P6 | **Components and assemblies**: components, joints (rigid, revolute, slider, ...), motion, interference | |
@@ -29,7 +29,7 @@ icons, file formats that are not publicly documented, or product names.
 
 Tracked against the menus people know. Done = usable today.
 
-**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Hole ✅ (simple, counterbore, countersink) · Rectangular Pattern ✅ · Circular Pattern ✅ · Sweep ✅ · Loft ✅ · Rib · Web · Emboss · Thread · Coil · Pipe · Path Pattern · Thicken · Boundary Fill · Create Form (T-splines, later)
+**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper, body faces, drag arrow) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Hole ✅ (simple, counterbore, countersink) · Rectangular Pattern ✅ · Circular Pattern ✅ · Sweep ✅ · Loft ✅ · Rib · Web · Emboss · Thread · Coil · Pipe · Path Pattern · Thicken · Boundary Fill · Create Form (T-splines, later)
 
 **Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull ✅ · Draft · Offset Face · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) ✅ · Compute All
 
