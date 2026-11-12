@@ -20,10 +20,6 @@ SketchPalette::SketchPalette(SketchEditor* editor, QWidget* parent) : QDialog(pa
   setProperty("panel", true);
   setAutoFillBackground(true);
   setMinimumWidth(250);
-  // Unchecked boxes need a visible outline on the dark panel.
-  setStyleSheet(QStringLiteral("QCheckBox::indicator:unchecked { width: 12px; height: 12px; border: 1px solid #8a93a0;"
-                               " border-radius: 2px; background: transparent; }"
-                               "QCheckBox::indicator:unchecked:disabled { border: 1px solid #5b6472; }"));
 
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(10, 6, 10, 8);

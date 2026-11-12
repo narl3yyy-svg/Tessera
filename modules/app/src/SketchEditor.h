@@ -163,6 +163,7 @@ private:
   // Click and drag from the end of a line (Line tool): a tangent arc.
   bool arcDrag_ = false;
   bool arcDragMoved_ = false;
+  bool arcEndsChain_ = false;   // started by a double-click: no drag ends the chain
   int arcFrom_ = -1;   // the point it starts at
   int arcRef_ = -1;    // the curve it is tangent to
   bool tangentArc(double x, double y, double& cx, double& cy, double& r, bool& ccw) const;

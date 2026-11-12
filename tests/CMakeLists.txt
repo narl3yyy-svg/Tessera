@@ -78,5 +78,13 @@ if(TSR_WITH_QT)
                      $<TARGET_FILE:tessera> --script ${PROJECT_SOURCE_DIR}/examples/demo_model.py
                                             --screenshot ${CMAKE_CURRENT_BINARY_DIR}/gui_render.png)
     set_tests_properties(gui_render PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=xcb;LIBGL_ALWAYS_SOFTWARE=1")
+    # Live tests: the real app on Xvfb driven by real X11 mouse/keyboard input
+    # (scripts/xdrive.py, XTest), with the saved design checked afterwards.
+    add_test(NAME live_line_tool
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/line_tool.drive ""
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/line_tool_check.py)
+    add_test(NAME live_extrude_section
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/extrude_arrow.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_sketch.py ${CMAKE_CURRENT_SOURCE_DIR}/live/extrude_arrow_check.py)
   endif()
 endif()

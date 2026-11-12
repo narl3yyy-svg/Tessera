@@ -28,6 +28,13 @@ The build must have **zero compiler warnings**. Only the dependency-free core:
 | `api_*` | Python scripts in `tests/api/` run through `tessera-cli`, one per feature area |
 | `gui_smoke` | the real window driven through commands, sketch mode and panels (offscreen) |
 | `gui_render` | an OpenGL render of `examples/demo_model.py` under `xvfb-run` |
+| `live_*` | the real app on Xvfb driven by real X11 mouse and keyboard input (`scripts/xdrive.py`, XTest), the saved design then checked with a Python script; scripts in `tests/live/` |
+
+Live tests: `scripts/live-test.sh tests/live/<name>.drive [setup.py] [check.py]`. The app runs with
+`--live-geometry FILE`, which keeps writing where its named widgets, the canvas, the drag arrow, the origin planes
+(while picking) and the open sketch are on screen, so a `.drive` script can say `click tsr.feature.extrude`,
+`sclick 40 0` (sketch mm), `adrag 0 -120` (the arrow) or `plane XY`; `shot FILE` saves a screenshot. Needs
+`xvfb-run` and libXtst (no other packages).
 
 Screenshots for visual checks: `tessera --script examples/<demo>.py --screenshot out.png`; add
 `--start-command <id>`, `--edit-sketch <name>` or `--demo-hud` to show a panel, sketch mode or the size boxes.

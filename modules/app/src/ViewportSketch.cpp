@@ -234,6 +234,7 @@ void Viewport::setPlanePicking(bool on) {
   if (context_.IsNull()) return;
   for (auto& [shape, spec] : planeObjects_) context_->Remove(shape, false);
   planeObjects_.clear();
+  planeCentres_.clear();
   if (on) {
     // Origin planes as small translucent squares in the positive quadrants
     // (sized to the view), the origin axes and the origin point. The plane
@@ -259,6 +260,7 @@ void Viewport::setPlanePicking(bool on) {
       s->SetDynamicHilightAttributes(hover);
       context_->Display(s, AIS_Shaded, 0, false);
       planeObjects_.emplace_back(s, spec);
+      planeCentres_.emplace_back(spec, sketch::toWorld(frame, gap + size / 2, gap + size / 2));
     }
     const struct { gp_Dir d; Quantity_Color c; } axes[] = {
         {gp::DX(), rgb(220, 60, 60)}, {gp::DY(), rgb(70, 200, 80)}, {gp::DZ(), rgb(60, 110, 235)}};
@@ -373,8 +375,10 @@ void Viewport::setSection(bool on, const gp_Pln& plane) {
       m.SetAmbientColor(rgb(214, 96, 70));
       clip_->SetCappingMaterial(m);
     }
-    // Graphic3d clips away the side the plane normal points to.
-    clip_->SetEquation(plane);
+    // Graphic3d keeps the side the equation's normal points to, so give it
+    // the reversed normal: what lies in the direction of `plane`'s normal
+    // (the way the section arrow points) is cut away.
+    clip_->SetEquation(gp_Pln(plane.Location(), plane.Axis().Direction().Reversed()));
     clip_->SetOn(true);
   }
   if (glReady_) rebuild();

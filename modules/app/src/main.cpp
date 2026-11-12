@@ -11,6 +11,12 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QAbstractSpinBox>
+#include <QComboBox>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLineEdit>
 
@@ -487,6 +493,79 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
 
 } // namespace
 
+// Where things are on screen, for an external input driver: the window, the
+// canvas, every named visible button / field / combo, open panels, and (in
+// a sketch) where sketch points (0,0), (1,0) and (0,1) cm appear.
+// The window plus any tool windows / panels drawn over it.
+QPixmap grabWindowWithPanels(QWidget& window) {
+  QPixmap shot = window.grab();
+  QPainter p(&shot);
+  for (QWidget* top : QApplication::topLevelWidgets())
+    if (top != &window && top->isVisible() && top->parentWidget() == &window)
+      p.drawPixmap(top->frameGeometry().topLeft() - window.frameGeometry().topLeft(), top->grab());
+  return shot;
+}
+
+void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
+  // Requests from the driver: a screenshot, or quitting.
+  if (QFile req(file + QStringLiteral(".shot")); req.exists() && req.open(QIODevice::ReadOnly)) {
+    const QString out = QString::fromUtf8(req.readAll()).trimmed();
+    req.close();
+    grabWindowWithPanels(w).save(out);
+    QFile::remove(file + QStringLiteral(".shot"));
+  }
+  if (QFile::exists(file + QStringLiteral(".quit"))) {
+    QFile::remove(file + QStringLiteral(".quit"));
+    QApplication::exit(0);
+    return;
+  }
+  auto rect = [](QWidget* x) {
+    const QPoint p = x->mapToGlobal(QPoint(0, 0));
+    return QJsonArray{p.x(), p.y(), x->width(), x->height()};
+  };
+  QJsonObject o;
+  o[QStringLiteral("window")] = rect(&w);
+  o[QStringLiteral("viewport")] = rect(w.viewport());
+  QJsonObject widgets;
+  for (QWidget* x : w.findChildren<QWidget*>()) {
+    if (x->objectName().isEmpty() || !x->isVisible()) continue;
+    if (!qobject_cast<QAbstractButton*>(x) && !qobject_cast<QLineEdit*>(x) && !qobject_cast<QComboBox*>(x) &&
+        !qobject_cast<QAbstractSpinBox*>(x) && !x->property("panel").toBool())
+      continue;
+    // The first visible one of a name wins (ribbon buttons before menu copies).
+    if (!widgets.contains(x->objectName())) widgets[x->objectName()] = rect(x);
+  }
+  o[QStringLiteral("widgets")] = widgets;
+  if (const auto h = w.viewport()->dragArrowHandle()) {
+    const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
+    o[QStringLiteral("arrow")] = QJsonArray{g.x(), g.y()};
+  }
+  if (w.viewport()->planePicking()) {
+    QJsonObject planes;
+    for (const auto& [spec, p] : w.viewport()->planeCentres()) {
+      const QPoint g = w.viewport()->mapToGlobal(w.viewport()->toWidget(p).toPoint());
+      planes[QString::fromStdString(spec)] = QJsonArray{g.x(), g.y()};
+    }
+    o[QStringLiteral("planes")] = planes;
+  }
+  if (auto* ed = w.sketchEditor()) {
+    auto at = [&](double x, double y) {
+      const QPointF p = w.viewport()->toWidget(tsr::sketch::toWorld(ed->frame(), x, y));
+      const QPoint g = w.viewport()->mapToGlobal(p.toPoint());
+      return QJsonArray{g.x(), g.y()};
+    };
+    o[QStringLiteral("sketch")] = QJsonObject{{QStringLiteral("o"), at(0, 0)}, {QStringLiteral("x"), at(1, 0)},   // 1 cm = 10 mm
+                                              {QStringLiteral("y"), at(0, 1)}};
+  }
+  QFile f(file + QStringLiteral(".tmp"));
+  if (f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+    f.close();
+    QFile::remove(file);
+    QFile::rename(file + QStringLiteral(".tmp"), file);
+  }
+}
+
 int main(int argc, char** argv) {
   // OCCT's OpenGL driver on Kubuntu talks GLX, so on a Wayland desktop run
   // through XWayland unless the user chose a platform explicitly.
@@ -522,6 +601,18 @@ int main(int argc, char** argv) {
   parser.addOption(commandOpt);
   QCommandLineOption hudOpt(QStringLiteral("demo-hud"), QStringLiteral("Start a rectangle with its size boxes (screenshots)."));
   parser.addOption(hudOpt);
+  // Live GUI testing on a (virtual) X display: an external driver injects real
+  // mouse/keyboard events (scripts/xdrive.py) and reads where things are.
+  QCommandLineOption geometryOpt(QStringLiteral("live-geometry"),
+                                 QStringLiteral("Keep writing widget and sketch positions (screen pixels) to this JSON file."),
+                                 QStringLiteral("file"));
+  parser.addOption(geometryOpt);
+  QCommandLineOption saveExitOpt(QStringLiteral("save-on-exit"), QStringLiteral("Save the design here when quitting."),
+                                 QStringLiteral("file"));
+  parser.addOption(saveExitOpt);
+  QCommandLineOption quitOpt(QStringLiteral("quit-after"), QStringLiteral("Quit after this many milliseconds."),
+                             QStringLiteral("ms"));
+  parser.addOption(quitOpt);
   parser.addOption(smokeOpt);
   parser.addOption(scriptOpt);
   parser.addOption(shotOpt);
@@ -546,6 +637,24 @@ int main(int argc, char** argv) {
   }
 
   window.show();
+  if (parser.isSet(geometryOpt)) {
+    const QString file = parser.value(geometryOpt);
+    auto* timer = new QTimer(&window);
+    QObject::connect(timer, &QTimer::timeout, &window, [&window, file] { writeLiveGeometry(window, file); });
+    timer->start(200);
+  }
+  if (parser.isSet(saveExitOpt)) {
+    const std::string out = parser.value(saveExitOpt).toStdString();
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &window, [&session, out] {
+      try {
+        session.save(out);
+      } catch (const std::exception& e) {
+        std::fprintf(stderr, "tessera: save-on-exit: %s\n", e.what());
+      }
+    });
+  }
+  if (parser.isSet(quitOpt))
+    QTimer::singleShot(parser.value(quitOpt).toInt(), &app, [] { QApplication::exit(0); });
   if (parser.isSet(scriptOpt)) {
     const auto r = python.runScript(parser.value(scriptOpt).toStdString());
     std::fputs(r.output.c_str(), stdout);
@@ -587,14 +696,7 @@ int main(int argc, char** argv) {
     const QString out = parser.value(shotOpt);
     QTimer::singleShot(1500, &window, [&window, out] {
       // The window plus any tool windows open over it (Parameters, Measure).
-      QPixmap shot = window.grab();
-      {
-        QPainter p(&shot);
-        for (QWidget* top : QApplication::topLevelWidgets())
-          if (top != &window && top->isVisible() && top->parentWidget() == &window)
-            p.drawPixmap(top->frameGeometry().topLeft() - window.frameGeometry().topLeft(), top->grab());
-      }
-      const bool ok = shot.save(out);
+      const bool ok = grabWindowWithPanels(window).save(out);
       std::fprintf(ok ? stdout : stderr, "screenshot %s: %s\n", ok ? "saved" : "FAILED", qPrintable(out));
       const bool view3d = window.viewport()->available();
       if (!view3d) std::fprintf(stderr, "screenshot: %s\n", qPrintable(window.viewport()->unavailableReason()));

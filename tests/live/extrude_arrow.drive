@@ -1,0 +1,20 @@
+# Live: Extrude by dragging the arrow up with the real mouse, then OK.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 500
+adrag 0 -120
+wait 300
+shot /tmp/live_extrude.png
+click panelOk
+wait 500
+# Section Analysis: pick the XY plane, drag the arrow, OK.
+click ui.section
+wait 300
+plane XZ
+wait 300
+adrag 0 -60
+shot /tmp/live_section.png
+click sectionOk
+wait 300

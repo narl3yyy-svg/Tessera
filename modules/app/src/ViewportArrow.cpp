@@ -83,6 +83,13 @@ void Viewport::dragArrowForTest(double value) {
   emit dragArrowReleased(value);
 }
 
+std::optional<QPointF> Viewport::dragArrowHandle() const {
+  if (!arrow_) return std::nullopt;
+  const gp_Dir d = arrow_->value < 0 ? arrow_->dir.Reversed() : arrow_->dir;
+  const gp_Pnt tail = arrow_->base.Translated(gp_Vec(arrow_->dir) * arrow_->value);
+  return toWidget(tail.Translated(gp_Vec(d) * modelPerPixel() * kArrowPixels * 0.6));
+}
+
 void Viewport::rebuildArrow() {
   if (!arrow_) return;
   placeArrowBox();

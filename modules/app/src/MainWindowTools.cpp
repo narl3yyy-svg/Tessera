@@ -559,6 +559,8 @@ void MainWindow::openSection() {
   lay->addLayout(form);
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
   auto* remove = buttons->addButton(tr("Remove"), QDialogButtonBox::DestructiveRole);
+  buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("sectionOk"));
+  remove->setObjectName(QStringLiteral("sectionRemove"));
   lay->addWidget(buttons);
 
   auto update = [this, offset, angle, flip, u] {

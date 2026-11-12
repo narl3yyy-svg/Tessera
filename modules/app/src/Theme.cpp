@@ -117,6 +117,8 @@ QPushButton:pressed { background: #3a414c; }
 QPushButton#finishSketch { background: #2b6e47; border-color: #3c8c5d; color: white; font-weight: bold; }
 QPushButton#finishSketch:hover { background: #33804f; }
 QCheckBox, QLabel { color: %TEXT%; }
+QCheckBox::indicator:unchecked { width: 12px; height: 12px; border: 1px solid #8a93a0; border-radius: 2px; background: transparent; }
+QCheckBox::indicator:unchecked:disabled { border: 1px solid #5b6472; }
 QDialog[panel="true"] { background: %BASE%; border: 1px solid #4b525e; border-radius: 4px; }
 QLabel#panelTitle { color: %MUTED%; font-weight: bold; padding: 2px 0 6px 0; border-bottom: 1px solid #4b525e; }
 QToolTip { background: #23272d; color: #e6e9ee; border: 1px solid #4b525e; padding: 4px; }

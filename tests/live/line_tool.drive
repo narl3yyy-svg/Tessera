@@ -1,0 +1,23 @@
+# Live: draw with the Line tool using real mouse input, including snapping,
+# a tangent arc dragged from the end, typed sizes with Tab, then finish.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0             # the origin
+sclick 40 1            # nearly level: snaps horizontal
+sdrag 40 0 60 20       # drag from the end: tangent arc
+sclick 60 50.5         # straight on from the arc: tangent
+key Escape
+shot /tmp/live_line.png
+click sketch.rectangle
+sclick 80 0
+type 30
+key Tab
+type 20
+key Return
+shot /tmp/live_rect.png
+click palette.finish
+wait 800

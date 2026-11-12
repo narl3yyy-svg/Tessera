@@ -116,6 +116,8 @@ public:
   // Origin planes and flat body faces become clickable (Create Sketch).
   void setPlanePicking(bool on);
   bool planePicking() const { return planePicking_; }
+  // While plane picking: the centre of each origin plane's square (tests).
+  const std::vector<std::pair<std::string, gp_Pnt>>& planeCentres() const { return planeCentres_; }
   // Construction planes (name, frame), drawn as translucent squares; they are
   // clickable while plane picking is on.
   void setConstructionPlanes(const std::vector<std::pair<std::string, gp_Ax3>>& planes);
@@ -163,6 +165,8 @@ public:
   QLineEdit* dragArrowBox() const { return arrowBox_; }
   // Tests: as if the arrow were dragged to `value` and released.
   void dragArrowForTest(double value);
+  // Where to grab the arrow (widget coordinates), when there is one.
+  std::optional<QPointF> dragArrowHandle() const;
 
 signals:
   void profileClicked(const QString& sketch, int index);
@@ -233,6 +237,7 @@ private:
   std::vector<Handle(AIS_Shape)> sketchCurves_;
   std::vector<ProfileObject> profileObjects_;
   std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> planeObjects_;
+  std::vector<std::pair<std::string, gp_Pnt>> planeCentres_;
   std::vector<std::pair<std::string, gp_Ax3>> constructionPlanes_;
   std::vector<std::pair<std::string, gp_Ax1>> constructionAxes_;
   std::vector<std::pair<std::string, gp_Pnt>> constructionPoints_;

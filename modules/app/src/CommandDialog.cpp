@@ -315,6 +315,8 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
   error_->setWordWrap(true);
   error_->setStyleSheet(QStringLiteral("color: palette(highlight);"));
   buttons_ = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+  buttons_->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("panelOk"));
+  buttons_->button(QDialogButtonBox::Cancel)->setObjectName(QStringLiteral("panelCancel"));
   connect(buttons_, &QDialogButtonBox::accepted, this, &CommandDialog::accept);
   connect(buttons_, &QDialogButtonBox::rejected, this, &CommandDialog::reject);
 

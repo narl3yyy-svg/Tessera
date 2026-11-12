@@ -467,6 +467,13 @@ bool SketchEditor::tangentArc(double x, double y, double& cx, double& cy, double
 
 void SketchEditor::finishArcDrag(double x, double y) {
   arcDrag_ = false;
+  const bool endsChain = arcEndsChain_;
+  arcEndsChain_ = false;
+  if (endsChain && !arcDragMoved_) {   // a plain double-click on the end: done with this chain
+    resetSteps();
+    rebuild();
+    return;
+  }
   double cx, cy, r;
   bool ccw;
   const Pick end = pickPoint(x, y, arcFrom_);
@@ -904,6 +911,7 @@ void SketchEditor::mousePress(QMouseEvent* e) {
     if (arcRef_ >= 0) {
       arcDrag_ = true;
       arcDragMoved_ = false;
+      arcEndsChain_ = false;
       clearHud();
       return;
     }
@@ -1356,6 +1364,20 @@ void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
   double x, y;
   if (!toSketch(e->position(), x, y)) return;
   if (tool_ == Tool::Line) {
+    // On the chain's end: a press-and-drag there still draws a tangent arc;
+    // a double-click without moving ends the chain (decided on release).
+    if (!steps_.empty() && steps_.back().hit.kind == Hit::Point && snapPoint(x, y) == steps_.back().hit.index) {
+      arcFrom_ = steps_.back().hit.index;
+      arcRef_ = curveEndingAt(arcFrom_);
+      if (arcRef_ >= 0) {
+        pressPos_ = e->position();
+        arcDrag_ = true;
+        arcDragMoved_ = false;
+        arcEndsChain_ = true;
+        clearHud();
+        return;
+      }
+    }
     resetSteps();
     rebuild();
     return;
