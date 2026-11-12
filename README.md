@@ -20,6 +20,13 @@ Status: **P2, early alpha** (`0.1.0-alpha`). What works today:
 - Box, Cylinder, Sphere, Torus and Cone with New Body / Join / Cut / Intersect, target body picked by clicking it
 - Parametric timeline: double-click a feature to change it and everything after it replays; suppress, delete, undo
 - Browser (bodies with visibility, origin, parameters), command search (`S`), right-click menu with Repeat
+- Ribbon laid out like Fusion: CREATE, MODIFY, ASSEMBLE, CONFIGURE, CONSTRUCT, INSPECT, INSERT, SELECT (planned items
+  shown greyed); command panels open inside the canvas
+- MODIFY: Fillet (F), Chamfer, Shell, Combine, Split Body, Move/Copy (M), Scale, Remove; CREATE also has Mirror
+- INSPECT: Measure (I), Interference, Section Analysis, Center of Mass; INSERT: STEP/IGES/STL/BREP files
+- File: Export (STEP, IGES, STL, 3MF, OBJ, BREP, .tsr), 3D Print, Capture Image, Preferences
+- Document Settings > Units (mm default, inches, cm, m); typed values while sketching (e.g. 30, 40 x 20) with live
+  sizes; grid settings and snap to grid; navigation presets (Fusion / SolidWorks / Tinkercad), orbit type, camera
 - Dark theme by default (Display > Dark theme switches to light; remembered between runs)
 - `.tsr` files, unlimited practical undo, Python scripting (`tsr.*` and the start of the `adsk.*` API)
 

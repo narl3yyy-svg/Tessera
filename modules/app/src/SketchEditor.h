@@ -17,6 +17,8 @@
 #include <QPointer>
 #include <QString>
 
+#include "tsr/core/Units.h"
+
 #include <optional>
 #include <vector>
 
@@ -72,6 +74,11 @@ public:
   void mouseMove(QMouseEvent* e) override;
   void mouseRelease(QMouseEvent* e) override;
   void mouseDoubleClick(QMouseEvent* e) override;
+  bool keyPress(QKeyEvent* e) override;
+
+  // Typing a value while drawing (like the on-canvas input): a length for a
+  // line, a diameter for a circle, "w x h" for a rectangle. For tests too.
+  bool typeValue(const QString& text);
 
 signals:
   void changed();
@@ -110,7 +117,13 @@ private:
   std::optional<std::pair<double, double>> labelAnchor(int constraintIndex) const;
   QString labelText(const sketch::Constraint& c) const;
 
+  void snapToGrid(double& x, double& y) const;
+  QString lengthText(double cm) const;
+  void openTypedBox(const QString& initial);
+
   doc::Session& session_;
+  Unit unit_ = Unit::Millimeter;
+  double cursorX_ = 0, cursorY_ = 0;
   QPointer<Viewport> view_;
   QString name_;
   QString plane_;

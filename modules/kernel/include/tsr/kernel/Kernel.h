@@ -110,6 +110,12 @@ struct Measurement {
 };
 Measurement measure(const std::vector<TopoDS_Shape>& picks);
 
+// Full extrude: faces moved `startOffset` along `dir`, then swept from
+// -back to +forward (back = 0 for one side). `taper` (radians, + widens)
+// applies to one-sided extrudes of a single profile at a time.
+TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
+                       double startOffset);
+
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError
 // if OCCT fails or the result is empty (e.g. a cut that removes everything).

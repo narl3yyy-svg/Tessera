@@ -3,6 +3,10 @@
 // (plan §4.2: API-callable before UI-callable) and drives scripted tests.
 #include "Bindings.h"
 #include "tsr/api/PythonHost.h"
+#include "tsr/doc/DocCommands.h"
+#include "tsr/kernel/Io.h"
+
+#include <TopoDS_Shape.hxx>
 
 #include <pybind11/stl.h>
 
@@ -112,6 +116,23 @@ void bindTsr(py::module_& m) {
   m.def("suppress_feature", [](int id, bool suppressed) {
     if (auto err = activeSession().setFeatureSuppressed(id, suppressed); !err.empty()) throw std::runtime_error(err);
   }, py::arg("feature_id"), py::arg("suppressed") = true);
+
+  m.def("export", [](const std::string& path, int refinement) {
+    const auto format = kernel::formatForPath(path);
+    if (!format) throw std::runtime_error("unsupported export type: " + path);
+    std::vector<kernel::NamedShape> bodies;
+    for (const auto& b : activeSession().document().bodies()) bodies.emplace_back(b.name, b.shape);
+    kernel::exportShapes(path, bodies, *format, refinement);
+  }, py::arg("path"), py::arg("refinement") = 1, "Export all bodies (STEP, IGES, STL, OBJ, 3MF, BREP; mm).");
+  m.def("insert", [](const std::string& path) {
+    const TopoDS_Shape s = kernel::importShape(path);
+    if (auto err = activeSession().run(doc::kCmdInsert, {{"source", path}, {"brep", kernel::toBrep(s)}}); !err.empty())
+      throw std::runtime_error(err);
+  }, py::arg("path"), "Insert a STEP, IGES, STL or BREP file as bodies.");
+  m.def("set_units", [](const std::string& unit) {
+    if (auto err = activeSession().run(doc::kCmdUnits, {{"unit", unit}}); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("unit"));
+  m.def("units", [] { return activeSession().document().lengthUnit(); });
 
   m.def("undo", [] { return activeSession().undo(); });
   m.def("redo", [] { return activeSession().redo(); });

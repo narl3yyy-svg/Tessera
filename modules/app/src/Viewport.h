@@ -20,6 +20,7 @@
 #include <gp_Pln.hxx>
 
 #include <QOpenGLWidget>
+#include <QImage>
 #include <QStringList>
 
 #include <map>
@@ -78,6 +79,24 @@ public:
   Style style() const { return style_; }
   void setGridVisible(bool visible);
   void applyTheme();   // background, grid and ViewCube colours
+
+  // Layout grid spacing (cm) and snapping sketch points to it.
+  void setGridSpacing(double cm);
+  double gridSpacing() const { return gridSpacing_; }
+  void setGridSnap(bool on) { gridSnap_ = on; }
+  bool gridSnap() const { return gridSnap_; }
+
+  // Navigation (Preferences): mouse scheme, zoom direction, orbit, camera.
+  enum class NavPreset { Fusion, SolidWorks, Tinkercad };
+  void setNavigation(NavPreset preset, bool reverseZoom, bool constrainedOrbit, bool perspective);
+  NavPreset navPreset() const { return navPreset_; }
+  bool perspective() const { return perspective_; }
+
+  // What a normal click selects: empty = whole bodies.
+  void setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types);
+  const std::vector<TopAbs_ShapeEnum>& selectionFilter() const { return selectFilter_; }
+
+  QImage capture();   // the canvas as an image
   // Bodies drawn see-through (while a sketch is being edited).
   void setBodiesGhosted(bool on);
   bool gridVisible() const { return grid_; }
@@ -198,6 +217,14 @@ private:
   std::string pickedSketch_;
   std::vector<int> pickedProfiles_;
   ViewInteractor* interactor_ = nullptr;
+
+  double gridSpacing_ = 1.0;
+  bool gridSnap_ = false;
+  NavPreset navPreset_ = NavPreset::Fusion;
+  bool reverseZoom_ = false;
+  bool perspective_ = false;
+  std::vector<TopAbs_ShapeEnum> selectFilter_;
+  void bindNavigation();
 
   bool orbitTool_ = false;
   bool panTool_ = false;

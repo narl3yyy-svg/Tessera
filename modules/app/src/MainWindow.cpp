@@ -10,6 +10,8 @@
 #include "tsr/kernel/Kernel.h"
 
 #include <QActionGroup>
+#include <QCursor>
+#include <QSettings>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QComboBox>
@@ -44,6 +46,8 @@ const QString kFilter = QStringLiteral("Tessera designs (*.tsr)");
 constexpr int kFeatureIdRole = Qt::UserRole + 1;
 constexpr int kBodyRole = Qt::UserRole + 2;
 constexpr int kSketchRole = Qt::UserRole + 3;
+constexpr int kUnitsRole = Qt::UserRole + 4;
+constexpr int kAnalysisRole = Qt::UserRole + 5;
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -68,6 +72,7 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   resize(1440, 900);
   setDockOptions(QMainWindow::AnimatedDocks | QMainWindow::AllowNestedDocks);
 
+  buildUiCommands();
   buildAppBar();
   addToolBarBreak();
   buildRibbon();
@@ -85,8 +90,20 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       sketchVisibility_[sketch.toStdString()] = item->checkState(0) == Qt::Checked;
       QTimer::singleShot(0, this, [this] { refresh(); });
     }
+    if (item->data(0, kAnalysisRole).toBool()) {
+      section_.visible = item->checkState(0) == Qt::Checked;
+      QTimer::singleShot(0, this, [this] { applySection(); });
+    }
+  });
+  connect(browser_, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
+    if (item->data(0, kUnitsRole).toBool())
+      QTimer::singleShot(0, this, [this, item] { chooseUnits(QCursor::pos()); });
   });
   connect(browser_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int) {
+    if (item->data(0, kAnalysisRole).toBool()) {
+      QTimer::singleShot(0, this, [this] { openSection(); });
+      return;
+    }
     const QString sketch = item->data(0, kSketchRole).toString();
     if (sketch.isEmpty()) return;
     for (const auto& f : session_.document().features())
@@ -129,13 +146,21 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   setCentralWidget(viewport_);
   connect(viewport_, &Viewport::contextMenuRequested, this, &MainWindow::showContextMenu);
   connect(viewport_, &Viewport::profileClicked, this, &MainWindow::onProfileClicked);
-  connect(viewport_, &Viewport::subShapeClicked, this, &MainWindow::onEdgeClicked);
+  connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
+    if (measure_) measurePick(shape);
+    else onEdgeClicked(body, shape);
+  });
   connect(viewport_, &Viewport::planePicked, this, [this](const QString& spec, const QString& label) {
     viewport_->setPlanePicking(false);
     if (startSketch(spec)) statusBar()->showMessage(tr("Sketching on %1.").arg(label), 4000);
   });
   connect(viewport_, &Viewport::statusMessage, this, [this](const QString& m) { statusBar()->showMessage(m, 5000); });
   connect(viewport_, &Viewport::bodyClicked, this, [this](const QString& name) {
+    if (measure_) {
+      measurePick(viewport_->bodyShape(name));
+      viewport_->clearSelection();
+      return;
+    }
     if (active_ && active_->hasBodiesInput() && !active_->currentBody().isEmpty() && active_->currentBody() != name) {
       // Combine: further bodies toggle in the tool list.
       QStringList tools = active_->currentTools().split(QLatin1Char(';'), Qt::SkipEmptyParts);
@@ -156,9 +181,10 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   buildNavBar();
   buildShortcuts();
 
-  auto* units = new QLabel(tr("Units: mm"));
-  units->setContentsMargins(8, 0, 8, 0);
-  statusBar()->addPermanentWidget(units);
+  unitsLabel_ = new QLabel;
+  unitsLabel_->setContentsMargins(8, 0, 8, 0);
+  statusBar()->addPermanentWidget(unitsLabel_);
+  applyPreferences();
 
   connect(&Theme::instance(), &Theme::changed, this, [this] {
     retintIcons(this);
@@ -169,7 +195,16 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   refresh();
 }
 
-MainWindow::~MainWindow() { session_.removeListener(listener_); }
+MainWindow::~MainWindow() {
+  session_.removeListener(listener_);
+  // Panels and tools are children of the canvas; take them down before the
+  // window's own members go, without their callbacks into this window.
+  for (QObject* o : {static_cast<QObject*>(active_.data()), static_cast<QObject*>(measure_.data())})
+    if (o) {
+      disconnect(o, nullptr, this, nullptr);
+      delete o;
+    }
+}
 
 // ---------------------------------------------------------------------------
 void MainWindow::buildAppBar() {
@@ -183,7 +218,10 @@ void MainWindow::buildAppBar() {
   auto* fileMenu = new QMenu(this);
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("document-new")), tr("&New Design"), QKeySequence::New, this,
                       [this] {
-                        if (maybeSave()) session_.newDocument();
+                        if (!maybeSave()) return;
+                        session_.newDocument();
+                        const QString u = QSettings().value(QStringLiteral("doc/defaultUnits"), QStringLiteral("mm")).toString();
+                        if (u != QLatin1String("mm")) (void)session_.run(doc::kCmdUnits, {{"unit", u.toStdString()}});
                       });
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("document-open")), tr("&Open…"), QKeySequence::Open, this,
                       [this] { openFile(); });
@@ -194,6 +232,13 @@ void MainWindow::buildAppBar() {
                                       });
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("document-save-as")), tr("Save &As…"), QKeySequence::SaveAs,
                       this, [this] { saveAs(); });
+  setIcon(fileMenu->addAction(tr("Export…"), this, [this] { exportDesign(); }), QStringLiteral("export"));
+  setIcon(fileMenu->addAction(tr("Insert Mesh / CAD File…"), this, [this] { insertFile(); }), QStringLiteral("insert"));
+  fileMenu->addSeparator();
+  setIcon(fileMenu->addAction(tr("3D Print…"), this, [this] { print3d(); }), QStringLiteral("print"));
+  setIcon(fileMenu->addAction(tr("Capture Image…"), this, [this] { captureImage(); }), QStringLiteral("image"));
+  fileMenu->addSeparator();
+  setIcon(fileMenu->addAction(tr("Preferences…"), this, [this] { showPreferences(); }), QStringLiteral("preferences"));
   fileMenu->addSeparator();
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("text-x-python")), tr("&Run Script…"), this,
                       [this] { runScript(); });
@@ -271,68 +316,109 @@ void MainWindow::buildRibbon() {
   wf.setBold(true);
   workspace->setFont(wf);
 
-  // tab -> panel -> commands, each in first-registered order.
-  std::vector<std::string> tabs;
-  std::map<std::string, std::vector<std::string>> panels;
-  std::map<std::pair<std::string, std::string>, std::vector<const Command*>> cmds;
+  // Entries: document commands plus tool commands, grouped by tab and panel
+  // in the familiar order. A panel shows its first few entries as large
+  // buttons; its title opens a menu with all of them and their shortcuts.
+  struct Entry {
+    QString id, name, tooltip, icon, shortcut;
+    bool enabled;
+    std::function<void()> run;
+  };
+  const std::vector<std::string> panelOrder = {"Create", "Modify", "Assemble", "Configure", "Construct", "Inspect", "Insert", "Select"};
+  std::map<std::string, std::vector<Entry>> panels;
   for (const Command* c : session_.commands().all()) {
     const CommandDef& d = c->def();
-    if (!panels.count(d.tab)) tabs.push_back(d.tab);
-    auto& ps = panels[d.tab];
-    if (std::find(ps.begin(), ps.end(), d.panel) == ps.end()) ps.push_back(d.panel);
-    cmds[{d.tab, d.panel}].push_back(c);
+    if (d.panel.empty()) continue;   // reached another way (Document Settings, Insert)
+    const QString id = qs(d.id);
+    panels[d.panel].push_back({id, qs(d.name), qs(d.tooltip), qs(d.icon), qs(d.shortcut), true,
+                               [this, id] { startCommand(id); }});
   }
+  for (const auto& u : uiCommands_)
+    panels[u.panel].push_back({qs(u.id), qs(u.name), qs(u.tooltip), qs(u.icon), qs(u.shortcut), u.enabled, u.run});
 
-  for (const auto& tab : tabs) {
-    auto* page = new QWidget;
-    auto* row = new QHBoxLayout(page);
-    row->setContentsMargins(6, 2, 6, 2);
-    row->setSpacing(2);
-    for (const auto& panel : panels[tab]) {
-      auto* box = new QWidget;
-      box->setObjectName(qs(tab + "." + panel));
-      auto* col = new QVBoxLayout(box);
-      col->setContentsMargins(4, 0, 4, 0);
-      col->setSpacing(0);
-      auto* buttons = new QHBoxLayout;
-      buttons->setSpacing(0);
-      auto* menu = new QMenu(box);
-      for (const Command* c : cmds[{tab, panel}]) {
-        const CommandDef& d = c->def();
-        const QString id = qs(d.id);
-        auto* b = new QToolButton;
-        b->setObjectName(id);
-        b->setText(qs(d.name));
-        setIcon(b, qs(d.icon));
-        b->setIconSize(QSize(32, 32));
-        b->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        b->setAutoRaise(true);
-        b->setToolTip(QStringLiteral("<b>%1</b><br>%2").arg(qs(d.name), qs(d.tooltip)));
-        b->setAccessibleName(qs(d.name));
-        connect(b, &QToolButton::clicked, this, [this, id] { startCommand(id); });
-        buttons->addWidget(b);
-        setIcon(menu->addAction(qs(d.name), this, [this, id] { startCommand(id); }), qs(d.icon));
+  auto* page = new QWidget;
+  auto* row = new QHBoxLayout(page);
+  row->setContentsMargins(6, 2, 6, 2);
+  row->setSpacing(2);
+  for (const auto& panel : panelOrder) {
+    const auto it = panels.find(panel);
+    if (it == panels.end()) continue;
+    auto* box = new QWidget;
+    box->setObjectName(qs("Solid." + panel));
+    auto* col = new QVBoxLayout(box);
+    col->setContentsMargins(4, 0, 4, 0);
+    col->setSpacing(0);
+    auto* buttons = new QHBoxLayout;
+    buttons->setSpacing(0);
+    auto* menu = new QMenu(box);
+    const size_t maxButtons = panel == "Create" || panel == "Modify" ? 7 : 3;
+    size_t shown = 0;
+    for (const Entry& e : it->second) {
+      const QString tip = QStringLiteral("<b>%1</b>%2<br>%3")
+                              .arg(e.name, e.shortcut.isEmpty() ? QString() : QStringLiteral(" &nbsp;(%1)").arg(e.shortcut),
+                                   e.tooltip);
+      if (e.enabled && shown < maxButtons) {
+        auto* btn = new QToolButton;
+        btn->setObjectName(e.id);
+        btn->setText(e.name);
+        setIcon(btn, e.icon);
+        btn->setIconSize(QSize(30, 30));
+        btn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        btn->setAutoRaise(true);
+        btn->setToolTip(tip);
+        btn->setAccessibleName(e.name);
+        auto run = e.run;
+        connect(btn, &QToolButton::clicked, this, [run] { run(); });
+        buttons->addWidget(btn);
+        ++shown;
       }
-      col->addLayout(buttons);
-      auto* title = new QToolButton;
-      title->setText(qs(panel).toUpper() + QStringLiteral(" ▾"));
-      title->setPopupMode(QToolButton::InstantPopup);
-      title->setMenu(menu);
-      title->setAutoRaise(true);
-      title->setToolButtonStyle(Qt::ToolButtonTextOnly);
-      QFont f = title->font();
-      f.setPointSizeF(f.pointSizeF() * 0.85);
-      title->setFont(f);
-      col->addWidget(title, 0, Qt::AlignHCenter);
-      row->addWidget(box);
-
-      auto* sep = new QFrame;
-      sep->setFrameShape(QFrame::VLine);
-      sep->setFrameShadow(QFrame::Sunken);
-      row->addWidget(sep);
+      // The text after a tab is shown as the shortcut column.
+      QAction* a = menu->addAction(e.shortcut.isEmpty() ? e.name : e.name + QLatin1Char('\t') + e.shortcut);
+      a->setObjectName(e.id);
+      a->setToolTip(tip);
+      setIcon(a, e.icon);
+      a->setEnabled(e.enabled);
+      if (e.enabled) {
+        auto run = e.run;
+        connect(a, &QAction::triggered, this, [run] { run(); });
+      } else {
+        a->setText(a->text() + tr("  (planned)"));
+      }
     }
-    row->addStretch();
-    ribbon_->addTab(page, qs(tab).toUpper());
+    if (shown == 0) {
+      // Planned-only panel: one greyed button keeps the layout recognisable.
+      auto* btn = new QToolButton;
+      setIcon(btn, it->second.front().icon);
+      btn->setIconSize(QSize(30, 30));
+      btn->setAutoRaise(true);
+      btn->setEnabled(false);
+      btn->setToolTip(tr("Planned: see ROADMAP.md."));
+      buttons->addWidget(btn);
+    }
+    col->addLayout(buttons);
+    auto* title = new QToolButton;
+    title->setText(qs(panel).toUpper() + QStringLiteral(" \u25BE"));
+    title->setPopupMode(QToolButton::InstantPopup);
+    title->setMenu(menu);
+    title->setAutoRaise(true);
+    title->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    QFont f = title->font();
+    f.setPointSizeF(f.pointSizeF() * 0.85);
+    title->setFont(f);
+    col->addWidget(title, 0, Qt::AlignHCenter);
+    row->addWidget(box);
+    auto* sep = new QFrame;
+    sep->setFrameShape(QFrame::VLine);
+    sep->setFrameShadow(QFrame::Sunken);
+    row->addWidget(sep);
+  }
+  row->addStretch();
+  ribbon_->addTab(page, QStringLiteral("SOLID"));
+  // Workspace tabs that are planned, disabled like the planned panels.
+  for (const char* t : {"SURFACE", "MESH", "SHEET METAL", "PLASTIC", "MANAGE", "UTILITIES"}) {
+    const int i = ribbon_->addTab(new QWidget, QString::fromLatin1(t));
+    ribbon_->setTabEnabled(i, false);
+    ribbon_->setTabToolTip(i, tr("Planned: see ROADMAP.md."));
   }
 
   auto* bar = new QToolBar(tr("Ribbon"));
@@ -366,6 +452,27 @@ void MainWindow::buildNavBar() {
     if (on) orbit->setChecked(false);
     viewport_->setPanTool(on);
   });
+  {
+    // Orbit type, like the orbit button's dropdown.
+    auto* orbitMenu = new QMenu(orbit);
+    auto* group = new QActionGroup(orbitMenu);
+    QAction* free = orbitMenu->addAction(tr("Free Orbit"));
+    QAction* constrained = orbitMenu->addAction(tr("Constrained Orbit"));
+    for (QAction* a : {free, constrained}) {
+      a->setCheckable(true);
+      group->addAction(a);
+    }
+    const bool c = QSettings().value(QStringLiteral("nav/constrainedOrbit"), false).toBool();
+    (c ? constrained : free)->setChecked(true);
+    auto setOrbit = [this](bool constrainedOrbit) {
+      QSettings().setValue(QStringLiteral("nav/constrainedOrbit"), constrainedOrbit);
+      applyPreferences();
+    };
+    connect(free, &QAction::triggered, this, [setOrbit] { setOrbit(false); });
+    connect(constrained, &QAction::triggered, this, [setOrbit] { setOrbit(true); });
+    orbit->setMenu(orbitMenu);
+    orbit->setPopupMode(QToolButton::MenuButtonPopup);
+  }
   auto* fitB = flatButton(QStringLiteral("fit"), tr("Fit (F6)"));
   connect(fitB, &QToolButton::clicked, viewport_, &Viewport::fitAll);
   auto* homeB = flatButton(QStringLiteral("home"), tr("Home view (Home)"));
@@ -404,10 +511,40 @@ void MainWindow::buildNavBar() {
     styles->addAction(a);
   }
   displayMenu->addSeparator();
-  QAction* grid = displayMenu->addAction(tr("Layout grid"));
+  auto* cameraGroup = new QActionGroup(displayMenu);
+  QAction* ortho = displayMenu->addAction(tr("Orthographic"));
+  QAction* persp = displayMenu->addAction(tr("Perspective"));
+  for (QAction* a : {ortho, persp}) {
+    a->setCheckable(true);
+    cameraGroup->addAction(a);
+  }
+  (QSettings().value(QStringLiteral("nav/perspective"), false).toBool() ? persp : ortho)->setChecked(true);
+  connect(ortho, &QAction::triggered, this, [this] {
+    QSettings().setValue(QStringLiteral("nav/perspective"), false);
+    applyPreferences();
+  });
+  connect(persp, &QAction::triggered, this, [this] {
+    QSettings().setValue(QStringLiteral("nav/perspective"), true);
+    applyPreferences();
+  });
+
+  // Grid and snaps.
+  auto* gridButton = flatButton(QStringLiteral("grid"), tr("Grid and snaps"));
+  gridButton->setPopupMode(QToolButton::InstantPopup);
+  auto* gridMenu = new QMenu(gridButton);
+  QAction* grid = gridMenu->addAction(tr("Layout Grid"));
   grid->setCheckable(true);
   grid->setChecked(true);
   connect(grid, &QAction::toggled, viewport_, &Viewport::setGridVisible);
+  QAction* snap = gridMenu->addAction(tr("Snap to Grid"));
+  snap->setCheckable(true);
+  snap->setChecked(QSettings().value(QStringLiteral("grid/snap"), false).toBool());
+  connect(snap, &QAction::toggled, this, [this](bool on) {
+    QSettings().setValue(QStringLiteral("grid/snap"), on);
+    viewport_->setGridSnap(on);
+  });
+  setIcon(gridMenu->addAction(tr("Grid Settings…"), this, [this] { gridSettings(); }), QStringLiteral("grid"));
+  gridButton->setMenu(gridMenu);
   displayMenu->addSeparator();
   QAction* darkTheme = displayMenu->addAction(tr("Dark theme"));
   darkTheme->setObjectName(QStringLiteral("darkTheme"));
@@ -418,7 +555,7 @@ void MainWindow::buildNavBar() {
   });
   display->setMenu(displayMenu);
 
-  for (QWidget* w : std::initializer_list<QWidget*>{orbit, pan, fitB, homeB, views, display}) row->addWidget(w);
+  for (QWidget* w : std::initializer_list<QWidget*>{orbit, pan, fitB, homeB, views, display, gridButton}) row->addWidget(w);
   navBar_->adjustSize();
   viewport_->installEventFilter(this);
 }
@@ -443,7 +580,8 @@ void MainWindow::buildShortcuts() {
   add(QKeySequence(Qt::Key_F6), [this] { viewport_->fitAll(); });
   add(QKeySequence(Qt::Key_Home), [this] { viewport_->home(); });
   add(QKeySequence(Qt::Key_Escape), [this] {
-    if (editor_) editor_->escape();
+    if (measure_) measure_->close();
+    else if (editor_) editor_->escape();
     else if (viewport_->planePicking()) {
       viewport_->setPlanePicking(false);
       statusBar()->showMessage(tr("Create Sketch cancelled."), 3000);
@@ -476,6 +614,13 @@ void MainWindow::buildShortcuts() {
     if (editor_ && constructionButton_) constructionButton_->click();
   });
   sketchShortcuts_.push_back(x);
+  for (const auto& u : uiCommands_)
+    if (u.enabled && !u.shortcut.empty()) {
+      auto run = u.run;
+      add(QKeySequence(qs(u.shortcut)), [this, run] {
+        if (!editor_) run();
+      });
+    }
   for (const Command* c : session_.commands().all())
     if (!c->def().shortcut.empty()) {
       const QString id = qs(c->def().id);
@@ -493,6 +638,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
     navBar_->adjustSize();
     navBar_->move((viewport_->width() - navBar_->width()) / 2, viewport_->height() - navBar_->height() - 10);
     navBar_->raise();
+    if (active_) placeDialog(active_);
   }
   return QMainWindow::eventFilter(watched, e);
 }
@@ -534,15 +680,23 @@ CommandDialog* MainWindow::editFeature(int featureId) {
 CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   auto* dlg = new CommandDialog(session_, std::move(cmd), this);
   dlg->setAttribute(Qt::WA_DeleteOnClose);
-  dlg->setWindowFlag(Qt::Tool);
+  // Command panels live inside the canvas, top right, like the familiar layout.
+  dlg->setParent(viewport_, Qt::Widget);
+  dlg->setProperty("panel", true);
+  dlg->setAutoFillBackground(true);
   active_ = dlg;
-  connect(dlg, &QObject::destroyed, this, [this] {
+  connect(dlg, &CommandDialog::inputsChanged, this, [this] { updateProfilePicking(); });
+  // Embedded panels are not windows, so closing does not delete them: finish
+  // here, synchronously, so the next command can start at once.
+  connect(dlg, &QDialog::finished, this, [this, dlg] {
+    if (active_ == dlg) active_ = nullptr;
+    dlg->hide();
+    dlg->deleteLater();
     viewport_->setProfilePicking(false);
-    viewport_->setEdgePicking(false);
+    viewport_->setSubShapePicking({});
     pickedEdges_.clear();
     refresh();
   });
-  connect(dlg, &CommandDialog::inputsChanged, this, [this] { updateProfilePicking(); });
   dlg->show();
   placeDialog(dlg);
   refresh();
@@ -566,8 +720,14 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
 }
 
 void MainWindow::placeDialog(QWidget* dlg) {
-  // Upper right of the canvas, clear of the ViewCube.
   dlg->adjustSize();
+  if (dlg->parentWidget() == viewport_ && !dlg->isWindow()) {
+    // Embedded panel: right edge of the canvas, below the ViewCube.
+    dlg->move(viewport_->width() - dlg->width() - 12, 150);
+    dlg->raise();
+    return;
+  }
+  // Separate tool window: upper right of the canvas, clear of the ViewCube.
   const QPoint topRight = viewport_->mapToGlobal(QPoint(viewport_->width(), 0));
   dlg->move(topRight.x() - dlg->width() - 170, topRight.y() + 16);
 }
@@ -627,6 +787,7 @@ void MainWindow::refresh() {
   undo_->setEnabled(editor_ ? editor_->canUndo() : idle && d.canUndo());
   redo_->setEnabled(editor_ ? editor_->canRedo() : idle && d.canRedo());
   viewport_->setBodies(d.bodies());
+  if (unitsLabel_) unitsLabel_->setText(tr("Units: %1").arg(qs(d.lengthUnit())));
 
   std::vector<SketchDisplay> sketches;
   for (const auto& rec : d.sketches()) {
@@ -659,8 +820,23 @@ void MainWindow::refreshBrowser(const QString& docName) {
   root->setIcon(0, QIcon::fromTheme(QStringLiteral("document-edit")));
 
   auto* settings = new QTreeWidgetItem(root, {tr("Document Settings")});
-  settings->setIcon(0, QIcon::fromTheme(QStringLiteral("configure")));
-  new QTreeWidgetItem(settings, {tr("Units: mm")});
+  settings->setIcon(0, icon(QStringLiteral("preferences")));
+  auto* units = new QTreeWidgetItem(settings, {tr("Units: %1").arg(qs(d.lengthUnit()))});
+  units->setIcon(0, icon(QStringLiteral("units")));
+  units->setData(0, kUnitsRole, true);
+  units->setToolTip(0, tr("Click to change the design's units"));
+  settings->setExpanded(true);
+  if (section_.active) {
+    auto* analysis = new QTreeWidgetItem(root, {tr("Analysis")});
+    analysis->setIcon(0, icon(QStringLiteral("section")));
+    auto* sec = new QTreeWidgetItem(analysis, {tr("Section Analysis")});
+    sec->setIcon(0, icon(QStringLiteral("section")));
+    sec->setData(0, kAnalysisRole, true);
+    sec->setFlags(sec->flags() | Qt::ItemIsUserCheckable);
+    sec->setCheckState(0, section_.visible ? Qt::Checked : Qt::Unchecked);
+    sec->setToolTip(0, tr("Double-click to edit"));
+    analysis->setExpanded(true);
+  }
 
   auto* origin = new QTreeWidgetItem(root, {tr("Origin")});
   origin->setIcon(0, QIcon::fromTheme(QStringLiteral("crosshairs")));

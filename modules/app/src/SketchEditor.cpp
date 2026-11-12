@@ -11,7 +11,10 @@
 #include <Prs3d_LineAspect.hxx>
 #include <Prs3d_PointAspect.hxx>
 
+#include <QCursor>
+#include <QKeyEvent>
 #include <QLineEdit>
+#include <QRegularExpression>
 #include <QMouseEvent>
 
 #include <algorithm>
@@ -78,6 +81,7 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
     : QObject(parent), session_(session), view_(viewport), name_(name), plane_(plane), offset_(offset),
       featureId_(featureId), sk_(initial) {
   frame_ = sketch::planeFrame(plane.toStdString(), offset);
+  unit_ = parseUnit(session_.document().lengthUnit()).value_or(Unit::Millimeter);
   res_ = sketch::solve(sk_);
   view_->setInteractor(this);
   view_->setGridPlane(frame_);
@@ -104,7 +108,7 @@ SketchEditor::SketchEditor(doc::Session& session, Viewport* viewport, const QStr
 }
 
 SketchEditor::~SketchEditor() {
-  if (valueBox_) valueBox_->deleteLater();
+  delete valueBox_.data();   // its callbacks refer to this editor
   if (!view_) return;
   clearPreview();
   const auto& ctx = view_->aisContext();
@@ -253,8 +257,22 @@ int SketchEditor::snapPoint(double x, double y, int exclude) const {
   return best;
 }
 
+void SketchEditor::snapToGrid(double& x, double& y) const {
+  if (!view_ || !view_->gridSnap()) return;
+  const double g = view_->gridSpacing();
+  if (g <= 0) return;
+  x = std::round(x / g) * g;
+  y = std::round(y / g) * g;
+}
+
+QString SketchEditor::lengthText(double cm) const {
+  return QStringLiteral("%1 %2").arg(fromInternal(cm, unit_), 0, 'f', unit_ == Unit::Inch ? 3 : 2)
+      .arg(QString::fromUtf8(unitSymbol(unit_).data()));
+}
+
 SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) const {
   Pick p;
+  snapToGrid(x, y);
   p.x = x;
   p.y = y;
   const int s = snapPoint(x, y, exclude);
@@ -514,6 +532,8 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
     }
     return;
   }
+  cursorX_ = x;
+  cursorY_ = y;
   const Hit h = hitTest(x, y);
   const bool changedHover = h.kind != hover_.kind || h.index != hover_.index;
   hover_ = h;
@@ -751,12 +771,13 @@ double SketchEditor::currentValue(const Constraint& c) const {
 void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int editIndex) {
   if (valueBox_) valueBox_->deleteLater();
   const bool angle = c.type == ConstraintType::Angle;
-  const Unit unit = angle ? Unit::Degree : Unit::Millimeter;
+  const Unit unit = angle ? Unit::Degree : unit_;
   const double v = editIndex >= 0 ? c.value : currentValue(c);
   auto* box = new QLineEdit(view_);
   valueBox_ = box;
   box->setObjectName(QStringLiteral("dimensionValue"));
-  box->setText(QString::number(fromInternal(v, unit), 'f', angle ? 2 : 3) + (angle ? QStringLiteral(" deg") : QStringLiteral(" mm")));
+  box->setText(QString::number(fromInternal(v, unit), 'f', angle ? 2 : 3) + QStringLiteral(" ") +
+               QString::fromUtf8(unitSymbol(unit).data()));
   box->setFixedWidth(120);
   box->move(widgetPos.toPoint() + QPoint(12, -12));
   box->show();
@@ -796,10 +817,109 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
     c2.value = *value;
     constrain(c2);
   });
-  connect(box, &QLineEdit::editingFinished, box, [this, box] {
+  connect(box, &QLineEdit::editingFinished, this, [this, box] {
     if (valueBox_ == box) valueBox_ = nullptr;
     box->deleteLater();
   });
+}
+
+bool SketchEditor::keyPress(QKeyEvent* e) {
+  const QString t = e->text();
+  if (steps_.empty() || t.isEmpty() || valueBox_) return false;
+  if (!(t[0].isDigit() || t[0] == QLatin1Char('.') || t[0] == QLatin1Char('-'))) return false;
+  if (tool_ != Tool::Line && tool_ != Tool::Circle && tool_ != Tool::Rectangle) return false;
+  openTypedBox(t);
+  return true;
+}
+
+void SketchEditor::openTypedBox(const QString& initial) {
+  auto* box = new QLineEdit(view_);
+  valueBox_ = box;
+  box->setObjectName(QStringLiteral("typedValue"));
+  box->setFixedWidth(150);
+  box->setPlaceholderText(tool_ == Tool::Rectangle ? tr("width x height") : QString());
+  box->move(view_->mapFromGlobal(QCursor::pos()) + QPoint(16, 8));
+  box->setText(initial);
+  box->show();
+  box->setFocus();
+  connect(box, &QLineEdit::returnPressed, this, [this, box] {
+    const QString text = box->text();
+    valueBox_ = nullptr;
+    box->deleteLater();
+    typeValue(text);
+  });
+  connect(box, &QLineEdit::editingFinished, this, [this, box] {
+    if (valueBox_ == box) valueBox_ = nullptr;
+    box->deleteLater();
+  });
+}
+
+bool SketchEditor::typeValue(const QString& text) {
+  if (steps_.empty()) return false;
+  auto parse = [this](const QString& s) { return parseQuantity(s.trimmed().toStdString(), unit_); };
+  const Pick a = steps_.back();
+  if (tool_ == Tool::Line) {
+    const auto len = parse(text);
+    if (!len || *len <= 0) {
+      emit message(tr("'%1' is not a length.").arg(text));
+      return false;
+    }
+    double dx = cursorX_ - a.x, dy = cursorY_ - a.y;
+    const double n = std::hypot(dx, dy);
+    if (n < 1e-12) dx = 1, dy = 0;
+    else dx /= n, dy /= n;
+    checkpoint();
+    const int pa = materialize(a);
+    const int pb = sk_.addPoint(sk_.points[pa].x + dx * *len, sk_.points[pa].y + dy * *len);
+    if (chainStart_ < 0) chainStart_ = pa;
+    const int l = sk_.addLine(pa, pb, construction_);
+    autoHorizontalVertical(l);
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l}, *len});
+    steps_ = {Pick{{Hit::Point, pb}, sk_.points[pb].x, sk_.points[pb].y}};
+    solveAndShow();
+    return true;
+  }
+  if (tool_ == Tool::Circle) {
+    const auto dia = parse(text);
+    if (!dia || *dia <= 0) {
+      emit message(tr("'%1' is not a diameter.").arg(text));
+      return false;
+    }
+    checkpoint();
+    const int c = sk_.addCircleAt(materialize(steps_.front()), *dia / 2, construction_);
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {c}, *dia});
+    resetSteps();
+    solveAndShow();
+    return true;
+  }
+  if (tool_ == Tool::Rectangle) {
+    QStringList parts = text.split(QRegularExpression(QStringLiteral("[xX*,]")), Qt::SkipEmptyParts);
+    if (parts.size() == 1) parts << parts[0];
+    const auto w = parts.size() == 2 ? parse(parts[0]) : std::nullopt;
+    const auto h = parts.size() == 2 ? parse(parts[1]) : std::nullopt;
+    if (!w || !h || *w <= 0 || *h <= 0) {
+      emit message(tr("Type the size as width x height, e.g. 40 x 20."));
+      return false;
+    }
+    const Pick c0 = steps_.front();
+    const double sx = cursorX_ >= c0.x ? 1 : -1, sy = cursorY_ >= c0.y ? 1 : -1;
+    checkpoint();
+    const int p0 = materialize(c0);
+    const double x0 = sk_.points[p0].x, y0 = sk_.points[p0].y;
+    const int p1 = sk_.addPoint(x0 + sx * *w, y0);
+    const int p2 = sk_.addPoint(x0 + sx * *w, y0 + sy * *h);
+    const int p3 = sk_.addPoint(x0, y0 + sy * *h);
+    const int l0 = sk_.addLine(p0, p1, construction_), l1 = sk_.addLine(p1, p2, construction_);
+    const int l2 = sk_.addLine(p2, p3, construction_), l3 = sk_.addLine(p3, p0, construction_);
+    for (int l : {l0, l2}) sk_.addConstraint({ConstraintType::Horizontal, {}, {l}});
+    for (int l : {l1, l3}) sk_.addConstraint({ConstraintType::Vertical, {}, {l}});
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l0}, *w});
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::Distance, {}, {l1}, *h});
+    resetSteps();
+    solveAndShow();
+    return true;
+  }
+  return false;
 }
 
 bool SketchEditor::submitValue(const QString& text) {
@@ -918,11 +1038,11 @@ QString SketchEditor::labelText(const Constraint& c) const {
     case ConstraintType::Distance:
     case ConstraintType::HorizontalDistance:
     case ConstraintType::VerticalDistance:
-      return QString::number(fromInternal(std::abs(c.value), Unit::Millimeter), 'f', 2);
+      return QString::number(fromInternal(std::abs(c.value), unit_), 'f', unit_ == Unit::Inch ? 3 : 2);
     case ConstraintType::Radius:
-      return QStringLiteral("R") + QString::number(fromInternal(c.value, Unit::Millimeter), 'f', 2);
+      return QStringLiteral("R") + QString::number(fromInternal(c.value, unit_), 'f', unit_ == Unit::Inch ? 3 : 2);
     case ConstraintType::Diameter:
-      return QString::fromUtf8("⌀") + QString::number(fromInternal(c.value, Unit::Millimeter), 'f', 2);
+      return QString::fromUtf8("⌀") + QString::number(fromInternal(c.value, unit_), 'f', unit_ == Unit::Inch ? 3 : 2);
     case ConstraintType::Angle:
       return QString::number(fromInternal(c.value, Unit::Degree), 'f', 1) + QString::fromUtf8("°");
     default:
@@ -1058,6 +1178,45 @@ void SketchEditor::updatePreview(double x, double y) {
     ctx->Display(w, AIS_WireFrame, -1, false);
     ctx->SetZLayer(w, Graphic3d_ZLayerId_Topmost);
     preview_.push_back(w);
+    // Live size of what is being drawn; type a number to set it exactly.
+    QString text;
+    double lx = x, ly = y;
+    switch (tool_) {
+      case Tool::Line: {
+        const auto& b = steps_.back();
+        text = lengthText(std::hypot(x - b.x, y - b.y));
+        const double ang = std::atan2(y - b.y, x - b.x) * 180.0 / kPi;
+        text += QStringLiteral("   %1\u00B0").arg(ang, 0, 'f', 1);
+        lx = (x + b.x) / 2;
+        ly = (y + b.y) / 2;
+        break;
+      }
+      case Tool::Rectangle:
+        text = lengthText(std::abs(x - a.x)) + QStringLiteral(" \u00D7 ") + lengthText(std::abs(y - a.y));
+        lx = (x + a.x) / 2;
+        ly = (y + a.y) / 2;
+        break;
+      case Tool::Circle:
+        text = QString::fromUtf8("\u2300 ") + lengthText(2 * std::hypot(x - a.x, y - a.y));
+        break;
+      case Tool::Arc:
+        if (steps_.size() > 1) text = QStringLiteral("R ") + lengthText(std::hypot(steps_[1].x - a.x, steps_[1].y - a.y));
+        break;
+      default:
+        break;
+    }
+    if (!text.isEmpty()) {
+      Handle(AIS_TextLabel) t = new AIS_TextLabel();
+      t->SetText(ext(text));
+      t->SetPosition(sketch::toWorld(frame_, lx, ly));
+      t->SetHeight(14);
+      t->SetColor(qc(themeColors().sketchLabel));
+      t->SetHJustification(Graphic3d_HTA_CENTER);
+      t->SetVJustification(Graphic3d_VTA_BOTTOM);
+      ctx->Display(t, 0, -1, false);
+      ctx->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
+      preview_.push_back(t);
+    }
   }
   view_->redraw();
 }

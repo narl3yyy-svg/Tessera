@@ -241,6 +241,22 @@ std::string Document::nextBodyName() const {
   return "Body" + std::to_string(n + 1);
 }
 
+std::string Document::lengthUnit() const {
+  Handle(TDataStd_NamedData) nd;
+  if (doc_->Main().FindAttribute(TDataStd_NamedData::GetID(), nd)) {
+    const std::string u = stringOf(nd, "lengthUnit");
+    if (!u.empty()) return u;
+  }
+  return "mm";
+}
+
+void Document::setLengthUnit(const std::string& unit) {
+  requireTransaction("setLengthUnit");
+  if (unit != "mm" && unit != "in" && unit != "cm" && unit != "m")
+    throw DocumentError("unsupported length unit '" + unit + "'");
+  TDataStd_NamedData::Set(doc_->Main())->SetString("lengthUnit", ext(unit));
+}
+
 std::vector<SketchRecord> Document::sketches() const {
   std::vector<SketchRecord> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kSketchesTag, false)); it.More(); it.Next()) {

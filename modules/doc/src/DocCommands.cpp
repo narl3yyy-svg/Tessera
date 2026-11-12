@@ -1,7 +1,10 @@
 #include "tsr/doc/DocCommands.h"
 #include "tsr/doc/Document.h"
 
+#include "tsr/kernel/Io.h"
 #include "tsr/kernel/Kernel.h"
+
+#include <TopExp_Explorer.hxx>
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
 
@@ -342,9 +345,18 @@ public:
          .defaultValue = std::string{}, .optional = true},
         {.id = "profiles", .label = "Profiles", .tooltip = "Click regions of the sketch. None picked: all of them.",
          .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
-        choice("direction", "Direction", {"One Side", "Symmetric"}, "Symmetric extrudes the distance both ways."),
+        choice("start", "Start", {"Profile Plane", "Offset"}, "Where the extrude starts."),
+        {.id = "startOffset", .label = "Offset", .tooltip = "Distance from the profile plane to the start.",
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "start=Offset"},
+        choice("direction", "Direction", {"One Side", "Two Sides", "Symmetric"},
+               "Symmetric: the distance both ways. Two Sides: a distance each way."),
+        choice("extent", "Extent Type", {"Distance", "All"}, "All: through everything in the design."),
         {.id = "distance", .label = "Distance", .tooltip = "Negative extrudes the other way.",
-         .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter},
+         .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "extent=Distance"},
+        {.id = "distance2", .label = "Distance (side 2)", .tooltip = "Two Sides only.", .type = InputType::Real,
+         .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "direction=Two Sides"},
+        {.id = "taper", .label = "Taper Angle", .tooltip = "One side only. Positive widens.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree, .min = -1.5, .max = 1.5, .visibleWhen = "direction=One Side"},
     };
     addOperationInputs(def_);
   }
@@ -356,11 +368,17 @@ public:
     if (!sketchFor(doc, name))
       return name.empty() ? "Sketch: there is no sketch to extrude; create one first"
                           : "Sketch: '" + name + "' does not exist";
-    if (std::abs(getReal(in, "distance")) < 1e-9) return "Distance: must not be zero";
+    if (getString(in, "extent") == "Distance" && std::abs(getReal(in, "distance")) < 1e-9)
+      return "Distance: must not be zero";
+    if (std::abs(getReal(in, "taper")) > 1e-9 && getString(in, "direction") != "One Side")
+      return "Taper Angle: only with Direction One Side";
     return validateOperation(in, doc);
   }
 
   void prepare(Inputs& in, CommandContext& ctx) const override {
+    // Inputs added after a feature was created get their defaults.
+    for (const auto& d : def_.inputs)
+      if (!in.count(d.id)) in[d.id] = d.defaultValue;
     // Record which sketch was meant, so later sketches do not change it.
     if (getString(in, "sketch").empty())
       if (auto rec = sketchFor(docOf(ctx), "")) in["sketch"] = rec->name;
@@ -380,10 +398,31 @@ public:
 
     const auto faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
     const gp_Dir n = sp.frame.Direction();
+    auto real = [&](const char* id, double fallback) {
+      auto it = in.find(id);
+      return it == in.end() ? fallback : getReal(in, id);
+    };
+    auto str = [&](const char* id, const char* fallback) {
+      auto it = in.find(id);
+      return it == in.end() ? std::string(fallback) : getString(in, id);
+    };
+    double d1 = real("distance", 1.0);
+    if (str("extent", "Distance") == "All") {
+      // Far enough to pass through every body (and the sketch) in both senses.
+      double size = 10;
+      for (const auto& b : doc.bodies()) {
+        const auto bb = kernel::boundingBox(b.shape);
+        size = std::max(size, std::hypot(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z) +
+                                  std::hypot(bb.max.x, bb.max.y, bb.max.z) + std::hypot(bb.min.x, bb.min.y, bb.min.z));
+      }
+      d1 = d1 < 0 ? -size : size;
+    }
+    const std::string dir = str("direction", "One Side");
+    const double back = dir == "Symmetric" ? d1 : dir == "Two Sides" ? real("distance2", 1.0) : 0.0;
+    const double start = str("start", "Profile Plane") == "Offset" ? real("startOffset", 0.0) : 0.0;
     TopoDS_Shape tool;
     try {
-      tool = kernel::extrude(faces, {n.X(), n.Y(), n.Z()}, getReal(in, "distance"),
-                             getString(in, "direction") == "Symmetric");
+      tool = kernel::extrudeEx(faces, {n.X(), n.Y(), n.Z()}, d1, back, real("taper", 0.0), start);
     } catch (const kernel::KernelError& e) {
       throw CommandError("Extrude: " + std::string(e.what()));
     }
@@ -942,6 +981,66 @@ public:
 private:
   CommandDef def_;
 };
+
+// Document Settings > Units. Not a feature (no timeline entry) but undoable.
+class DocumentUnits final : public Command {
+public:
+  DocumentUnits() {
+    def_.id = kCmdUnits;
+    def_.name = "Change Units";
+    def_.tooltip = "Default length unit for this design.";
+    def_.workspace = "Design";
+    def_.icon = "units";
+    def_.inputs = {choice("unit", "Default units", {"mm", "in", "cm", "m"}, "Shown in dialogs, dimensions and measurements.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    try {
+      docOf(ctx).setLengthUnit(getString(in, "unit"));
+    } catch (const DocumentError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
+// Insert > geometry from a file, stored in the timeline as BREP text.
+class InsertGeometry final : public Command {
+public:
+  InsertGeometry() {
+    def_.id = kCmdInsert;
+    def_.name = "Insert";
+    def_.tooltip = "Geometry inserted from a STEP, IGES, STL or BREP file.";
+    def_.workspace = "Design";
+    def_.icon = "insert";
+    def_.feature = true;
+    def_.inputs = {
+        {.id = "source", .label = "Source file", .tooltip = {}, .type = InputType::String,
+         .defaultValue = std::string{}, .optional = true},
+        {.id = "brep", .label = "Geometry", .tooltip = "BREP text (internal units).", .type = InputType::String,
+         .defaultValue = std::string{}},
+    };
+  }
+  const CommandDef& def() const override { return def_; }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    TopoDS_Shape s;
+    try {
+      s = kernel::fromBrep(getString(in, "brep"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+    // One body per solid; shells/faces (open meshes) become one body.
+    int solids = 0;
+    for (TopExp_Explorer it(s, TopAbs_SOLID); it.More(); it.Next(), ++solids) doc.addBody(doc.nextBodyName(), it.Current());
+    if (solids == 0) doc.addBody(doc.nextBodyName(), s);
+  }
+
+private:
+  CommandDef def_;
+};
 } // namespace
 
 void registerDocCommands(CommandRegistry& registry) {
@@ -963,6 +1062,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<MoveCopy>());
   registry.add(std::make_unique<RemoveBody>());
   registry.add(std::make_unique<AddUserParameter>());
+  registry.add(std::make_unique<DocumentUnits>());
+  registry.add(std::make_unique<InsertGeometry>());
 }
 
 } // namespace tsr::doc

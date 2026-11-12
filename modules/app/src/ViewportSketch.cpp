@@ -295,6 +295,8 @@ void Viewport::applyPickModes() {
     if (planePicking_) context_->Activate(shape, faceMode);
     else if (!pickTypes_.empty())
       for (TopAbs_ShapeEnum t : pickTypes_) context_->Activate(shape, AIS_Shape::SelectionMode(t));
+    else if (!selectFilter_.empty())
+      for (TopAbs_ShapeEnum t : selectFilter_) context_->Activate(shape, AIS_Shape::SelectionMode(t));
     else context_->Activate(shape, 0);
   }
   for (auto& s : sketchCurves_) context_->Deactivate(s);

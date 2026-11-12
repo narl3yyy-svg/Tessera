@@ -122,7 +122,10 @@ public:
   // fails keeps its error and the replay continues. Requires a transaction.
   void recompute(const CommandRegistry& registry);
 
-  std::string defaultLengthUnit() const { return "mm"; }
+  // Display unit for lengths: "mm" (default) or "in". Stored in the document.
+  std::string defaultLengthUnit() const { return lengthUnit(); }
+  std::string lengthUnit() const;
+  void setLengthUnit(const std::string& unit);   // requires a transaction
 
   const Handle(TDocStd_Document)& ocaf() const { return doc_; }
 

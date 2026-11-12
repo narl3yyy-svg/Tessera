@@ -33,3 +33,8 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P3-2 | Fillet: constant radius only (no variable radius, setback or rule-based selection); Chamfer: equal distance only (no two-distance or distance-angle) | P3 scope | P4 |
 | P3-3 | Revolve axis: sketch X/Y axis, the sketch's first construction line, or a world axis; no picking an arbitrary edge as the axis | P3 scope | P4 |
 | P3-4 | While a Fillet/Chamfer dialog previews, edges are picked on the previewed body | Preview replaces the body | when the preview uses an overlay |
+| P4-1 | Extrude: no in-canvas drag arrow yet (values are typed in the panel); extents are Distance and All (no To Object / To Face); taper works on one-sided extrudes | P4 scope | P5 |
+| P4-2 | Split Body and Mirror use origin planes plus an offset, not picked faces or construction planes | Construction planes not built yet | P5 (CONSTRUCT) |
+| P4-3 | Section Analysis and the units choice for new designs are app settings; section analysis is not saved in the document | P4 scope | later |
+| P4-4 | Export writes mm for mesh and STEP/IGES files; F3D, IPT, SKP, SAT, DWG, USD are not available (proprietary or unsupported by the kernel) | Formats | accepted |
+| P4-5 | ASSEMBLE, CONFIGURE, CONSTRUCT and several INSPECT/INSERT entries, and the SURFACE/MESH/SHEET METAL/PLASTIC/MANAGE/UTILITIES tabs, are shown disabled | Not built yet | see ROADMAP.md |

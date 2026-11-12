@@ -130,7 +130,8 @@ void MainWindow::exitSketchMode() {
   }
   toolButtons_.clear();
   constructionButton_ = nullptr;
-  for (int i = 0; i < ribbon_->count(); ++i) ribbon_->setTabEnabled(i, true);
+  for (int i = 0; i < ribbon_->count(); ++i)
+    ribbon_->setTabEnabled(i, !ribbon_->tabToolTip(i).startsWith(tr("Planned")));
   timeline_->setEnabled(true);
   viewport_->setBodiesGhosted(false);
   delete editor_;   // restores the view's grid and mouse handling

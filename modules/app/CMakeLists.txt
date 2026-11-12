@@ -5,6 +5,7 @@ add_executable(tessera
   src/MainWindow.cpp
   src/MainWindow.h
   src/MainWindowSketch.cpp
+  src/MainWindowTools.cpp
   src/SketchEditor.cpp
   src/SketchEditor.h
   src/ViewportSketch.cpp

@@ -39,6 +39,9 @@ struct InputDef {
   bool minExclusive = false;
   bool optional = false;        // may be left empty (String/Body)
   std::vector<std::string> choices; // Choice only
+  // Show this input only when another input has one of the listed values,
+  // e.g. "direction=Two Sides" or "extent=Distance|To Object". Empty: always.
+  std::string visibleWhen;
 };
 
 struct CommandDef {

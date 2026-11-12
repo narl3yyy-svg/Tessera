@@ -59,3 +59,25 @@ except RuntimeError as e:
 else:
     raise AssertionError("conflicting sketch accepted")
 print("api sketch/extrude: OK")
+
+# Extrude options: two sides, start offset, taper and through-all cut.
+tsr.new_document()
+sq = {"points": [[0, 0], [1, 0], [1, 1], [0, 1]],
+      "entities": [{"type": "line", "p": [0, 1]}, {"type": "line", "p": [1, 2]},
+                   {"type": "line", "p": [2, 3]}, {"type": "line", "p": [3, 0]}]}
+tsr.run_command("tsr.sketch.create", plane="XY", data=json.dumps(sq))
+tsr.run_command("tsr.feature.extrude", direction="Two Sides", distance=2.0, distance2=1.0)
+assert abs(root.bRepBodies.item(0).volume - 3.0) < 1e-6
+tsr.undo()
+tsr.run_command("tsr.feature.extrude", start="Offset", startOffset=5.0, distance=1.0)
+bb = root.bRepBodies.item(0)
+assert abs(bb.volume - 1.0) < 1e-6
+tsr.undo()
+tsr.run_command("tsr.feature.extrude", distance=1.0, taper=math.radians(-10))   # narrows
+v = root.bRepBodies.item(0).volume
+assert 0.5 < v < 1.0, v
+tsr.undo()
+tsr.run_command("tsr.primitive.box", length=3.0, width=3.0, height=3.0, x=-1.0, y=-1.0, z=-1.0)
+tsr.run_command("tsr.feature.extrude", sketch="Sketch1", extent="All", direction="Symmetric", operation="Cut")
+assert abs(root.bRepBodies.item(0).volume - (27 - 3)) < 1e-6, root.bRepBodies.item(0).volume
+print("api extrude options: OK")

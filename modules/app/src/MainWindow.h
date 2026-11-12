@@ -5,7 +5,13 @@
 #include <QMainWindow>
 #include <QPointer>
 
+#include <TopAbs_ShapeEnum.hxx>
 #include <TopoDS_Shape.hxx>
+#include <gp_Pln.hxx>
+
+#include "tsr/core/Units.h"
+
+#include <functional>
 
 #include <map>
 #include <vector>
@@ -19,6 +25,8 @@ class QLineEdit;
 class QWidget;
 class QShortcut;
 class QAbstractButton;
+class QDialog;
+class QLabel;
 
 namespace tsr::app {
 
@@ -77,6 +85,27 @@ private:
   void showTimelineMenu(const QPoint& pos);
   void focusSearch();
   void styleNavBar();
+  // Tools (MainWindowTools.cpp)
+  void buildUiCommands();
+  void setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types);
+  void chooseUnits(const QPoint& globalPos);
+  void exportDesign();
+  void print3d();
+  void insertFile();
+  void captureImage();
+  void applyPreferences();
+  void showPreferences();
+  void gridSettings();
+  void openMeasure();
+  void measurePick(const TopoDS_Shape& s);
+  void updateMeasure();
+  void openSection();
+  void applySection();
+  gp_Pln sectionPlane() const;
+  void showCenterOfMass();
+  void checkInterference();
+  Unit lengthUnit() const;
+  QString formatLength(double cm) const;
   void enterSketchMode();
   void exitSketchMode();
   QWidget* buildSketchTab();
@@ -112,6 +141,25 @@ private:
   std::map<std::string, bool> sketchVisibility_;   // user overrides from the browser
   std::vector<TopoDS_Shape> pickedEdges_;          // shown highlighted while picking
   QString lastCommand_;
+
+  struct UiCommand {
+    std::string tab, panel, id, name, tooltip, icon, shortcut;
+    bool enabled = true;
+    std::function<void()> run;
+  };
+  std::vector<UiCommand> uiCommands_;
+  QPointer<QDialog> measure_;
+  QLabel* measureLabel_ = nullptr;
+  std::vector<TopoDS_Shape> measurePicks_;
+  struct SectionState {
+    bool active = false;
+    bool visible = true;
+    QString plane = QStringLiteral("XZ");
+    double offset = 0;
+    bool flip = false;
+  } section_;
+  bool comShown_ = false;
+  QLabel* unitsLabel_ = nullptr;
 };
 
 } // namespace tsr::app

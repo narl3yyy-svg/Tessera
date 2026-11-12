@@ -22,8 +22,14 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
   const CommandDef& def = cmd_->def();
   setWindowTitle(QString::fromStdString(def.name));
   setObjectName(QString::fromStdString(def.id));
+  setMinimumWidth(300);
+  const Unit lengthUnit = parseUnit(session_.document().lengthUnit()).value_or(Unit::Millimeter);
 
   auto* form = new QFormLayout;
+  form_ = form;
+  form->setLabelAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+  form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+  form->setHorizontalSpacing(14);
   for (const InputDef& in : def.inputs) {
     const QString label = QString::fromStdString(in.label);
     const QString tip = QString::fromStdString(in.tooltip);
@@ -34,15 +40,18 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
     switch (in.type) {
       case InputType::Real: {
         auto* sb = new QDoubleSpinBox;
-        sb->setDecimals(3);
-        const double step = fromInternal(1.0, in.unit) / 10.0; // 1 mm for mm inputs
+        // Lengths are shown in the document's unit (Document Settings).
+        const Unit shown = dimensionOf(in.unit) == Dimension::Length ? lengthUnit : in.unit;
+        sb->setDecimals(shown == Unit::Inch ? 4 : 3);
+        const double step = shown == Unit::Inch ? 0.0625 : shown == Unit::Degree ? 1.0 : fromInternal(0.1, shown);
         sb->setSingleStep(step > 0 ? step : 1.0);
-        double lo = in.min ? fromInternal(*in.min, in.unit) : -1e9;
+        double lo = in.min ? fromInternal(*in.min, shown) : -1e9;
         if (in.min && in.minExclusive) lo += std::pow(10.0, -sb->decimals());
-        sb->setRange(lo, in.max ? fromInternal(*in.max, in.unit) : 1e9);
-        if (in.unit != Unit::None) sb->setSuffix(QStringLiteral(" ") + QString::fromUtf8(unitSymbol(in.unit).data()));
-        if (auto p = std::get_if<double>(&cur)) sb->setValue(fromInternal(*p, in.unit));
-        const Unit unit = in.unit;
+        sb->setRange(lo, in.max ? fromInternal(*in.max, shown) : 1e9);
+        if (shown != Unit::None) sb->setSuffix(QStringLiteral(" ") + QString::fromUtf8(unitSymbol(shown).data()));
+        if (auto p = std::get_if<double>(&cur)) sb->setValue(fromInternal(*p, shown));
+        sb->setAccelerated(true);
+        const Unit unit = shown;
         connect(sb, &QDoubleSpinBox::valueChanged, this,
                 [this, id, unit](double v) { onInputChanged(id, toInternal(v, unit)); });
         w = sb;
@@ -171,7 +180,9 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
     w->setToolTip(tip);
     w->setAccessibleName(label);
     form->addRow(label, w);
+    if (!in.visibleWhen.empty()) conditional_.emplace_back(w, in.visibleWhen);
   }
+  updateVisibility();
 
   error_ = new QLabel;
   error_->setObjectName(QStringLiteral("error"));
@@ -182,7 +193,12 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
   connect(buttons_, &QDialogButtonBox::rejected, this, &CommandDialog::reject);
 
   auto* layout = new QVBoxLayout(this);
+  layout->setContentsMargins(10, 6, 10, 8);
+  auto* title = new QLabel(QStringLiteral("—  ") + QString::fromStdString(def.name).toUpper());
+  title->setObjectName(QStringLiteral("panelTitle"));
+  layout->addWidget(title);
   layout->addLayout(form);
+  form->setContentsMargins(0, 4, 0, 4);
   layout->addWidget(error_);
   layout->addWidget(buttons_);
 
@@ -204,7 +220,35 @@ void CommandDialog::onInputChanged(const std::string& id, const Value& v) {
   refreshPreview();
 }
 
+void CommandDialog::adjustAfterResize() {
+  // Embedded panels keep their right edge when rows appear or disappear.
+  if (QWidget* p = parentWidget(); p && !isWindow()) move(p->width() - width() - 12, y());
+}
+
+void CommandDialog::updateVisibility() {
+  for (const auto& [w, rule] : conditional_) {
+    const auto eq = rule.find('=');
+    if (eq == std::string::npos) continue;
+    const std::string id = rule.substr(0, eq);
+    std::string value;
+    if (auto it = cmd_->inputs().find(id); it != cmd_->inputs().end())
+      if (auto s = std::get_if<std::string>(&it->second)) value = *s;
+    bool show = false;
+    size_t start = eq + 1;
+    while (start <= rule.size()) {
+      size_t end = rule.find('|', start);
+      if (end == std::string::npos) end = rule.size();
+      show = show || rule.substr(start, end - start) == value;
+      start = end + 1;
+    }
+    form_->setRowVisible(w, show);
+  }
+  adjustSize();
+  adjustAfterResize();
+}
+
 void CommandDialog::refreshPreview() {
+  updateVisibility();
   updateProfilesLabel();
   emit inputsChanged();
   showError(cmd_->preview());

@@ -12,6 +12,7 @@
 #include <BRepPrimAPI_MakeSphere.hxx>
 #include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <LocOpe_DPrism.hxx>
 #include <BRepPrimAPI_MakeRevol.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
@@ -822,6 +823,43 @@ TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>&
   }
   if (!isValid(r)) throw KernelError("Chamfer: the distance is too large for the selected edges");
   return r;
+}
+
+TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
+                       double startOffset) {
+  if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");
+  if (!(std::abs(forward + back) > 1e-9)) throw KernelError("extrude distance must not be zero");
+  const gp_Vec n = gp_Vec(dir.x, dir.y, dir.z).Normalized();
+  TopoDS_Shape result;
+  for (const TopoDS_Shape& f : faces) {
+    TopoDS_Shape solid = guarded("Extrude", [&]() -> TopoDS_Shape {
+      gp_Trsf t;
+      t.SetTranslation(n * (startOffset - back));
+      const TopoDS_Shape base = BRepBuilderAPI_Transform(f, t, true).Shape();
+      const double length = forward + back;
+      if (std::abs(taper) > 1e-9) {
+        if (back != 0) throw KernelError("taper works with one-sided extrudes only");
+        // LocOpe_DPrism sweeps along the face normal; flip for negative lengths.
+        TopoDS_Face face = TopoDS::Face(base);
+        gp_Dir fn = BRepAdaptor_Surface(face).Plane().Axis().Direction();
+        if (face.Orientation() == TopAbs_REVERSED) fn.Reverse();
+        const bool along = gp_Vec(fn).Dot(n * length) > 0;
+        LocOpe_DPrism dp(face, std::abs(length), -taper);
+        TopoDS_Shape s = dp.Shape();
+        if (!along) {
+          gp_Trsf m;
+          m.SetMirror(gp_Ax2(BRepAdaptor_Surface(face).Plane().Location(), fn));
+          s = BRepBuilderAPI_Transform(s, m, true).Shape();
+        }
+        return s;
+      }
+      BRepPrimAPI_MakePrism mk(base, n * length);
+      return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
+    });
+    if (!isValid(solid)) throw KernelError("Extrude: the taper angle is too steep for this profile and distance");
+    result = result.IsNull() ? solid : boolean(BooleanOp::Join, result, solid);
+  }
+  return result;
 }
 
 TopoDS_Shape boolean(BooleanOp op, const TopoDS_Shape& target, const TopoDS_Shape& tool) {

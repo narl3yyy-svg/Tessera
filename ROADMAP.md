@@ -24,3 +24,27 @@ Each phase ends with something usable; nothing below is promised by date.
 
 Not planned: cloud storage/collaboration (designs are local files), anything that copies Autodesk branding,
 icons, file formats that are not publicly documented, or product names.
+
+## Fusion feature checklist
+
+Tracked against the menus people know. Done = usable today.
+
+**Create**: Sketch ✅ · Extrude ✅ (distance, all, two sides, symmetric, start offset, taper) · Revolve ✅ · Box/Cylinder/Sphere/Torus/Cone ✅ · Mirror ✅ (body) · Sweep · Loft · Rib · Web · Emboss · Hole · Thread · Coil · Pipe · Pattern (rectangular/circular/path) · Thicken · Boundary Fill · Create Form (T-splines, later)
+
+**Modify**: Fillet ✅ · Chamfer ✅ · Shell ✅ · Combine ✅ · Split Body ✅ · Move/Copy ✅ · Scale ✅ · Remove ✅ · Press Pull · Draft · Offset Face · Replace Face · Split Face · Silhouette Split · Align · Delete (faces) · Physical Material · Appearance · Change Parameters (table) · Compute All
+
+**Assemble**: New Component · Joint · As-Built Joint · Joint Origin · Rigid Group · Drive Joints · Motion Link · Motion Study · Contact Sets
+
+**Construct**: Offset Plane · Plane at Angle · Tangent Plane · Midplane · Plane through points · Axis (cylinder, edge, two points) · Point (vertex, edge/plane intersection)
+
+**Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb · Zebra · Draft Analysis · Curvature Map · Isocurve · Minimum Radius · Accessibility
+
+**Insert**: Insert Mesh / CAD (STEP, IGES, STL, BREP) ✅ · Insert SVG · Insert DXF · Canvas · Decal · McMaster-style part libraries (no)
+
+**Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
+
+**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · typed sizes while drawing ✅ · Midpoint Line · Center Rectangle · 3-Point Rectangle · 2-Point / 3-Point / Tangent circles · 3-Point / Tangent arcs · Polygon · Ellipse · Slot · Spline · Conic · Text · Mirror · Circular/Rectangular Pattern · Project/Include · Fillet · Chamfer · Offset · Trim · Extend · Break · Sketch Scale · Move/Copy
+
+**Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear · Symmetry · Curvature · Polygon; Sketch Palette options (grid, snap, slice, show profiles/points/dimensions/constraints)
+
+**File and settings**: Document units ✅ · Export (STEP, IGES, STL, 3MF, OBJ, BREP) ✅ · 3D Print ✅ · Capture Image ✅ · Preferences: navigation presets, zoom direction, orbit type, camera ✅ · Grid settings and snap ✅ · Named Views · Incremental Move · Design history import/export

@@ -37,6 +37,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_fillet_revolve.py)
   add_test(NAME api_modify
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_modify.py)
+  add_test(NAME api_io_units
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_io_units.py)
   add_test(NAME api_features
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_features.py)
 endif()

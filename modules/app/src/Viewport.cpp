@@ -7,6 +7,7 @@
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_Grid.hxx>
 #include <Aspect_NeutralWindow.hxx>
+#include <Graphic3d_Camera.hxx>
 #include <Graphic3d_TransformPers.hxx>
 #include <OpenGl_Context.hxx>
 #include <OpenGl_FrameBuffer.hxx>
@@ -177,12 +178,7 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
   });
 
   // Mouse bindings (gesture = what a drag does, scheme = what a click selects).
-  AIS_MouseGestureMap& g = ChangeMouseGestureMap();
-  g.Clear();
-  g.Bind(Aspect_VKeyMouse_MiddleButton, AIS_MouseGesture_Pan);
-  g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_RotateOrbit);
-  g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_CTRL), AIS_MouseGesture_Zoom);
-  bindLeftButton();
+  bindNavigation();
   AIS_MouseSelectionSchemeMap& s = ChangeMouseSelectionSchemes();
   s.Clear();
   s.Bind(Aspect_VKeyMouse_LeftButton, AIS_SelectionScheme_Replace);
@@ -199,6 +195,62 @@ Viewport::~Viewport() {
     context_->RemoveAll(false);
     doneCurrent();
   }
+}
+
+void Viewport::bindNavigation() {
+  AIS_MouseGestureMap& g = ChangeMouseGestureMap();
+  g.Clear();
+  switch (navPreset_) {
+    case NavPreset::Fusion:   // middle pans, Shift+middle orbits
+      g.Bind(Aspect_VKeyMouse_MiddleButton, AIS_MouseGesture_Pan);
+      g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_RotateOrbit);
+      g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_CTRL), AIS_MouseGesture_Zoom);
+      break;
+    case NavPreset::SolidWorks:   // middle orbits, Ctrl+middle pans, Shift+middle zooms
+      g.Bind(Aspect_VKeyMouse_MiddleButton, AIS_MouseGesture_RotateOrbit);
+      g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_CTRL), AIS_MouseGesture_Pan);
+      g.Bind(keys(Aspect_VKeyMouse_MiddleButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_Zoom);
+      break;
+    case NavPreset::Tinkercad:   // right orbits, middle pans
+      g.Bind(Aspect_VKeyMouse_RightButton, AIS_MouseGesture_RotateOrbit);
+      g.Bind(Aspect_VKeyMouse_MiddleButton, AIS_MouseGesture_Pan);
+      g.Bind(keys(Aspect_VKeyMouse_RightButton, Aspect_VKeyFlags_SHIFT), AIS_MouseGesture_Pan);
+      break;
+  }
+  bindLeftButton();
+}
+
+void Viewport::setNavigation(NavPreset preset, bool reverseZoom, bool constrainedOrbit, bool perspective) {
+  navPreset_ = preset;
+  reverseZoom_ = reverseZoom;
+  SetLockOrbitZUp(constrainedOrbit);
+  perspective_ = perspective;
+  bindNavigation();
+  if (!view_.IsNull()) {
+    view_->Camera()->SetProjectionType(perspective ? Graphic3d_Camera::Projection_Perspective
+                                                   : Graphic3d_Camera::Projection_Orthographic);
+    redrawAll();
+  }
+}
+
+void Viewport::setGridSpacing(double cm) {
+  gridSpacing_ = std::max(cm, 1e-4);
+  if (viewer_.IsNull()) return;
+  viewer_->SetRectangularGridValues(0, 0, gridSpacing_, gridSpacing_, 0);
+  viewer_->SetRectangularGridGraphicValues(gridSpacing_ * 25, gridSpacing_ * 25, 0);
+  redrawAll();
+}
+
+void Viewport::setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types) {
+  selectFilter_ = types;
+  if (!context_.IsNull()) context_->ClearSelected(false);
+  applyPickModes();
+  updateView();
+}
+
+QImage Viewport::capture() {
+  if (glReady_) return grabFramebuffer();
+  return grab().toImage();
 }
 
 void Viewport::bindLeftButton() {
@@ -337,7 +389,9 @@ void Viewport::handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const
 
 Aspect_VKeyMouse Viewport::aisButtons(Qt::MouseButtons b) const {
   // While an interactor (sketch editor) is active it owns the left button.
-  return toVKeys(interactor_ ? (b & ~Qt::LeftButton) : b);
+  Aspect_VKeyMouse k = toVKeys(interactor_ ? (b & ~Qt::LeftButton) : b);
+  if (navPreset_ == NavPreset::Tinkercad && (b & Qt::RightButton)) k |= Aspect_VKeyMouse_RightButton;
+  return k;
 }
 
 void Viewport::mousePressEvent(QMouseEvent* e) {
@@ -391,7 +445,8 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
 void Viewport::wheelEvent(QWheelEvent* e) {
   QOpenGLWidget::wheelEvent(e);
   if (!glReady_) return;
-  if (UpdateZoom(Aspect_ScrollDelta(toPixels(e->position()), e->angleDelta().y() / 8.0))) updateView();
+  const double delta = (reverseZoom_ ? -1.0 : 1.0) * e->angleDelta().y() / 8.0;
+  if (UpdateZoom(Aspect_ScrollDelta(toPixels(e->position()), delta))) updateView();
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {

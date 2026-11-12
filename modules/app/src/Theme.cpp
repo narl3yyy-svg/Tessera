@@ -117,6 +117,8 @@ QPushButton:pressed { background: #3a414c; }
 QPushButton#finishSketch { background: #2b6e47; border-color: #3c8c5d; color: white; font-weight: bold; }
 QPushButton#finishSketch:hover { background: #33804f; }
 QCheckBox, QLabel { color: %TEXT%; }
+QDialog[panel="true"] { background: %BASE%; border: 1px solid #4b525e; border-radius: 4px; }
+QLabel#panelTitle { color: %MUTED%; font-weight: bold; padding: 2px 0 6px 0; border-bottom: 1px solid #4b525e; }
 QToolTip { background: #23272d; color: #e6e9ee; border: 1px solid #4b525e; padding: 4px; }
 QScrollBar:horizontal, QScrollBar:vertical { background: %WINDOW%; border: none; height: 10px; width: 10px; }
 QScrollBar::handle { background: #59616e; border-radius: 4px; min-width: 24px; min-height: 24px; }
@@ -139,6 +141,8 @@ QTabWidget#ribbon::pane { border: none; }
 QTabWidget#ribbon > QTabBar::tab { padding: 3px 16px; border: none; border-bottom: 2px solid transparent; background: transparent; }
 QTabWidget#ribbon > QTabBar::tab:selected { border-bottom: 2px solid %1; }
 QPushButton#finishSketch { background: #2e8b57; color: white; font-weight: bold; padding: 4px 14px; border-radius: 3px; }
+QDialog[panel="true"] { background: palette(window); border: 1px solid palette(mid); border-radius: 4px; }
+QLabel#panelTitle { font-weight: bold; padding: 2px 0 6px 0; }
 )").arg(c.highlight.name());
 }
 

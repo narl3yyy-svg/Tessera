@@ -5,10 +5,13 @@
 #include <QDialog>
 
 #include <memory>
+#include <utility>
+#include <vector>
 
 class QLabel;
 class QDialogButtonBox;
 class QComboBox;
+class QFormLayout;
 
 namespace tsr::app {
 
@@ -73,6 +76,10 @@ private:
   QLabel* bodiesLabel_ = nullptr;
   std::string bodiesId_;
   QString stringInput(const std::string& id) const;
+  void updateVisibility();
+  void adjustAfterResize();
+  QFormLayout* form_ = nullptr;
+  std::vector<std::pair<QWidget*, std::string>> conditional_;
   void updateProfilesLabel();
 };
 

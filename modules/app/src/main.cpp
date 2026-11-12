@@ -28,8 +28,11 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     return 1;
   };
   // Ribbon must expose every registered command.
-  for (const tsr::Command* c : s.commands().all())
-    if (!w.ribbon()->findChild<QToolButton*>(QString::fromStdString(c->def().id))) return fail("ribbon button missing");
+  for (const tsr::Command* c : s.commands().all()) {
+    const QString id = QString::fromStdString(c->def().id);
+    if (c->def().panel.empty()) continue;
+    if (!w.ribbon()->findChild<QToolButton*>(id) && !w.ribbon()->findChild<QAction*>(id)) return fail("ribbon entry missing");
+  }
 
   auto* button = w.ribbon()->findChild<QToolButton*>(QStringLiteral("tsr.primitive.box"));
   button->click();
@@ -117,6 +120,24 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (std::abs(volume() - (15 - pi)) > 1e-6) return fail("extrude did not follow the sketch edit");
   if (!s.undo() || std::abs(volume() - (15 - pi * 0.25)) > 1e-6) return fail("undo sketch edit");
 
+  // Typed values while drawing: a 30 mm line and a 40 x 20 rectangle.
+  s.newDocument();
+  ed = w.startSketch(QStringLiteral("XY"));
+  if (!ed) return fail("sketch for typed values");
+  ed->setTool(Tool::Line);
+  ed->clickAt(1, 1);
+  if (!ed->typeValue(QStringLiteral("30"))) return fail("typed line length");
+  ed->escape();
+  ed->setTool(Tool::Rectangle);
+  ed->clickAt(-5, -5);
+  if (!ed->typeValue(QStringLiteral("40 x 20"))) return fail("typed rectangle");
+  const auto& sk = ed->sketch();
+  if (sk.entities.size() != 5) return fail("typed geometry count");
+  const auto& l0 = sk.entities[0];
+  if (std::abs(std::hypot(sk.points[l0.b].x - sk.points[l0.a].x, sk.points[l0.b].y - sk.points[l0.a].y) - 3.0) > 1e-9)
+    return fail("typed line is not 30 mm");
+  w.cancelSketch();
+
   // Fillet an edge through the dialog (edge picked as the canvas would).
   s.newDocument();
   if (!s.run("tsr.primitive.box", {{"length", 2.0}, {"width", 2.0}, {"height", 2.0}}).empty()) return fail("box");
@@ -164,6 +185,9 @@ int main(int argc, char** argv) {
                                    QStringLiteral("Open this sketch in sketch mode after startup (screenshots)."),
                                    QStringLiteral("name"));
   parser.addOption(editSketchOpt);
+  QCommandLineOption commandOpt(QStringLiteral("start-command"),
+                                QStringLiteral("Open this command's dialog after startup (screenshots)."), QStringLiteral("id"));
+  parser.addOption(commandOpt);
   parser.addOption(smokeOpt);
   parser.addOption(scriptOpt);
   parser.addOption(shotOpt);
@@ -196,6 +220,10 @@ int main(int argc, char** argv) {
       return 1;
     }
     window.viewport()->fitAll();
+  }
+  if (parser.isSet(commandOpt)) {
+    const QString id = parser.value(commandOpt);
+    QTimer::singleShot(400, &window, [&window, id] { window.startCommand(id); });
   }
   if (parser.isSet(editSketchOpt)) {
     // After the window is up, as when a user double-clicks the sketch.
