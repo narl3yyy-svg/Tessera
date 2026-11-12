@@ -320,10 +320,12 @@ SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) cons
   if (s.kind == Snap::OnCurve) p.onEntity = s.entity;
   if (s.kind == Snap::Midpoint) p.midpointOf = s.entity;
   if (s.perpendicular) p.perpendicularTo = s.reference;
+  if (s.parallel) p.parallelTo = s.reference;
+  if (s.kind == Snap::BodyEdge && s.bodyArc >= 0) p.bodyArc = s.bodyArc;
   if (s.tangent) p.tangentTo = s.reference;
   if (s.kind == Snap::BodyVertex) p.bodyPoint = true;
   if (s.kind == Snap::BodyEdge) {
-    p.bodyPoint = s.bodySegment < 0;
+    p.bodyPoint = s.bodySegment < 0 && s.bodyArc < 0;
     p.bodySegment = s.bodySegment;
   }
   return p;
@@ -360,10 +362,55 @@ int SketchEditor::materialize(const Pick& p) {
         sk_.addConstraint({ConstraintType::Fix, {q}, {}, sk_.points[q].x, sk_.points[q].y});
     }
     (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {line}});
+  } else if (p.bodyArc >= 0 && p.bodyArc < static_cast<int>(bodyEdges_.arcs.size())) {
+    const auto& g = bodyEdges_.arcs[p.bodyArc];
+    const bool full = std::abs(std::abs(g[4]) - 2 * kPi) < 1e-9;
+    // Already projected? (same centre and radius)
+    int curve = -1;
+    for (int i = 0; i < static_cast<int>(sk_.entities.size()) && curve < 0; ++i) {
+      const auto& e = sk_.entities[i];
+      if (!e.projected || !sketch::isRound(e.type)) continue;
+      const auto& c = sk_.points[e.center];
+      if (std::hypot(c.x - g[0], c.y - g[1]) < 1e-7 && std::abs(e.radius - g[2]) < 1e-7) curve = i;
+    }
+    if (curve < 0) {
+      const int c = sk_.addPoint(g[0], g[1]);
+      sk_.addConstraint({ConstraintType::Fix, {c}, {}, g[0], g[1]});
+      if (full) {
+        curve = sk_.addCircleAt(c, g[2]);
+      } else {
+        // Stored anticlockwise: start at the end the sweep leaves from.
+        const double a0 = g[4] > 0 ? g[3] : g[3] + g[4], a1 = g[4] > 0 ? g[3] + g[4] : g[3];
+        const int s0 = sk_.addPoint(g[0] + g[2] * std::cos(a0), g[1] + g[2] * std::sin(a0));
+        const int s1 = sk_.addPoint(g[0] + g[2] * std::cos(a1), g[1] + g[2] * std::sin(a1));
+        sk_.addConstraint({ConstraintType::Fix, {s0}, {}, sk_.points[s0].x, sk_.points[s0].y});
+        sk_.addConstraint({ConstraintType::Fix, {s1}, {}, sk_.points[s1].x, sk_.points[s1].y});
+        curve = sk_.addArc(c, s0, s1);
+      }
+      sk_.entities[curve].projected = true;
+      if (full) sk_.addConstraint({ConstraintType::Radius, {}, {curve}, g[2]});
+    }
+    (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {pt}, {curve}});
   } else if (p.bodyPoint) {
     sk_.addConstraint({ConstraintType::Fix, {pt}, {}, p.x, p.y});
   }
   return pt;
+}
+
+bool SketchEditor::onlyProjected(const sketch::Constraint& c) const {
+  bool any = false;
+  for (int e : c.entities) {
+    if (e < 0 || e >= static_cast<int>(sk_.entities.size()) || !sk_.entities[e].projected) return false;
+    any = true;
+  }
+  for (int p : c.points) {
+    bool owned = false;
+    for (const auto& e : sk_.entities)
+      if (e.projected && (e.a == p || e.b == p || e.center == p)) owned = true;
+    if (!owned) return false;
+    any = true;
+  }
+  return any;
 }
 
 int SketchEditor::curveEndingAt(int point, int exclude) const {
@@ -596,6 +643,7 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
       best = d;
       s.kind = Snap::BodyEdge;
       s.bodySegment = -1;
+      s.bodyArc = static_cast<int>(&g - bodyEdges_.arcs.data());
       s.x = g[0] + (x - g[0]) / d0 * g[2];
       s.y = g[1] + (y - g[1]) / d0 * g[2];
     }
@@ -643,6 +691,41 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
       s.vertical = snappedX = true;
     }
   }
+  // 6b. Parallel or perpendicular to another line in the sketch.
+  if (!steps_.empty() && tool_ == Tool::Line && !s.horizontal && !s.vertical) {
+    const Pick& from = steps_.back();
+    const double vx = x - from.x, vy = y - from.y, len = std::hypot(vx, vy);
+    if (len > tol * 2) {
+      double bestDev = tol;
+      for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+        const auto& e = sk_.entities[i];
+        if (e.type != EntityType::Line || e.construction) continue;
+        if (from.hit.kind == Hit::Point && (e.a == from.hit.index || e.b == from.hit.index)) continue;
+        const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
+        const double l = std::hypot(b.x - a.x, b.y - a.y);
+        if (l < 1e-12) continue;
+        const double ux = (b.x - a.x) / l, uy = (b.y - a.y) / l;
+        // Horizontal and vertical lines are covered by H/V above.
+        if (std::abs(ux) < 1e-9 || std::abs(uy) < 1e-9) continue;
+        for (int k = 0; k < 2; ++k) {
+          const double cx = k == 0 ? ux : -uy, cy = k == 0 ? uy : ux;
+          const double along = vx * cx + vy * cy;
+          const double dev = std::abs(vx * cy - vy * cx);
+          if (dev < bestDev) {
+            bestDev = dev;
+            s.x = from.x + cx * along;
+            s.y = from.y + cy * along;
+            s.reference = i;
+            s.parallel = k == 0;
+            s.perpendicular = k == 1;
+            s.fromX = from.x;
+            s.fromY = from.y;
+          }
+        }
+      }
+      if (s.reference >= 0) return s;
+    }
+  }
   double bx = tol, by = tol;
   for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {
     if (i == exclude) continue;
@@ -681,7 +764,13 @@ void SketchEditor::showSnap(const Snap& s) {
   const double px = view_->modelPerPixel();
   // Guide lines: dashed from the previous point (H/V), dotted from aligned points.
   sketch::Sketch guides;
-  if (s.horizontal || s.vertical || s.tangent || s.perpendicular) guides.addLine(s.fromX, s.fromY, s.x, s.y);
+  if (s.horizontal || s.vertical || s.tangent || s.perpendicular || s.parallel) guides.addLine(s.fromX, s.fromY, s.x, s.y);
+  // Highlight the line the new one is parallel / perpendicular to.
+  if ((s.parallel || s.perpendicular) && s.reference >= 0 && sk_.entities[s.reference].type == EntityType::Line &&
+      !(s.tangent)) {
+    const auto& e = sk_.entities[s.reference];
+    guides.addLine(sk_.points[e.a].x, sk_.points[e.a].y, sk_.points[e.b].x, sk_.points[e.b].y);
+  }
   if (s.alignX >= 0) guides.addLine(sk_.points[s.alignX].x, sk_.points[s.alignX].y, s.x, s.y);
   if (s.alignY >= 0) guides.addLine(sk_.points[s.alignY].x, sk_.points[s.alignY].y, s.x, s.y);
   const TopoDS_Shape gs = sketch::curves(guides, frame_, false);
@@ -705,6 +794,7 @@ void SketchEditor::showSnap(const Snap& s) {
   if (s.vertical) glyph += QStringLiteral(" V");
   if (s.perpendicular) glyph += QStringLiteral(" \u27C2");   // perpendicular
   if (s.tangent) glyph += QStringLiteral(" T");
+  if (s.parallel) glyph += QStringLiteral(" \u2225");   // parallel
   if (s.kind == Snap::Free || s.kind == Snap::Grid) {
     if (glyph.isEmpty() && s.alignX < 0 && s.alignY < 0 && s.kind == Snap::Free) return;
   }
@@ -769,6 +859,7 @@ SketchEditor::Hit SketchEditor::hitTest(double x, double y, bool pointsFirst) co
     if (auto a = labelAnchor(i)) {
       // Hidden labels (Sketch Palette) cannot be clicked.
       if (sketch::isDimension(sk_.constraints[i].type) ? !display_.dimensions : !display_.constraints) continue;
+      if (onlyProjected(sk_.constraints[i])) continue;
       const double d = std::hypot(a->first - x, a->second - y);
       if (d < labelD) {
         labelD = d;
@@ -869,6 +960,8 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       // Inferred relations first (they say more than horizontal/vertical).
       if (end.perpendicularTo >= 0)
         (void)sketch::addConstraintChecked(sk_, {ConstraintType::Perpendicular, {}, {end.perpendicularTo, l}});
+      if (end.parallelTo >= 0)
+        (void)sketch::addConstraintChecked(sk_, {ConstraintType::Parallel, {}, {end.parallelTo, l}});
       if (end.tangentTo >= 0 && end.tangentTo < static_cast<int>(sk_.entities.size()) &&
           sk_.entities[end.tangentTo].type == EntityType::Arc)
         (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {end.tangentTo, l}});
@@ -2237,6 +2330,7 @@ void SketchEditor::rebuild() {
     if (!anchor) continue;
     const auto& c = sk_.constraints[i];
     if (sketch::isDimension(c.type) ? !display_.dimensions : !display_.constraints) continue;
+    if (onlyProjected(c)) continue;
     Handle(AIS_TextLabel) t = new AIS_TextLabel();
     t->SetText(ext(labelText(c)));
     t->SetPosition(sketch::toWorld(frame_, anchor->first, anchor->second));

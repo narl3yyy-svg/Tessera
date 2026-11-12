@@ -121,6 +121,8 @@ private:
     int midpointOf = -1;   // at this line's midpoint: a midpoint constraint is added
     int perpendicularTo = -1;   // the new line is perpendicular to this line
     int tangentTo = -1;         // the new line is tangent to this arc (or continues this line)
+    int parallelTo = -1;        // the new line is parallel to this line
+    int bodyArc = -1;           // on this curved body edge: it is projected too
     bool bodyPoint = false;     // on body geometry: the point is projected (fixed)
     int bodySegment = -1;       // on this straight body edge: the edge is projected too
   };
@@ -136,8 +138,10 @@ private:
     int entity = -1;
     bool horizontal = false, vertical = false;   // H/V from the previous point
     bool perpendicular = false, tangent = false; // to the curve the line starts from
+    bool parallel = false;                       // to `reference`, a line elsewhere
     int reference = -1;                          // that curve
     int bodySegment = -1;                        // BodyEdge: which straight body edge
+    int bodyArc = -1;                            // BodyEdge: which curved body edge
     int alignX = -1, alignY = -1;                // lined up with these points
     double fromX = 0, fromY = 0;                 // the previous point (for H/V guides)
   };
@@ -150,6 +154,8 @@ private:
     std::vector<std::array<double, 5>> arcs;              // cx, cy, r, a0, sweep (full circle: sweep 2*pi)
   } bodyEdges_;
   void collectBodyEdges();
+  // Constraint labels that belong to projected geometry are not shown.
+  bool onlyProjected(const sketch::Constraint& c) const;
   // The curve (line or arc) that ends at `point`, if exactly one does, and
   // its direction there, pointing out of the curve.
   int curveEndingAt(int point, int exclude = -1) const;

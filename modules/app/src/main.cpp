@@ -385,6 +385,7 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   // perpendicular inference; snapping onto a body edge projects it.
   s.newDocument();
   if (!s.run("tsr.primitive.box", {{"length", 2.0}, {"width", 2.0}, {"height", 2.0}, {"x", 10.0}}).empty()) return fail("box for projection");
+  if (!s.run("tsr.primitive.cylinder", {{"diameter", 2.0}, {"height", 1.0}, {"x", 30.0}}).empty()) return fail("cylinder for projection");
   ed = w.startSketch(QStringLiteral("XY"));
   ed->setTool(Tool::Line);
   ed->clickAt(0, 0);
@@ -416,6 +417,17 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     if (!perp) return fail("perpendicular inference");
   }
   ed->escape();
+  ed->clickAt(0, 20);
+  ed->clickAt(3, 21);       // an oblique line
+  ed->escape();
+  ed->clickAt(0, 23);
+  ed->clickAt(3.02, 24.0);  // nearly parallel to it
+  ed->escape();
+  {
+    bool par = false;
+    for (const auto& c : ed->sketch().constraints) par = par || c.type == tsr::sketch::ConstraintType::Parallel;
+    if (!par) return fail("parallel inference");
+  }
   ed->clickAt(11, 0.01);    // on the box's bottom edge (in the sketch plane)
   ed->clickAt(11, -2);
   ed->escape();
@@ -423,6 +435,14 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     bool projected = false;
     for (const auto& e : ed->sketch().entities) projected = projected || e.projected;
     if (!projected || !ed->status().ok) return fail("body edge projection");
+  }
+  ed->clickAt(30, 1.01);    // on the cylinder's bottom circle
+  ed->clickAt(30, 3);
+  ed->escape();
+  {
+    bool circle = false;
+    for (const auto& e : ed->sketch().entities) circle = circle || (e.projected && e.type == tsr::sketch::EntityType::Circle);
+    if (!circle || !ed->status().ok) return fail("curved body edge projection");
   }
   w.cancelSketch();
 
