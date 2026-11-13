@@ -225,6 +225,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
     case Tool::ThreePointCircle: emit message(tr("3-Point Circle: click three points on the circle.")); break;
     case Tool::ThreePointArc: emit message(tr("3-Point Arc: click the start, the end, then a point the arc passes through.")); break;
+    case Tool::TangentArc: emit message(tr("Tangent Arc: click the end of a line or arc, then where the arc ends. Each arc carries on from the last.")); break;
     case Tool::TwoTangentCircle: emit message(tr("2-Tangent Circle: click two lines, then place the circle.")); break;
     case Tool::ThreeTangentCircle: emit message(tr("3-Tangent Circle: click three lines.")); break;
     case Tool::OverallSlot: emit message(tr("Overall Slot: click both ends of the slot, then a point for the width.")); break;
@@ -1593,6 +1594,43 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       resetSteps();
       solveAndShow();
       if (!res_.ok) undo();
+      return;
+    }
+    case Tool::TangentArc: {
+      // First click: the open end of a line or arc; the arc leaves it tangent.
+      if (steps_.empty()) {
+        const Pick p = pickPoint(x, y);
+        const int ref = p.hit.kind == Hit::Point ? curveEndingAt(p.hit.index) : -1;
+        if (ref < 0) {
+          emit message(tr("Tangent Arc: click the free end of a line or arc."));
+          return;
+        }
+        arcFrom_ = p.hit.index;
+        arcRef_ = ref;
+        steps_.push_back(p);
+        return;
+      }
+      const Pick end = pickPoint(x, y, arcFrom_);
+      double cx, cy, r;
+      bool ccw;
+      if (!tangentArc(end.x, end.y, cx, cy, r, ccw)) {
+        emit message(tr("The arc's end must be off the tangent line."));
+        return;
+      }
+      checkpoint();
+      const int e = materialize(end);
+      const int c = sk_.addPoint(cx, cy);
+      const int arc = ccw ? sk_.addArc(c, arcFrom_, e, construction_) : sk_.addArc(c, e, arcFrom_, construction_);
+      (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {arcRef_, arc}});
+      solveAndShow();
+      if (!res_.ok) {
+        undo();
+        return;
+      }
+      // The next arc carries on, tangent to this one.
+      arcFrom_ = e;
+      arcRef_ = arc;
+      steps_ = {Pick{{Hit::Point, e}, sk_.points[e].x, sk_.points[e].y}};
       return;
     }
     case Tool::ThreePointArc: {
@@ -4072,7 +4110,7 @@ void SketchEditor::updatePreview(double x, double y) {
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
                        tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
                        tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc ||
-                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
+                       tool_ == Tool::TangentArc || tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (view_ && tool_ == Tool::TwoTangentCircle && tangentLines_.size() == 2) {
     double cx, cy, r;
@@ -4213,6 +4251,16 @@ void SketchEditor::updatePreview(double x, double y) {
       double cx, cy, r;
       if (steps_.size() == 1) tmp.addLine(a.x, a.y, x, y);
       else if (circumcircle(a.x, a.y, steps_[1].x, steps_[1].y, x, y, cx, cy, r)) tmp.addCircle(cx, cy, r);
+      break;
+    }
+    case Tool::TangentArc: {
+      double cx, cy, r;
+      bool ccw;
+      if (tangentArc(x, y, cx, cy, r, ccw)) {
+        const int c = tmp.addPoint(cx, cy), ps = tmp.addPoint(a.x, a.y), pe = tmp.addPoint(x, y);
+        if (ccw) tmp.addArc(c, ps, pe);
+        else tmp.addArc(c, pe, ps);
+      }
       break;
     }
     case Tool::ThreePointArc: {

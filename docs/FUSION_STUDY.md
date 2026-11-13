@@ -58,6 +58,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Timeline: drag the rollback marker; drag features to reorder (blue drop bar; refused if it breaks a feature); right-click Edit Feature / Edit Profile Sketch / Suppress / Delete / Roll History Marker Here / Roll to End. Not yet: feature groups, playback buttons.
 
 ### Sketch
+- [x] Tangent Arc (CREATE > Arc): click a free end of a line or arc, then the arc's end; it carries on, each arc tangent to the last.
 - [x] Line tool: click-drag from an end makes a tangent arc; automatic midpoint / perpendicular / parallel / tangent inference; dashed inference lines to points however far away (no constraint added); a point dropped on the sketch's origin axes stays on them (tied to the origin).
 - [x] Dimension tool: the dimension follows the cursor after the pick and a click places it (beside a sloped line or point pair: horizontal / vertical, else aligned); dimensions drawn with extension lines, arrows, leaders and angle arcs; the value can be dragged with Select; angle between two lines by clicking both.
 - [x] Driven (reference) dimensions, offered when a dimension would over-constrain the sketch: shown in brackets, following the geometry, ignored by the solver.

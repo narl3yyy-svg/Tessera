@@ -317,7 +317,8 @@ QWidget* MainWindow::buildSketchTab() {
              {T::ThreeTangentCircle, QStringLiteral("circle-3tan"), tr("3-Tangent Circle"), {}}});
   toolGroup(create, QStringLiteral("arc"),
             {{T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A")},
-             {T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {}}});
+             {T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {}},
+             {T::TangentArc, QStringLiteral("arc-tangent"), tr("Tangent Arc"), {}}});
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
   toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {});
   toolGroup(create, QStringLiteral("slot"),

@@ -42,7 +42,7 @@ public:
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
-    RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect,
+    RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc,
   };
 
   // featureId < 0: a new sketch named `name`.

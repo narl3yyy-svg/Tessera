@@ -1,0 +1,20 @@
+# Live: CREATE > Arc > Tangent Arc, as in the familiar tool. Click the end
+# of a line, then where the arc ends: the arc leaves the line tangent. The
+# next click carries on with another arc, tangent to the first (an S bend).
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 20 0
+key Escape
+menu sketch.group-arc sketch.arc-tangent
+sclick 20 0               # the line's end
+sclick 20 20              # a half circle up, leaving the line heading +X
+sclick 20 40              # and back the other way: an S
+key Escape
+shot /tmp/live_tangent_arc.png
+click palette.finish
+wait 600
