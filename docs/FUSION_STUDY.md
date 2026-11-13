@@ -105,6 +105,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Thread: Full Length off gives a length arrow and an offset arrow on the cylinder (Days 4, 9).
 - [ ] Thread: Modeled checkbox (cosmetic threads), more thread types.
 - [x] Hole: click a face (flat or curved) to place it; the hole follows the face normal (Day 6).
+- [x] Hole positions show as "N selected" with Clear.
 - [ ] Hole: drag the placed centre; snap it to circle centres; dimension it to edges.
 - [x] Chamfer types: Equal Distance, Two Distances, Distance and Angle, with Flip (Day 8).
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).

@@ -166,6 +166,25 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         break;
       }
       case InputType::String: {
+        if (id == "points") {
+          // Hole positions are clicked on the body: shown as a selection
+          // ("2 selected") with Clear, as in the familiar panel.
+          auto* box = new QWidget;
+          auto* row = new QHBoxLayout(box);
+          row->setContentsMargins(0, 0, 0, 0);
+          pointsLabel_ = new QLabel;
+          auto* clear = new QPushButton(tr("Clear"));
+          clear->setObjectName(QStringLiteral("clearPoints"));
+          row->addWidget(pointsLabel_, 1);
+          row->addWidget(clear);
+          pointsId_ = id;
+          connect(clear, &QPushButton::clicked, this, [this, id] {
+            onInputChanged(id, std::string());
+            updateProfilesLabel();
+          });
+          w = box;
+          break;
+        }
         auto* le = new QLineEdit;
         if (auto p = std::get_if<std::string>(&cur)) le->setText(QString::fromStdString(*p));
         connect(le, &QLineEdit::textEdited, this,
@@ -595,6 +614,10 @@ void CommandDialog::updateProfilesLabel() {
     const int n = count(currentVertices());
     verticesLabel_->setText(n == 0 ? tr("Click vertices in the canvas") : tr("%n vertex(es)", nullptr, n));
   }
+  if (pointsLabel_) {
+    const int n = count(stringInput(pointsId_));
+    pointsLabel_->setText(n == 0 ? tr("Click the body") : tr("%n selected", nullptr, n));
+  }
   if (featuresLabel_) {
     const int n = count(currentFeatures());
     featuresLabel_->setText(n == 0 ? tr("Click features in the timeline") : tr("%n feature(s)", nullptr, n));
@@ -678,6 +701,12 @@ bool CommandDialog::setInputForTest(const QString& id, const QVariant& value) {
   if (auto* le = qobject_cast<QLineEdit*>(w)) {
     le->setText(value.toString());
     emit le->textEdited(le->text()); // setText does not emit textEdited
+    return true;
+  }
+  // Selection rows (clicked in the canvas): set the value itself.
+  if (w && cmd_->def().input(id.toStdString())) {
+    onInputChanged(id.toStdString(), value.toString().toStdString());
+    updateProfilesLabel();
     return true;
   }
   return false;

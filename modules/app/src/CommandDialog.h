@@ -116,6 +116,8 @@ private:
   std::string bodiesId_;
   QLabel* featuresLabel_ = nullptr;
   std::string featuresId_;
+  QLabel* pointsLabel_ = nullptr;   // Hole positions
+  std::string pointsId_;
   QString stringInput(const std::string& id) const;
   void updateVisibility();
   void adjustAfterResize();
