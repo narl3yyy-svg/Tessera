@@ -92,7 +92,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Display settings > Visual Style: the six styles (Shaded; Shaded with Hidden Edges; Shaded with Visible Edges Only, the default; Wireframe; Wireframe with Hidden Edges; Wireframe with Visible Edges Only). The wireframe hidden-line styles run hidden-line removal for each view direction.
 - [ ] Display settings: environment, ground shadow, layout grid.
 - [x] Named views: Browser > Named Views with TOP, FRONT, RIGHT, HOME and the design's own; right-click the folder > New Named View saves the camera (kept in the design); double-click or Go To glides there; rename in place, Delete. Home view, Fit (F6).
-- [ ] ViewCube corners and edges, drag the ViewCube to orbit.
+- [x] ViewCube: faces, edges and corners turn the view (Z up again, as the familiar cube does); dragging the cube orbits.
 
 ### Data and files
 - [ ] Recent files / Data Panel replacement for local files; Save / Save As versions; Export F3D-like archive of the local design (open format).

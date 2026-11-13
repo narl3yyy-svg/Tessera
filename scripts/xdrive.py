@@ -396,6 +396,29 @@ def main():
             count = diff.histogram()[255]
             if count < int(a[2]):
                 sys.exit("xdrive: line %d: %s and %s differ in %d pixels, expected %s or more" % (n, a[0], a[1], count, a[2]))
+        elif cmd in ("cube", "cubedrag"):
+            # The ViewCube: its centre sits 85 px in from the canvas's top
+            # right corner. cube DX DY clicks there; cubedrag DX DY drags from
+            # the centre by that much, slowly.
+            vx, vy, vw, vh = geometry()["viewport"]
+            cx, cy = vx + vw - 85, vy + 85
+            if cmd == "cube":
+                click(cx + float(a[0]), cy + float(a[1]))
+            else:
+                move(cx, cy)
+                button(True)
+                for i in range(1, 31):
+                    move(cx + float(a[0]) * i / 30, cy + float(a[1]) * i / 30)
+                    time.sleep(0.02)
+                button(False)
+            time.sleep(0.6)
+        elif cmd == "expectaxisnot":
+            w = geometry()["world"]
+            o = w["o"]
+            v = (w[a[0]][0] - o[0], w[a[0]][1] - o[1])
+            length = math.hypot(*v) or 1
+            if math.hypot(v[0] / length - float(a[1]), v[1] / length - float(a[2])) < 0.2:
+                sys.exit("xdrive: line %d: axis %s still points %r" % (n, a[0], v))
         elif cmd == "expectaxis":
             # Where a world axis points on screen (unit dx dy, y down), or
             # "0 0": straight at the viewer. Waits out a camera move.

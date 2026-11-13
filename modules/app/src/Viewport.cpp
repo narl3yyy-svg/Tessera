@@ -2,6 +2,7 @@
 #include "Theme.h"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_ViewCube.hxx>
 #include <V3d_AmbientLight.hxx>
 #include <V3d_DirectionalLight.hxx>
 #include <Aspect_DisplayConnection.hxx>
@@ -206,6 +207,9 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     cube_->SetFixedAnimationLoop(false);
     cube_->SetAutoStartAnimation(true);
     cube_->SetDuration(0.35);
+    // A click turns to that side with Z up again, as the familiar cube does
+    // (otherwise a corner reached from TOP would come out rolled).
+    cube_->SetResetCamera(true);
     cube_->SetTransformPersistence(
         new Graphic3d_TransformPers(Graphic3d_TMF_TriedronPers, Aspect_TOTP_RIGHT_UPPER, Graphic3d_Vec2i(85, 85)));
   } catch (const Standard_Failure& f) {
@@ -511,6 +515,8 @@ void Viewport::mousePressEvent(QMouseEvent* e) {
   if (e->button() == Qt::LeftButton && ownsLeftButton()) {
     leftDown_ = true;
     boxDrag_ = false;
+    cubePress_ = glReady_ && onViewCube(e->position());
+    if (cubePress_) return;   // a click or an orbit: decided when it moves
     holdTimer_->start();
   }
   if (!glReady_) return;
@@ -568,6 +574,14 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
     return;
   }
   if (e->button() == Qt::LeftButton) holdTimer_->stop();
+  if (e->button() == Qt::LeftButton && cubeDrag_) {
+    cubeDrag_ = cubePress_ = false;
+    if (glReady_) UpdateMouseButtons(toPixels(e->position()), Aspect_VKeyMouse_NONE, Aspect_VKeyFlags_NONE, false);
+    bindLeftButton();
+    updateView();
+    return;
+  }
+  if (e->button() == Qt::LeftButton) cubePress_ = false;
   if (e->button() == Qt::LeftButton && leftDown_) {
     leftDown_ = false;
     const bool box = boxDrag_;
@@ -592,7 +606,15 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
     hoverPos_ = e->position();
     hoverTimer_->start();
   }
-  if (leftDown_ && (e->buttons() & Qt::LeftButton) && ownsLeftButton() &&
+  if (cubePress_ && !cubeDrag_ && (e->buttons() & Qt::LeftButton) &&
+      (e->position() - pressPos_).manhattanLength() >= 5) {
+    // A drag that starts on the ViewCube orbits the view.
+    cubeDrag_ = true;
+    leftDown_ = false;
+    ChangeMouseGestureMap().Bind(Aspect_VKeyMouse_LeftButton, AIS_MouseGesture_RotateOrbit);
+    UpdateMouseButtons(toPixels(pressPos_), Aspect_VKeyMouse_LeftButton, Aspect_VKeyFlags_NONE, false);
+  }
+  if (leftDown_ && !cubePress_ && (e->buttons() & Qt::LeftButton) && ownsLeftButton() &&
       (boxDrag_ || (e->position() - pressPos_).manhattanLength() >= 5)) {
     holdTimer_->stop();
     boxDrag_ = true;
@@ -713,6 +735,12 @@ void Viewport::handleDynamicHighlight(const Handle(AIS_InteractiveContext)& ctx,
   const bool thin = !o.IsNull() && o->HasShape() &&
                     (o->Shape().ShapeType() == TopAbs_EDGE || o->Shape().ShapeType() == TopAbs_VERTEX);
   showIdleHover(thin ? o->Shape() : TopoDS_Shape());
+}
+
+bool Viewport::onViewCube(const QPointF& pos) {
+  const Graphic3d_Vec2i p = toPixels(pos);
+  context_->MoveTo(p.x(), p.y(), view_, false);
+  return context_->HasDetected() && !Handle(AIS_ViewCubeOwner)::DownCast(context_->DetectedOwner()).IsNull();
 }
 
 void Viewport::clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods) {

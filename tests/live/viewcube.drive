@@ -1,0 +1,23 @@
+# Live: the ViewCube, as in the familiar tool. A click on its top face looks
+# down; a corner gives the corner's isometric view; an edge looks along the
+# edge's bisector; dragging the cube orbits the view.
+waitfor tsr.feature.extrude
+wait 800
+expectaxis z 0 -1             # home: Z up the screen
+cube 0 -22                    # the top face
+expectaxis z 0 0
+expectaxis y 0 -1
+cube 34 34                    # bottom-right corner of the top face: top-front-right
+expectaxis z 0 -1
+expectaxisnot y 0 0
+bdclick Named_Views
+wait 300
+bdclick TOP
+expectaxis z 0 0
+cube 34 0                     # the top face's right edge: from +X and above
+expectaxis y 1 0
+bdclick HOME
+expectaxis z 0 -1
+cubedrag -300 0               # orbit by dragging the cube (free orbit: Z may tilt)
+expectaxisnot x 0.866 0.5
+shot /tmp/live_viewcube.png

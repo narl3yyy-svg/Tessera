@@ -64,7 +64,7 @@ never needs the network.
 | Action | How |
 |---|---|
 | Orbit / pan / zoom | **Shift + middle drag** / **middle drag** / **wheel** (other schemes in *File → Preferences*) |
-| Standard views | Click the ViewCube, or *Views* on the navigation bar; **F6** fits, **Home** resets |
+| Standard views | Click the ViewCube (faces, edges, corners; drag it to orbit), or *Views* on the navigation bar; **F6** fits, **Home** resets |
 | Named views | Browser > *Named Views*: double-click TOP, FRONT, RIGHT, HOME or your own; right-click the folder > *New Named View* saves the current camera in the design |
 | Visual style | *Display > Visual Style* on the navigation bar: Shaded, Shaded with Hidden Edges, Shaded with Visible Edges Only (default), Wireframe, Wireframe with Hidden Edges, Wireframe with Visible Edges Only |
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |

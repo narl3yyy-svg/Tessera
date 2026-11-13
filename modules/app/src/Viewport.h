@@ -371,7 +371,11 @@ private:
   bool panTool_ = false;
   // The left button in the default select mode is handled here (click and
   // window / crossing box), not by the view controller.
-  bool ownsLeftButton() const { return !interactor_ && !orbitTool_ && !panTool_; }
+  bool ownsLeftButton() const { return !interactor_ && !orbitTool_ && !panTool_ && !cubeDrag_; }
+  // Dragging the ViewCube orbits, as in the familiar tool; a click on it
+  // (face, edge or corner) still turns the view to that side.
+  bool cubePress_ = false, cubeDrag_ = false;
+  bool onViewCube(const QPointF& pos);
   void clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods);
   void boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods);
   QWidget* selectionBox_ = nullptr;

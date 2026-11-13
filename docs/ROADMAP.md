@@ -39,7 +39,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb ✅ · Zebra ✅ · Draft Analysis ✅ · Curvature Map ✅ · Isocurve · Minimum Radius · Accessibility
 
-**Display**: Named Views ✅ · Visual Style ✅ (all six, hidden-line wireframes) · Orthographic / Perspective ✅ · Environment · Ground shadow · Layout grid
+**Display**: ViewCube ✅ (faces, edges, corners, drag to orbit) · Named Views ✅ · Visual Style ✅ (all six, hidden-line wireframes) · Orthographic / Perspective ✅ · Environment · Ground shadow · Layout grid
 
 **Insert**: Insert Mesh / CAD (STEP, IGES, STL, BREP) ✅ · Insert SVG · Insert DXF · Canvas · Decal · McMaster-style part libraries (no)
 
