@@ -39,6 +39,7 @@ public:
     Coincident, HorizontalVertical, Parallel, Perpendicular, Equal, Tangent, Fix, Midpoint, Concentric,
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
+    ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
   };
 
   // featureId < 0: a new sketch named `name`.

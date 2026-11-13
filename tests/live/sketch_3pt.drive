@@ -1,0 +1,29 @@
+# Live: 3-Point Rectangle, 2-Point Circle, 3-Point Circle and 3-Point Arc,
+# as in the familiar CREATE panel.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.rectangle-3pt
+sclick 0 20
+sclick 30 30              # one side
+sclick 20 60              # the width
+key Escape
+click sketch.circle-2pt
+sclick 60 20
+sclick 80 20              # a diameter
+key Escape
+click sketch.circle-3pt
+sclick 100 20
+sclick 120 20
+sclick 110 30             # three points on it
+key Escape
+click sketch.arc-3pt
+sclick 0 -40
+sclick 20 -40             # start and end
+sclick 10 -30             # through the top
+key Escape
+shot /tmp/live_sketch_3pt.png
+click palette.finish
+wait 600

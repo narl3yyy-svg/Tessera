@@ -265,8 +265,12 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Select, QStringLiteral("select"), tr("Select / move"), QStringLiteral("Q"));
   toolButton(create, T::Line, QStringLiteral("line"), tr("Line"), QStringLiteral("L"));
   toolButton(create, T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R"));
+  toolButton(create, T::ThreePointRectangle, QStringLiteral("rectangle-3pt"), tr("3-Point Rectangle"), {});
   toolButton(create, T::CenterRectangle, QStringLiteral("center-rectangle"), tr("Center Rectangle"), {});
   toolButton(create, T::Circle, QStringLiteral("circle"), tr("Center Diameter Circle"), QStringLiteral("C"));
+  toolButton(create, T::TwoPointCircle, QStringLiteral("circle-2pt"), tr("2-Point Circle"), {});
+  toolButton(create, T::ThreePointCircle, QStringLiteral("circle-3pt"), tr("3-Point Circle"), {});
+  toolButton(create, T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {});
   toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
   toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});

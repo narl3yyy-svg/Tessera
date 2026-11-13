@@ -281,6 +281,38 @@ void arcIcon(QPainter& p) {
   dot(p, 10, 32);
 }
 
+void rect3Icon(QPainter& p) {   // a tilted rectangle from three clicks
+  stroke(p);
+  const QPointF a(12, 40), b(36, 16), c(52, 32), d(28, 56);
+  p.drawPolygon(QPolygonF({a, b, c, d}));
+  dot(p, a.x(), a.y());
+  dot(p, b.x(), b.y());
+  dot(p, c.x(), c.y());
+}
+
+void circle2Icon(QPainter& p) {   // a circle through the ends of a diameter
+  stroke(p);
+  p.drawEllipse(QPointF(32, 32), 22, 22);
+  dot(p, 10, 32);
+  dot(p, 54, 32);
+}
+
+void circle3Icon(QPainter& p) {   // a circle through three points
+  stroke(p);
+  p.drawEllipse(QPointF(32, 32), 22, 22);
+  dot(p, 10, 32);
+  dot(p, 32, 10);
+  dot(p, 48, 48);
+}
+
+void arc3Icon(QPainter& p) {   // an arc through start, end and a point between
+  stroke(p);
+  p.drawArc(QRectF(10, 14, 44, 44), 0, 180 * 16);
+  dot(p, 10, 36);
+  dot(p, 54, 36);
+  dot(p, 32, 14);
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -954,6 +986,10 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("rectangle")) rectIcon(p);
   else if (name == QLatin1String("circle")) circleIcon(p);
   else if (name == QLatin1String("arc")) arcIcon(p);
+  else if (name == QLatin1String("rectangle-3pt")) rect3Icon(p);
+  else if (name == QLatin1String("circle-2pt")) circle2Icon(p);
+  else if (name == QLatin1String("circle-3pt")) circle3Icon(p);
+  else if (name == QLatin1String("arc-3pt")) arc3Icon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

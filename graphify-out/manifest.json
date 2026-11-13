@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794535394.8052344,
-    "seen": 1794546759.3844712,
-    "ast_hash": "48fe10041ef6327d6d2837b727120a5e",
+    "mtime": 1794566868.4896736,
+    "seen": 1794567173.0627224,
+    "ast_hash": "3901b847f7504fc48fe48d7cbc2aaaff",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794560660.425361,
-    "seen": 1794560876.7763882,
-    "ast_hash": "eb3e3554571db87dce2060e7d28e827c",
+    "mtime": 1794566868.4896736,
+    "seen": 1794567173.0627275,
+    "ast_hash": "b2db05623c2803d4d768798141095e10",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -192,15 +192,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794564522.0759234,
-    "seen": 1794565864.9588265,
-    "ast_hash": "23982272f36a83e00b919c931ae0a62f",
+    "mtime": 1794567014.0242367,
+    "seen": 1794567173.0627344,
+    "ast_hash": "176bfd0144214d81c7877925cb35643b",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
-    "mtime": 1794564522.0724192,
-    "seen": 1794565864.9588273,
-    "ast_hash": "55184504fc377731318342fc3fc6a535",
+    "mtime": 1794566868.4853501,
+    "seen": 1794567173.062735,
+    "ast_hash": "542f68d69451c68a6d4d191a81ecb95f",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.cpp": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794565859.3633654,
-    "seen": 1794565864.959089,
-    "ast_hash": "679b9fe7856900b96c0645ca51147f38",
+    "mtime": 1794567167.5395672,
+    "seen": 1794567173.0629978,
+    "ast_hash": "1b9993d08a0d4a647c0eec49cb15faa7",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794564770.4758673,
-    "seen": 1794565864.959098,
-    "ast_hash": "e267cfb1b6b04389ac248ffc9a8bd7a4",
+    "mtime": 1794566925.358554,
+    "seen": 1794567173.0630069,
+    "ast_hash": "e232ff30831b7d77ac5f4795032350d8",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2145,6 +2145,12 @@
     "mtime": 1794564801.326485,
     "seen": 1794565864.95888,
     "ast_hash": "dcde6ec7f8002e65018e646d54e3d6c0",
+    "semantic_hash": ""
+  },
+  "tests/live/sketch_3pt_check.py": {
+    "mtime": 1794567014.0252352,
+    "seen": 1794567173.0628254,
+    "ast_hash": "0032e8e4866dd767e6ce69ca600e3605",
     "semantic_hash": ""
   }
 }

@@ -76,6 +76,25 @@ Handle(AIS_Shape) wire(const TopoDS_Shape& s, const Quantity_Color& c, double wi
   return a;
 }
 
+// The circle through three points: false when they are (nearly) in line.
+bool circumcircle(double ax, double ay, double bx, double by, double cx, double cy, double& ox, double& oy, double& r) {
+  const double d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+  const double scale = std::max({std::hypot(bx - ax, by - ay), std::hypot(cx - ax, cy - ay), 1e-12});
+  if (std::abs(d) < 1e-9 * scale * scale) return false;
+  const double a2 = ax * ax + ay * ay, b2 = bx * bx + by * by, c2 = cx * cx + cy * cy;
+  ox = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d;
+  oy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d;
+  r = std::hypot(ax - ox, ay - oy);
+  return true;
+}
+
+// Does the counter-clockwise arc from angle s to e pass through m?
+bool ccwContains(double s, double e, double m) {
+  const double twoPi = 2 * std::numbers::pi;
+  auto norm = [&](double a) { return a - twoPi * std::floor(a / twoPi); };
+  return norm(m - s) < norm(e - s);
+}
+
 TCollection_ExtendedString ext(const QString& s) {
   return TCollection_ExtendedString(s.toUtf8().constData(), /*isMultiByte=*/true);
 }
@@ -194,6 +213,10 @@ void SketchEditor::setTool(Tool t) {
     case Tool::CenterRectangle: emit message(tr("Center Rectangle: click the centre, then a corner. Type sizes in the boxes (Tab, Enter).")); break;
     case Tool::Polygon: emit message(tr("Polygon: click the centre, then a corner. The boxes take the diameter and the number of sides.")); break;
     case Tool::Slot: emit message(tr("Slot: click one end centre, then the other. The boxes take length and width.")); break;
+    case Tool::ThreePointRectangle: emit message(tr("3-Point Rectangle: click both ends of one side, then a point for the width.")); break;
+    case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
+    case Tool::ThreePointCircle: emit message(tr("3-Point Circle: click three points on the circle.")); break;
+    case Tool::ThreePointArc: emit message(tr("3-Point Arc: click the start, the end, then a point the arc passes through.")); break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
@@ -1399,6 +1422,98 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       sk_.addArc(pc, ps, pe, construction_);
       resetSteps();
       solveAndShow();
+      return;
+    }
+    case Tool::ThreePointRectangle: {
+      if (steps_.size() < 2) {
+        if (!steps_.empty() && std::hypot(x - steps_[0].x, y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick a = steps_[0], b = steps_[1];
+      const double len = std::hypot(b.x - a.x, b.y - a.y);
+      if (len < 1e-12) return resetSteps();
+      const Pick wpick = pickPoint(x, y);   // the width click snaps like the others
+      x = wpick.x;
+      y = wpick.y;
+      // The width: how far the third click is across the first side.
+      const double nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      const double h = (x - a.x) * nx + (y - a.y) * ny;
+      if (std::abs(h) < tolerance() / 2) return;
+      checkpoint();
+      const int p0 = materialize(a), p1 = materialize(b);
+      const int p2 = sk_.addPoint(sk_.points[p1].x + nx * h, sk_.points[p1].y + ny * h);
+      const int p3 = sk_.addPoint(sk_.points[p0].x + nx * h, sk_.points[p0].y + ny * h);
+      const int l0 = sk_.addLine(p0, p1, construction_), l1 = sk_.addLine(p1, p2, construction_);
+      const int l2 = sk_.addLine(p2, p3, construction_), l3 = sk_.addLine(p3, p0, construction_);
+      sk_.addConstraint({ConstraintType::Perpendicular, {}, {l0, l1}});
+      sk_.addConstraint({ConstraintType::Parallel, {}, {l0, l2}});
+      sk_.addConstraint({ConstraintType::Parallel, {}, {l1, l3}});
+      autoHorizontalVertical(l0);   // a level or upright first side stays so
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::TwoPointCircle:
+    case Tool::ThreePointCircle: {
+      const size_t need = tool_ == Tool::TwoPointCircle ? 1 : 2;
+      if (steps_.size() < need) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick last = pickPoint(x, y);
+      double cx, cy, r;
+      if (tool_ == Tool::TwoPointCircle) {
+        cx = (steps_[0].x + last.x) / 2, cy = (steps_[0].y + last.y) / 2;
+        r = std::hypot(last.x - steps_[0].x, last.y - steps_[0].y) / 2;
+      } else if (!circumcircle(steps_[0].x, steps_[0].y, steps_[1].x, steps_[1].y, last.x, last.y, cx, cy, r)) {
+        emit message(tr("Those three points are in line: pick a point off the line."));
+        return;
+      }
+      if (r < tolerance() / 4) return;
+      checkpoint();
+      const int circle = sk_.addCircleAt(sk_.addPoint(cx, cy), r, construction_);
+      // Picks on existing geometry stay on the circle (as the clicks were).
+      std::vector<Pick> picks = steps_;
+      picks.push_back(last);
+      for (const Pick& p : picks)
+        if (p.hit.kind == Hit::Point || p.onEntity >= 0 || p.midpointOf >= 0 || p.bodyPoint || p.bodySegment >= 0 ||
+            p.bodyArc >= 0 || p.onXAxis || p.onYAxis)
+          (void)sketch::addConstraintChecked(sk_, {ConstraintType::PointOnEntity, {materialize(p)}, {circle}});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::ThreePointArc: {
+      if (steps_.size() < 2) {
+        if (!steps_.empty() && std::hypot(x - steps_[0].x, y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick s = steps_[0], e = steps_[1];
+      const Pick m = pickPoint(x, y);   // the point it passes through snaps too
+      x = m.x;
+      y = m.y;
+      double cx, cy, r;
+      if (!circumcircle(s.x, s.y, e.x, e.y, x, y, cx, cy, r)) {
+        emit message(tr("The arc needs a point off the line between its ends."));
+        return;
+      }
+      checkpoint();
+      const int ps = materialize(s), pe = materialize(e);
+      const int pc = sk_.addPoint(cx, cy);
+      // Arcs run counter-clockwise from start to end: the one through the
+      // third point decides which way round.
+      const double as = std::atan2(sk_.points[ps].y - cy, sk_.points[ps].x - cx);
+      const double ae = std::atan2(sk_.points[pe].y - cy, sk_.points[pe].x - cx);
+      const double am = std::atan2(y - cy, x - cx);
+      if (ccwContains(as, ae, am)) sk_.addArc(pc, ps, pe, construction_);
+      else sk_.addArc(pc, pe, ps, construction_);
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
       return;
     }
     case Tool::Project:
@@ -3235,7 +3350,8 @@ void SketchEditor::updatePreview(double x, double y) {
   }
   const bool drawing = tool_ == Tool::Line || tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle ||
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
-                       tool_ == Tool::Slot || tool_ == Tool::Spline;
+                       tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
+                       tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (!view_ || steps_.empty()) {
     if (view_) view_->redraw();
@@ -3349,6 +3465,47 @@ void SketchEditor::updatePreview(double x, double y) {
     case Tool::Circle: {
       const double r = std::hypot(x - a.x, y - a.y);
       if (r > 1e-9) tmp.addCircle(a.x, a.y, r);
+      break;
+    }
+    case Tool::TwoPointCircle: {
+      const double r = std::hypot(x - a.x, y - a.y) / 2;
+      if (r > 1e-9) tmp.addCircle((a.x + x) / 2, (a.y + y) / 2, r);
+      break;
+    }
+    case Tool::ThreePointCircle: {
+      double cx, cy, r;
+      if (steps_.size() == 1) tmp.addLine(a.x, a.y, x, y);
+      else if (circumcircle(a.x, a.y, steps_[1].x, steps_[1].y, x, y, cx, cy, r)) tmp.addCircle(cx, cy, r);
+      break;
+    }
+    case Tool::ThreePointArc: {
+      double cx, cy, r;
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+      } else if (circumcircle(a.x, a.y, steps_[1].x, steps_[1].y, x, y, cx, cy, r)) {
+        const int c = tmp.addPoint(cx, cy), ps = tmp.addPoint(a.x, a.y), pe = tmp.addPoint(steps_[1].x, steps_[1].y);
+        const double as = std::atan2(a.y - cy, a.x - cx), ae = std::atan2(steps_[1].y - cy, steps_[1].x - cx);
+        if (ccwContains(as, ae, std::atan2(y - cy, x - cx))) tmp.addArc(c, ps, pe);
+        else tmp.addArc(c, pe, ps);
+      } else {
+        tmp.addLine(a.x, a.y, steps_[1].x, steps_[1].y);
+      }
+      break;
+    }
+    case Tool::ThreePointRectangle: {
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+        break;
+      }
+      const auto& b = steps_[1];
+      const double len = std::hypot(b.x - a.x, b.y - a.y);
+      if (len < 1e-12) break;
+      const double nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+      const double h = (x - a.x) * nx + (y - a.y) * ny;
+      tmp.addLine(a.x, a.y, b.x, b.y);
+      tmp.addLine(b.x, b.y, b.x + nx * h, b.y + ny * h);
+      tmp.addLine(b.x + nx * h, b.y + ny * h, a.x + nx * h, a.y + ny * h);
+      tmp.addLine(a.x + nx * h, a.y + ny * h, a.x, a.y);
       break;
     }
     case Tool::Arc:
