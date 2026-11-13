@@ -21,11 +21,13 @@ Script lines (blank lines and # comments ignored):
   smove X Y                  move the pointer there (hover)
   sdrag X1 Y1 X2 Y2          press at one sketch point, drag to another, release
   spress X Y / srelease      press (and hold) / release the left button at a sketch point
+  wbox X1 Y1 Z1 X2 Y2 Z2 window|cross   selection box round a world box (mm)
   vdrag FX1 FY1 FX2 FY2      the same in canvas fractions
   wdrag NAME DX DY           press on widget NAME, drag by DX, DY pixels, release
   adrag DX DY                drag the in-canvas arrow by DX, DY pixels
   a2drag DX DY               drag the second arrow (Two Sides extrude)
   tclick NAME                click a feature in the timeline
+  vdrag FX1 FY1 FX2 FY2       drag in the canvas (fractions of its size): a selection box
   tdrag ITEM TARGET          drag a timeline item onto another (History_Marker for the marker)
   bclick / brclick / bdclick TEXT   click / right-click / double-click a Browser item
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
@@ -199,6 +201,9 @@ def main():
             click(*widget(a[0]), times=2)
         elif cmd == "vclick":
             click(*canvas(float(a[0]), float(a[1])))
+        elif cmd == "vdrag":
+            p, q = canvas(float(a[0]), float(a[1])), canvas(float(a[2]), float(a[3]))
+            drag(p[0], p[1], q[0], q[1])
         elif cmd == "plane":
             end = time.time() + 5
             while a[0] not in geometry().get("planes", {}):
@@ -227,6 +232,18 @@ def main():
             button(True, 3)
             button(False, 3)
             time.sleep(0.3)
+        elif cmd == "wbox":
+            # A selection box round a world-space box (mm): its 8 corners on
+            # screen plus a margin; "window" drags left to right, "cross"
+            # right to left.
+            lo, hi = [float(v) for v in a[0:3]], [float(v) for v in a[3:6]]
+            pts = [world_point(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]
+            x0, x1 = min(p[0] for p in pts) - 25, max(p[0] for p in pts) + 25
+            y0, y1 = min(p[1] for p in pts) - 25, max(p[1] for p in pts) + 25
+            if a[6] == "window":
+                drag(x0, y0, x1, y1)
+            else:
+                drag(x1, y0, x0, y1)
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
         elif cmd in ("bclick", "brclick", "bdclick"):

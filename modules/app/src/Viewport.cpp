@@ -435,8 +435,9 @@ void Viewport::handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const
 }
 
 Aspect_VKeyMouse Viewport::aisButtons(Qt::MouseButtons b) const {
-  // While an interactor (sketch editor) is active it owns the left button.
-  Aspect_VKeyMouse k = toVKeys(interactor_ ? (b & ~Qt::LeftButton) : b);
+  // While an interactor (sketch editor) is active it owns the left button;
+  // in select mode the left button is handled here (clickSelect / boxSelect).
+  Aspect_VKeyMouse k = toVKeys((interactor_ || ownsLeftButton()) ? (b & ~Qt::LeftButton) : b);
   if (navPreset_ == NavPreset::Tinkercad && (b & Qt::RightButton)) k |= Aspect_VKeyMouse_RightButton;
   return k;
 }
@@ -448,6 +449,10 @@ void Viewport::mousePressEvent(QMouseEvent* e) {
   if (interactor_ && e->button() == Qt::LeftButton) {
     interactor_->mousePress(e);
     return;
+  }
+  if (e->button() == Qt::LeftButton && ownsLeftButton()) {
+    leftDown_ = true;
+    boxDrag_ = false;
   }
   if (!glReady_) return;
   if (UpdateMouseButtons(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
@@ -500,6 +505,17 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
     interactor_->mouseRelease(e);
     return;
   }
+  if (e->button() == Qt::LeftButton && leftDown_) {
+    leftDown_ = false;
+    const bool box = boxDrag_;
+    boxDrag_ = false;
+    hideSelectionBox();
+    if (glReady_) {
+      if (box) boxSelect(pressPos_, e->position(), e->modifiers());
+      else clickSelect(e->position(), e->modifiers());
+    }
+    return;
+  }
   if (!glReady_) return;
   if (UpdateMouseButtons(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
     updateView();
@@ -508,6 +524,11 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
   if (arrowMouseMove(e)) return;
+  if (leftDown_ && (e->buttons() & Qt::LeftButton) && ownsLeftButton() &&
+      (boxDrag_ || (e->position() - pressPos_).manhattanLength() >= 5)) {
+    boxDrag_ = true;
+    showSelectionBox(pressPos_, e->position());
+  }
   if (!interactor_ && !pickTypes_.empty()) updateHoverHighlight(e->position());
   if (pickHint_) {
     const QString hint = planePicking_ ? tr("Select a plane or planar face") : cursorHint_;
@@ -550,6 +571,96 @@ QStringList Viewport::selectedBodies() const {
       if (shape == obj) out << QString::fromStdString(name);
   }
   return out;
+}
+
+namespace {
+// The window / crossing box drawn over the canvas.
+class SelectionBox : public QWidget {
+public:
+  explicit SelectionBox(QWidget* parent) : QWidget(parent) {
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setAttribute(Qt::WA_NoSystemBackground);
+    setObjectName(QStringLiteral("selectionBox"));
+  }
+  bool crossing = false;
+
+protected:
+  void paintEvent(QPaintEvent*) override {
+    QPainter p(this);
+    const QColor c = crossing ? QColor(60, 176, 67) : QColor(47, 143, 232);
+    QColor fill = c;
+    fill.setAlpha(40);
+    p.fillRect(rect(), fill);
+    QPen pen(c, 1, crossing ? Qt::DashLine : Qt::SolidLine);
+    p.setPen(pen);
+    p.drawRect(rect().adjusted(0, 0, -1, -1));
+  }
+};
+} // namespace
+
+void Viewport::showSelectionBox(const QPointF& from, const QPointF& to) {
+  auto* box = static_cast<SelectionBox*>(selectionBox_);
+  if (!box) selectionBox_ = box = new SelectionBox(this);
+  box->crossing = to.x() < from.x();
+  box->setGeometry(QRectF(from, to).normalized().toAlignedRect());
+  box->show();
+  box->raise();
+  box->update();
+}
+
+void Viewport::hideSelectionBox() {
+  if (selectionBox_) selectionBox_->hide();
+}
+
+void Viewport::clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods) {
+  const Graphic3d_Vec2i p = toPixels(pos);
+  context_->MoveTo(p.x(), p.y(), view_, false);
+  context_->SelectDetected((mods & (Qt::ShiftModifier | Qt::ControlModifier)) ? AIS_SelectionScheme_XOR
+                                                                               : AIS_SelectionScheme_Replace);
+  OnSelectionChanged(context_, view_);
+  updateView();
+}
+
+void Viewport::boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods) {
+  const Graphic3d_Vec2i a = toPixels(from), b = toPixels(to);
+  const AIS_SelectionScheme scheme = (mods & Qt::ShiftModifier)     ? AIS_SelectionScheme_Add
+                                     : (mods & Qt::ControlModifier) ? AIS_SelectionScheme_Remove
+                                                                    : AIS_SelectionScheme_Replace;
+  // Right to left: a crossing box (anything touched); else wholly inside.
+  context_->MainSelector()->AllowOverlapDetection(to.x() < from.x());
+  context_->SelectRectangle(Graphic3d_Vec2i(std::min(a.x(), b.x()), std::min(a.y(), b.y())),
+                            Graphic3d_Vec2i(std::max(a.x(), b.x()), std::max(a.y(), b.y())), view_, scheme);
+  context_->MainSelector()->AllowOverlapDetection(false);
+  // While a command picks profiles, faces or edges, each one boxed is
+  // reported as a pick (adding to the command's selection).
+  std::vector<std::pair<QString, int>> profiles;
+  std::vector<std::pair<QString, TopoDS_Shape>> subs;
+  for (context_->InitSelected(); context_->MoreSelected(); context_->NextSelected()) {
+    const Handle(AIS_InteractiveObject) obj = context_->SelectedInteractive();
+    bool isProfile = false;
+    for (const auto& pr : profileObjects_)
+      if (pr.shape == obj) {
+        profiles.emplace_back(QString::fromStdString(pr.sketch), pr.index);
+        isProfile = true;
+      }
+    if (isProfile || pickTypes_.empty() || planePicking_) continue;
+    const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(context_->SelectedOwner());
+    if (brep.IsNull() || !brep->HasShape()) continue;
+    for (const auto& [name, shape] : shapes_)
+      if (shape == obj) subs.emplace_back(QString::fromStdString(name), brep->Shape());
+  }
+  if (!profiles.empty() || !subs.empty() || !pickTypes_.empty() || planePicking_) {
+    context_->ClearSelected(false);
+    boxPicking_ = true;
+    for (const auto& [sketch, index] : profiles) emit profileClicked(sketch, index);
+    for (const auto& [body, shape] : subs) emit subShapeClicked(body, shape);
+    boxPicking_ = false;
+  } else {
+    const QStringList sel = selectedBodies();
+    if (sel.size() == 1) emit bodyClicked(sel.first());
+    emit selectionChanged();
+  }
+  updateView();
 }
 
 void Viewport::clearSelection() {

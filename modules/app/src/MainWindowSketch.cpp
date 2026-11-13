@@ -509,7 +509,10 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
     if (!active_->currentBody().isEmpty() && active_->currentBody() != body) refs.clear();
     active_->pickBody(body);
     const QString ref = QString::fromStdString(kernel::vertexReference(edge));
-    if (refs.contains(ref)) refs.removeAll(ref);
+    if (refs.contains(ref)) {
+      if (viewport_->boxPicking()) return;   // a box adds, never removes
+      refs.removeAll(ref);
+    }
     else refs << ref;
     active_->setVertices(refs.join(QLatin1Char(';')));
     return;
@@ -538,6 +541,7 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
       const auto r = isFace ? kernel::resolveFaces(shape, refs[i].toStdString())
                             : kernel::resolveEdges(shape, refs[i].toStdString());
       if (!r.empty() && r.front().IsSame(picked)) {
+        if (viewport_->boxPicking()) return;   // a box adds, never removes
         refs.removeAt(i);
         store(refs.join(QLatin1Char(';')));
         syncPickedShapes();
@@ -584,8 +588,11 @@ void MainWindow::onProfileClicked(const QString& sketchName, int index) {
         const int i = sketch::profileAt(profiles, frame, xy[0].toDouble(), xy[1].toDouble());
         if (i >= 0 && std::find(picked.begin(), picked.end(), i) == picked.end()) picked.push_back(i);
       }
-    if (auto it = std::find(picked.begin(), picked.end(), index); it != picked.end()) picked.erase(it);
-    else picked.push_back(index);
+    if (auto it = std::find(picked.begin(), picked.end(), index); it != picked.end()) {
+      if (!viewport_->boxPicking()) picked.erase(it);
+    } else {
+      picked.push_back(index);
+    }
     QStringList items;
     for (int i : picked)
       items << QStringLiteral("%1,%2").arg(profiles[i].x, 0, 'g', 12).arg(profiles[i].y, 0, 'g', 12);

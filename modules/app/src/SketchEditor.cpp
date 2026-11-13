@@ -39,6 +39,7 @@
 #include <optional>
 #include <tuple>
 #include <cmath>
+#include <numbers>
 
 namespace tsr::app {
 
@@ -1075,6 +1076,8 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::Select: {
       const Hit h = hitTest(x, y);
       dragged_ = false;
+      boxing_ = h.kind == Hit::None;
+      boxShown_ = false;
       dragX_ = x;
       dragY_ = y;
       dragPoint_ = (h.kind == Hit::Point && h.index > 0) ? h.index : -1;
@@ -1440,6 +1443,13 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
     view_->redraw();
     return;
   }
+  if (tool_ == Tool::Select && boxing_ && (e->buttons() & Qt::LeftButton)) {
+    if (boxShown_ || (e->position() - pressPos_).manhattanLength() >= 5) {
+      boxShown_ = true;
+      view_->showSelectionBox(pressPos_, e->position());
+      return;
+    }
+  }
   if ((e->buttons() & Qt::LeftButton) && (dragPoint_ >= 0 || dragLine_ >= 0)) {
     if (!dragged_) {
       if ((e->position() - pressPos_).manhattanLength() < 4) return;
@@ -1494,6 +1504,13 @@ void SketchEditor::mouseRelease(QMouseEvent* e) {
     return;
   }
   if (tool_ != Tool::Select) return;
+  const bool box = boxing_ && boxShown_;
+  boxing_ = boxShown_ = false;
+  if (box) {
+    view_->hideSelectionBox();
+    selectInBox(pressPos_, e->position(), e->modifiers());
+    return;
+  }
   const bool wasDrag = dragged_;
   dragPoint_ = dragLine_ = -1;
   dragged_ = false;
@@ -1512,6 +1529,98 @@ void SketchEditor::mouseRelease(QMouseEvent* e) {
     if (it != selection_.end()) selection_.erase(it);
     else selection_.push_back(h);
   }
+  rebuild();
+}
+
+// Window (left to right): curves and points wholly inside the box. Crossing
+// (right to left): anything the box touches. Shift / Ctrl add to the selection.
+void SketchEditor::selectInBox(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods) {
+  const QRectF box = QRectF(from, to).normalized();
+  const bool crossing = to.x() < from.x();
+  auto screen = [&](double x, double y) { return view_->toWidget(sketch::toWorld(frame_, x, y)); };
+  // Does the segment p-q touch the box? (Liang-Barsky clip.)
+  auto segmentHits = [&](QPointF p, QPointF q) {
+    double t0 = 0, t1 = 1;
+    const double dx = q.x() - p.x(), dy = q.y() - p.y();
+    const double ps[4] = {-dx, dx, -dy, dy};
+    const double qs[4] = {p.x() - box.left(), box.right() - p.x(), p.y() - box.top(), box.bottom() - p.y()};
+    for (int i = 0; i < 4; ++i) {
+      if (ps[i] == 0) {
+        if (qs[i] < 0) return false;
+        continue;
+      }
+      const double t = qs[i] / ps[i];
+      if (ps[i] < 0) t0 = std::max(t0, t);
+      else t1 = std::min(t1, t);
+      if (t0 > t1) return false;
+    }
+    return true;
+  };
+  // A curve as a polyline in sketch coordinates.
+  auto samples = [&](const sketch::Entity& en) {
+    std::vector<std::pair<double, double>> out;
+    const auto& pts = sk_.points;
+    switch (en.type) {
+      case EntityType::Line:
+        out = {{pts[en.a].x, pts[en.a].y}, {pts[en.b].x, pts[en.b].y}};
+        break;
+      case EntityType::Circle: {
+        const auto& c = pts[en.center];
+        for (int k = 0; k <= 72; ++k) {
+          const double t = 2 * std::numbers::pi * k / 72;
+          out.emplace_back(c.x + en.radius * std::cos(t), c.y + en.radius * std::sin(t));
+        }
+        break;
+      }
+      case EntityType::Arc: {
+        const auto& c = pts[en.center];
+        const double r = std::hypot(pts[en.a].x - c.x, pts[en.a].y - c.y);
+        const double s = std::atan2(pts[en.a].y - c.y, pts[en.a].x - c.x);
+        double e = std::atan2(pts[en.b].y - c.y, pts[en.b].x - c.x);
+        while (e <= s) e += 2 * std::numbers::pi;   // counter-clockwise from start to end
+        for (int k = 0; k <= 48; ++k) {
+          const double t = s + (e - s) * k / 48;
+          out.emplace_back(c.x + r * std::cos(t), c.y + r * std::sin(t));
+        }
+        break;
+      }
+      case EntityType::Spline:
+        for (int p : en.fit) out.emplace_back(pts[p].x, pts[p].y);
+        break;
+    }
+    return out;
+  };
+  std::vector<Hit> found;
+  std::vector<bool> used(sk_.points.size(), false);
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    const auto& en = sk_.entities[i];
+    for (int p : {en.a, en.b, en.center})
+      if (p >= 0 && p < static_cast<int>(used.size())) used[p] = true;
+    for (int p : en.fit)
+      if (p >= 0 && p < static_cast<int>(used.size())) used[p] = true;
+    const auto pts = samples(en);
+    if (pts.empty()) continue;
+    std::vector<QPointF> w;
+    for (const auto& [x, y] : pts) w.push_back(screen(x, y));
+    bool all = true, any = false;
+    for (const QPointF& q : w) {
+      const bool in = box.contains(q);
+      all = all && in;
+      any = any || in;
+    }
+    for (size_t k = 1; !any && crossing && k < w.size(); ++k) any = segmentHits(w[k - 1], w[k]);
+    if (crossing ? any : all) found.push_back({Hit::Entity, i});
+  }
+  // Sketch points on their own (not the ends or centres of curves).
+  for (int p = 1; p < static_cast<int>(sk_.points.size()); ++p)
+    if (!used[p] && box.contains(screen(sk_.points[p].x, sk_.points[p].y))) found.push_back({Hit::Point, p});
+  if (!(mods & (Qt::ShiftModifier | Qt::ControlModifier))) selection_.clear();
+  for (const Hit& h : found)
+    if (std::none_of(selection_.begin(), selection_.end(),
+                     [&](const Hit& s) { return s.kind == h.kind && s.index == h.index; }))
+      selection_.push_back(h);
+  emit message(found.empty() ? tr("Nothing inside the box.")
+                             : tr("%n item(s) selected.", nullptr, static_cast<int>(selection_.size())));
   rebuild();
 }
 

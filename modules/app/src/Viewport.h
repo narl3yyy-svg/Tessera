@@ -128,6 +128,15 @@ public:
   QStringList selectedBodies() const;
   void clearSelection();
 
+  // Window / crossing selection, as in the familiar tool: drag left to right
+  // for a window (solid blue box, only what is wholly inside), right to left
+  // for a crossing (dashed green box, anything it touches). Shift adds,
+  // Ctrl removes. The sketch editor draws the same box.
+  void showSelectionBox(const QPointF& from, const QPointF& to);
+  void hideSelectionBox();
+  // True while a box's picks are being reported: they add, never toggle off.
+  bool boxPicking() const { return boxPicking_; }
+
   // Sketches and their profiles (closed regions).
   void setSketches(std::vector<SketchDisplay> sketches);
   void setProfilePicking(bool on);   // profiles become clickable (Extrude)
@@ -318,6 +327,15 @@ private:
 
   bool orbitTool_ = false;
   bool panTool_ = false;
+  // The left button in the default select mode is handled here (click and
+  // window / crossing box), not by the view controller.
+  bool ownsLeftButton() const { return !interactor_ && !orbitTool_ && !panTool_; }
+  void clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods);
+  void boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods);
+  QWidget* selectionBox_ = nullptr;
+  bool leftDown_ = false;
+  bool boxDrag_ = false;
+  bool boxPicking_ = false;
   bool glReady_ = false;
   bool fittedOnce_ = false;
   QString reason_;

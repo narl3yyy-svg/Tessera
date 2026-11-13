@@ -286,6 +286,9 @@ private:
   int dragLine_ = -1;
   double dragX_ = 0, dragY_ = 0;
   bool dragged_ = false;
+  bool boxing_ = false;      // Select: a press on empty space; a drag draws a box
+  bool boxShown_ = false;
+  void selectInBox(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods);
   QPointF pressPos_;
   QPointer<QLineEdit> valueBox_;
 

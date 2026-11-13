@@ -1,0 +1,25 @@
+# Live: window and crossing selection in a sketch. A window (left to right)
+# round the rectangle's left side takes only the left line; a crossing (right
+# to left) through the right side takes only the line it touches.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.rectangle
+sclick 0 0
+sclick 40 30
+key Escape
+key q
+wait 300
+sdrag -10 -10 10 40     # window: wholly inside is only the left line
+wait 300
+key Delete
+wait 300
+sdrag 50 22 30 8        # crossing: touches only the right line
+wait 300
+key Delete
+wait 300
+shot /tmp/live_sketch_box.png
+click palette.finish
+wait 600
