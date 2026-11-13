@@ -56,7 +56,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ### Sketch
 - [x] Line tool: click-drag from an end makes a tangent arc; automatic midpoint / perpendicular / parallel / tangent inference; dashed inference lines to points however far away (no constraint added); a point dropped on the sketch's origin axes stays on them (tied to the origin).
-- [ ] Dimension tool: placing a dimension follows the cursor before the click; driven (reference) dimensions; angular dimension between lines by clicking both.
+- [x] Dimension tool: the dimension follows the cursor after the pick and a click places it (beside a sloped line or point pair: horizontal / vertical, else aligned); dimensions drawn with extension lines, arrows, leaders and angle arcs; the value can be dragged with Select; angle between two lines by clicking both.
+- [ ] Driven (reference) dimensions, offered when a dimension would over-constrain the sketch.
 - [ ] Sketch text, ellipse, conic, 3-point rectangle / circle / arc, tangent circle, centre-point arc slot, overall slot.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
@@ -98,7 +99,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
 - [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); 3-point arc; Centerline linetype (Day 8).
 - [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
-- [ ] Dimension: where the cursor is dragged decides horizontal / vertical / aligned; dimensions can be named d1, d2 ... and used in others (Days 5, 8).
+- [x] Dimension: where the cursor is dragged decides horizontal / vertical / aligned (Day 5).
+- [ ] Dimensions named d1, d2 ... and used in other dimensions (Day 8).
 
 ### Solid
 - [x] Rectangular / Circular Pattern of Features picked in the timeline, Extent / Spacing, a drag arrow per direction (Days 1, 5, 8).

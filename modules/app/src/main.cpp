@@ -140,6 +140,7 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (!ed) return fail("edit sketch");
   ed->setTool(Tool::Dimension);
   ed->clickAt(2.5, 1.5);   // the circle
+  ed->clickAt(4.5, 3.5);   // where its diameter goes
   if (!ed->submitValue(QStringLiteral("20"))) return fail("diameter box");
   if (!w.finishSketch()) return fail("finish edited sketch");
   if (std::abs(volume() - (15 - pi)) > 1e-6) return fail("extrude did not follow the sketch edit");

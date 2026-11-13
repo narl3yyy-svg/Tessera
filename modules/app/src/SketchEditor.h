@@ -14,6 +14,7 @@
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <AIS_InteractiveObject.hxx>
+#include <Quantity_Color.hxx>
 
 #include <QObject>
 #include <QPointer>
@@ -220,6 +221,15 @@ private:
   void updatePreview(double x, double y);
   void clearPreview();
   std::optional<std::pair<double, double>> labelAnchor(int constraintIndex) const;
+  // Dimensions drawn as in the familiar sketcher: extension lines, a
+  // dimension line with arrows (or a leader / an arc), the value at (lx, ly).
+  std::pair<double, double> dimensionBase(const sketch::Constraint& c) const;
+  void addDimensionGraphics(const sketch::Constraint& c, double lx, double ly, const Quantity_Color& colour,
+                            std::vector<Handle(AIS_InteractiveObject)>& out) const;
+  // Dimension tool: the dimension the picks make with the cursor at (x, y)
+  // (where the cursor is decides horizontal / vertical / aligned).
+  std::optional<sketch::Constraint> dimensionCandidate(double x, double y) const;
+  int dragLabel_ = -1;   // Select: a dimension's value being dragged
   QString labelText(const sketch::Constraint& c) const;
 
   // On-canvas size boxes (the heads-up inputs). After the first click of a

@@ -72,6 +72,12 @@ struct Constraint {
   // Dimensions only: the expression the value came from ("width / 2"), empty
   // for a plain number. Evaluated again when the design recomputes.
   std::string expression;
+  // Dimensions only: where the value is shown, as an offset (cm) from the
+  // dimension's base point (the middle of what it measures, a circle's
+  // centre, the lines' crossing), so it moves with the geometry. Unset: a
+  // default place next to the geometry.
+  bool hasLabel = false;
+  double labelX = 0, labelY = 0;
 };
 
 bool isDimension(ConstraintType t);

@@ -1095,6 +1095,7 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       dragY_ = y;
       dragPoint_ = (h.kind == Hit::Point && h.index > 0) ? h.index : -1;
       dragLine_ = (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Line) ? h.index : -1;
+      dragLabel_ = (h.kind == Hit::Label && sketch::isDimension(sk_.constraints[h.index].type)) ? h.index : -1;
       return;
     }
     case Tool::Line: {
@@ -1463,6 +1464,21 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
       return;
     }
   }
+  if ((e->buttons() & Qt::LeftButton) && dragLabel_ >= 0 && tool_ == Tool::Select) {
+    if (!dragged_) {
+      if ((e->position() - pressPos_).manhattanLength() < 4) return;
+      dragged_ = true;
+      checkpoint();
+    }
+    // The value follows the cursor; the dimension line comes with it.
+    Constraint& c = sk_.constraints[dragLabel_];
+    const auto [bx, by] = dimensionBase(c);
+    c.hasLabel = true;
+    c.labelX = x - bx;
+    c.labelY = y - by;
+    rebuild();
+    return;
+  }
   if ((e->buttons() & Qt::LeftButton) && (dragPoint_ >= 0 || dragLine_ >= 0)) {
     if (!dragged_) {
       if ((e->position() - pressPos_).manhattanLength() < 4) return;
@@ -1525,7 +1541,14 @@ void SketchEditor::mouseRelease(QMouseEvent* e) {
     return;
   }
   const bool wasDrag = dragged_;
-  dragPoint_ = dragLine_ = -1;
+  const bool wasLabel = dragLabel_ >= 0;
+  dragPoint_ = dragLine_ = dragLabel_ = -1;
+  if (wasDrag && wasLabel) {
+    dragged_ = false;
+    emit changed();
+    rebuild();
+    return;
+  }
   dragged_ = false;
   if (wasDrag) {
     solveAndShow();
@@ -1863,7 +1886,9 @@ void SketchEditor::evaluateConstraintPicks() {
 void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
   const Hit h = hitTest(x, y);
   auto isLine = [&](const Hit& p) { return p.kind == Hit::Entity && sk_.entities[p.index].type == EntityType::Line; };
-
+  auto isRound = [&](const Hit& p) {
+    return p.kind == Hit::Entity && (sk_.entities[p.index].type == EntityType::Circle || sk_.entities[p.index].type == EntityType::Arc);
+  };
   if (picks_.empty()) {
     if (h.kind == Hit::None) return;
     if (h.kind == Hit::Label) {
@@ -1874,40 +1899,36 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
       emit message(tr("Splines follow their points: dimension the points instead."));
       return;
     }
-    if (h.kind == Hit::Entity && !isLine(h)) {
-      const bool arc = sk_.entities[h.index].type == EntityType::Arc;
-      askValue({arc ? ConstraintType::Radius : ConstraintType::Diameter, {}, {h.index}}, widgetPos);
-      return;
-    }
     picks_.push_back({h, x, y});
-    emit message(isLine(h) ? tr("Click empty space for the line's length, or another line (angle) or point (distance).")
-                           : tr("Pick a second point or a line."));
+    emit message(h.kind == Hit::Point ? tr("Pick a second point or a line.")
+                 : isLine(h)          ? tr("Move to place the length (above or beside for horizontal / vertical) and "
+                                           "click; or click another line (angle) or a point (distance).")
+                                      : tr("Move to place the size and click."));
+    updatePreview(x, y);
     rebuild();
     return;
   }
+  // A second pick that makes a two-item dimension.
   const Hit a = picks_[0].hit;
-  picks_.clear();
-  rebuild();
-  if (h.kind == Hit::None || h.kind == Hit::Label || (h.kind == a.kind && h.index == a.index)) {
-    if (isLine(a)) askValue({ConstraintType::Distance, {}, {a.index}}, widgetPos);
+  const bool same = h.kind == a.kind && h.index == a.index;
+  if (picks_.size() == 1 && !same && !isRound(a) &&
+      ((isLine(a) && (isLine(h) || h.kind == Hit::Point)) || (a.kind == Hit::Point && (h.kind == Hit::Point || isLine(h))))) {
+    picks_.push_back({h, x, y});
+    emit message(tr("Move to place the dimension and click."));
+    updatePreview(x, y);
+    rebuild();
     return;
   }
-  if (isLine(a) && isLine(h)) {
-    askValue({ConstraintType::Angle, {}, {a.index, h.index}}, widgetPos);
-  } else if (a.kind == Hit::Point && h.kind == Hit::Point) {
-    // Mostly horizontal or vertical pairs get the matching dimension.
-    const auto& p = sk_.points[a.index];
-    const auto& q = sk_.points[h.index];
-    const double dx = std::abs(q.x - p.x), dy = std::abs(q.y - p.y);
-    ConstraintType t = ConstraintType::Distance;
-    if (dy < 1e-9 * (1 + dx) || dy < 0.05 * dx) t = ConstraintType::HorizontalDistance;
-    else if (dx < 0.05 * dy) t = ConstraintType::VerticalDistance;
-    askValue({t, {a.index, h.index}}, widgetPos);
-  } else if (a.kind == Hit::Point && isLine(h)) {
-    askValue({ConstraintType::Distance, {a.index}, {h.index}}, widgetPos);
-  } else if (isLine(a) && h.kind == Hit::Point) {
-    askValue({ConstraintType::Distance, {h.index}, {a.index}}, widgetPos);
+  // Anything else places it: the value box opens where it was put.
+  const auto c = dimensionCandidate(x, y);
+  if (!c) {
+    if (a.kind == Hit::Point) emit message(tr("Pick a second point or a line."));
+    return;
   }
+  picks_.clear();
+  clearPreview();
+  rebuild();
+  askValue(*c, widgetPos);
 }
 
 double SketchEditor::currentValue(const Constraint& c) const {
@@ -2587,6 +2608,10 @@ void SketchEditor::deleteSelection() {
 
 std::optional<std::pair<double, double>> SketchEditor::labelAnchor(int ci) const {
   const Constraint& c = sk_.constraints.at(ci);
+  if (sketch::isDimension(c.type) && c.hasLabel) {
+    const auto [bx, by] = dimensionBase(c);
+    return std::make_pair(bx + c.labelX, by + c.labelY);
+  }
   const double px = view_ ? view_->modelPerPixel() : 0.01;
   const auto& P = sk_.points;
   auto lineMid = [&](int l, double off, double& x, double& y) {
@@ -2645,6 +2670,11 @@ std::optional<std::pair<double, double>> SketchEditor::labelAnchor(int ci) const
     default: {
       if (c.entities.empty()) {   // e.g. horizontal between two points
         if (c.points.size() < 2) return std::nullopt;
+        // A point kept on an origin axis: the glyph sits by the point.
+        if (c.points[0] == 0 || c.points[1] == 0) {
+          const int q = c.points[0] == 0 ? c.points[1] : c.points[0];
+          return std::make_pair(P[q].x + 9 * px, P[q].y + 9 * px);
+        }
         return std::make_pair((P[c.points[0]].x + P[c.points[1]].x) / 2,
                               (P[c.points[0]].y + P[c.points[1]].y) / 2 + 10 * px);
       }
@@ -2659,6 +2689,223 @@ std::optional<std::pair<double, double>> SketchEditor::labelAnchor(int ci) const
       return std::make_pair(x, y);
     }
   }
+}
+
+// The point a dimension's value is placed relative to.
+std::pair<double, double> SketchEditor::dimensionBase(const Constraint& c) const {
+  const auto& P = sk_.points;
+  auto mid = [](const sketch::Point& a, const sketch::Point& b) { return std::make_pair((a.x + b.x) / 2, (a.y + b.y) / 2); };
+  switch (c.type) {
+    case ConstraintType::Distance:
+    case ConstraintType::HorizontalDistance:
+    case ConstraintType::VerticalDistance: {
+      if (c.points.size() == 2) return mid(P[c.points[0]], P[c.points[1]]);
+      const auto& e = sk_.entities[c.entities[0]];
+      if (c.points.empty()) return mid(P[e.a], P[e.b]);
+      // Point to line: halfway between the point and its foot on the line.
+      const auto& p = P[c.points[0]];
+      const double dx = P[e.b].x - P[e.a].x, dy = P[e.b].y - P[e.a].y;
+      const double t = ((p.x - P[e.a].x) * dx + (p.y - P[e.a].y) * dy) / std::max(dx * dx + dy * dy, 1e-24);
+      return std::make_pair((p.x + P[e.a].x + t * dx) / 2, (p.y + P[e.a].y + t * dy) / 2);
+    }
+    case ConstraintType::Radius:
+    case ConstraintType::Diameter: {
+      const auto& e = sk_.entities[c.entities[0]];
+      return {P[e.center].x, P[e.center].y};
+    }
+    case ConstraintType::Angle: {
+      const auto& e1 = sk_.entities[c.entities[0]];
+      const auto& e2 = sk_.entities[c.entities[1]];
+      const double ax = P[e1.b].x - P[e1.a].x, ay = P[e1.b].y - P[e1.a].y;
+      const double bx = P[e2.b].x - P[e2.a].x, by = P[e2.b].y - P[e2.a].y;
+      const double den = ax * by - ay * bx;
+      if (std::abs(den) < 1e-12 * std::max(1.0, std::hypot(ax, ay) * std::hypot(bx, by))) {
+        const auto m1 = mid(P[e1.a], P[e1.b]), m2 = mid(P[e2.a], P[e2.b]);
+        return {(m1.first + m2.first) / 2, (m1.second + m2.second) / 2};
+      }
+      // Where the two lines (extended) cross.
+      const double t = ((P[e2.a].x - P[e1.a].x) * by - (P[e2.a].y - P[e1.a].y) * bx) / den;
+      return {P[e1.a].x + t * ax, P[e1.a].y + t * ay};
+    }
+    default:
+      return {0, 0};
+  }
+}
+
+void SketchEditor::addDimensionGraphics(const Constraint& c, double lx, double ly, const Quantity_Color& colour,
+                                        std::vector<Handle(AIS_InteractiveObject)>& out) const {
+  if (!view_ || view_->aisContext().IsNull()) return;
+  const double px = view_->modelPerPixel();
+  const auto& P = sk_.points;
+  sketch::Sketch g;   // the dimension's lines, drawn thin
+  auto seg = [&](double x1, double y1, double x2, double y2) {
+    if (std::hypot(x2 - x1, y2 - y1) > px * 0.5) g.addLine(x1, y1, x2, y2);
+  };
+  // An arrowhead with its tip at (x, y), pointing along (dx, dy) (unit).
+  auto arrow = [&](double x, double y, double dx, double dy) {
+    const double l = 9 * px, w = 3.2 * px;
+    seg(x, y, x - dx * l - dy * w, y - dy * l + dx * w);
+    seg(x, y, x - dx * l + dy * w, y - dy * l - dx * w);
+  };
+  switch (c.type) {
+    case ConstraintType::Distance:
+    case ConstraintType::HorizontalDistance:
+    case ConstraintType::VerticalDistance: {
+      // The two measured points and the measuring direction.
+      double x1, y1, x2, y2;
+      if (c.points.size() == 2) {
+        x1 = P[c.points[0]].x, y1 = P[c.points[0]].y, x2 = P[c.points[1]].x, y2 = P[c.points[1]].y;
+      } else {
+        const auto& e = sk_.entities[c.entities[0]];
+        if (c.points.empty()) {
+          x1 = P[e.a].x, y1 = P[e.a].y, x2 = P[e.b].x, y2 = P[e.b].y;
+        } else {   // point to line: the point and its foot
+          const auto& p = P[c.points[0]];
+          const double dx = P[e.b].x - P[e.a].x, dy = P[e.b].y - P[e.a].y;
+          const double t = ((p.x - P[e.a].x) * dx + (p.y - P[e.a].y) * dy) / std::max(dx * dx + dy * dy, 1e-24);
+          x1 = p.x, y1 = p.y, x2 = P[e.a].x + t * dx, y2 = P[e.a].y + t * dy;
+          // The line itself, extended to the foot, as a thin reference.
+          seg(P[e.a].x, P[e.a].y, x2, y2);
+        }
+      }
+      double dx = x2 - x1, dy = y2 - y1;
+      if (c.type == ConstraintType::HorizontalDistance) dx = 1, dy = 0;
+      else if (c.type == ConstraintType::VerticalDistance) dx = 0, dy = 1;
+      const double n = std::hypot(dx, dy);
+      if (n < 1e-12) break;
+      dx /= n, dy /= n;
+      const double nx = -dy, ny = dx;   // across the measurement
+      // The dimension line runs through the value, a little below it.
+      double h = (lx - x1) * nx + (ly - y1) * ny;
+      const double gap = 8 * px;
+      if (std::abs(h) > 2 * gap) h -= std::copysign(gap, h);
+      const double h1 = h, h2 = h + (x1 - x2) * nx + (y1 - y2) * ny;   // offsets from each point
+      const double ax = x1 + nx * h1, ay = y1 + ny * h1;   // dimension line ends
+      const double bx = x2 + nx * h2, by = y2 + ny * h2;
+      // Extension lines, a small gap off the geometry and a little past the line.
+      auto ext = [&](double x, double y, double hh) {
+        if (std::abs(hh) < 3 * px) return;
+        const double s = hh > 0 ? 1 : -1;
+        seg(x + nx * s * 2 * px, y + ny * s * 2 * px, x + nx * (hh + s * 4 * px), y + ny * (hh + s * 4 * px));
+      };
+      ext(x1, y1, h1);
+      ext(x2, y2, h2);
+      // Dimension line (out to the value when it sits beyond the ends).
+      const double along = ((bx - ax) * dx + (by - ay) * dy);
+      const double s = along >= 0 ? 1 : -1;
+      const double tv = (lx - ax) * dx + (ly - ay) * dy;   // the value along the line
+      const double lo = std::min({0.0, along, tv}), hi = std::max({0.0, along, tv});
+      seg(ax + dx * lo, ay + dy * lo, ax + dx * hi, ay + dy * hi);
+      arrow(ax, ay, -dx * s, -dy * s);
+      arrow(bx, by, dx * s, dy * s);
+      break;
+    }
+    case ConstraintType::Radius:
+    case ConstraintType::Diameter: {
+      const auto& e = sk_.entities[c.entities[0]];
+      const double cx = P[e.center].x, cy = P[e.center].y, r = e.radius;
+      double ux = lx - cx, uy = ly - cy;
+      const double d = std::hypot(ux, uy);
+      if (d < 1e-12) ux = 0.7071, uy = 0.7071;
+      else ux /= d, uy /= d;
+      const double qx = cx + ux * r, qy = cy + uy * r;
+      if (c.type == ConstraintType::Radius) {
+        seg(cx, cy, qx, qy);
+        arrow(qx, qy, ux, uy);
+      } else {
+        seg(cx - ux * r, cy - uy * r, qx, qy);
+        arrow(qx, qy, ux, uy);
+        arrow(cx - ux * r, cy - uy * r, -ux, -uy);
+      }
+      if (d > r + 2 * px) seg(qx, qy, cx + ux * (d - 8 * px), cy + uy * (d - 8 * px));   // leader out to the value
+      break;
+    }
+    case ConstraintType::Angle: {
+      const auto [ox, oy] = dimensionBase(c);
+      const double rho = std::hypot(lx - ox, ly - oy);
+      if (rho < 4 * px) break;
+      // The two lines' directions; the arc spans the sector the value is in.
+      const auto& e1 = sk_.entities[c.entities[0]];
+      const auto& e2 = sk_.entities[c.entities[1]];
+      const double t1 = std::atan2(P[e1.b].y - P[e1.a].y, P[e1.b].x - P[e1.a].x);
+      const double t2 = std::atan2(P[e2.b].y - P[e2.a].y, P[e2.b].x - P[e2.a].x);
+      const double tl = std::atan2(ly - oy, lx - ox);
+      const double pi = std::numbers::pi;
+      auto norm = [&](double a) { return a - 2 * pi * std::floor(a / (2 * pi)); };
+      // Of the four rays (each line both ways), the ones either side of tl.
+      double lo = -1e9, hi = 1e9;
+      for (double ray : {t1, t1 + pi, t2, t2 + pi}) {
+        const double d = norm(ray - tl);   // counter-clockwise from tl to the ray
+        if (d < norm(hi - tl) || hi > 1e8) hi = tl + d;
+        const double back = norm(tl - ray);   // clockwise
+        if (back < norm(tl - lo) || lo < -1e8) lo = tl - back;
+      }
+      const int n = 32;
+      double px0 = ox + rho * std::cos(lo), py0 = oy + rho * std::sin(lo);
+      for (int k = 1; k <= n; ++k) {
+        const double a = lo + (hi - lo) * k / n;
+        const double x = ox + rho * std::cos(a), y = oy + rho * std::sin(a);
+        seg(px0, py0, x, y);
+        px0 = x, py0 = y;
+      }
+      arrow(ox + rho * std::cos(lo), oy + rho * std::sin(lo), std::sin(lo), -std::cos(lo));
+      arrow(ox + rho * std::cos(hi), oy + rho * std::sin(hi), -std::sin(hi), std::cos(hi));
+      break;
+    }
+    default:
+      break;
+  }
+  const TopoDS_Shape gs = sketch::curves(g, frame_, false);
+  if (gs.IsNull() || !TopExp_Explorer(gs, TopAbs_EDGE).More()) return;
+  Handle(AIS_Shape) a = wire(gs, colour, 1.0, Aspect_TOL_SOLID);
+  view_->aisContext()->Display(a, AIS_WireFrame, -1, false);
+  view_->aisContext()->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+  out.push_back(a);
+}
+
+std::optional<Constraint> SketchEditor::dimensionCandidate(double x, double y) const {
+  if (picks_.empty()) return std::nullopt;
+  const auto& P = sk_.points;
+  auto isLine = [&](const Hit& h) { return h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Line; };
+  // Two points measured: horizontal, vertical or aligned, by where the cursor
+  // is, as in the familiar sketcher (beside the pair's span: across it).
+  auto linear = [&](int a, int b, std::optional<int> line) -> Constraint {
+    const auto& p = P[a];
+    const auto& q = P[b];
+    const double dx = std::abs(q.x - p.x), dy = std::abs(q.y - p.y);
+    const bool level = dy <= 1e-9 * (1 + dx), upright = dx <= 1e-9 * (1 + dy);
+    const bool inX = x > std::min(p.x, q.x) && x < std::max(p.x, q.x);
+    const bool inY = y > std::min(p.y, q.y) && y < std::max(p.y, q.y);
+    const bool outX = !inX && !level, outY = !inY && !upright;
+    const int left = p.x <= q.x ? a : b, right = left == a ? b : a;
+    const int low = p.y <= q.y ? a : b, high = low == a ? b : a;
+    if (!line && level) return {ConstraintType::HorizontalDistance, {left, right}};
+    if (!line && upright) return {ConstraintType::VerticalDistance, {low, high}};
+    if (inX && outY && !level && !upright) return {ConstraintType::HorizontalDistance, {left, right}};
+    if (inY && outX && !level && !upright) return {ConstraintType::VerticalDistance, {low, high}};
+    if (line) return {ConstraintType::Distance, {}, {*line}};
+    return {ConstraintType::Distance, {a, b}};
+  };
+  const Hit a = picks_[0].hit;
+  Constraint c;
+  if (picks_.size() == 1) {
+    if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Circle) c = {ConstraintType::Diameter, {}, {a.index}};
+    else if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Arc) c = {ConstraintType::Radius, {}, {a.index}};
+    else if (isLine(a)) c = linear(sk_.entities[a.index].a, sk_.entities[a.index].b, a.index);
+    else return std::nullopt;   // a point: a second pick is needed
+  } else {
+    const Hit b = picks_[1].hit;
+    if (isLine(a) && isLine(b)) c = {ConstraintType::Angle, {}, {a.index, b.index}};
+    else if (a.kind == Hit::Point && b.kind == Hit::Point) c = linear(a.index, b.index, std::nullopt);
+    else if (a.kind == Hit::Point && isLine(b)) c = {ConstraintType::Distance, {a.index}, {b.index}};
+    else if (isLine(a) && b.kind == Hit::Point) c = {ConstraintType::Distance, {b.index}, {a.index}};
+    else return std::nullopt;
+  }
+  const auto [bx, by] = dimensionBase(c);
+  c.hasLabel = true;
+  c.labelX = x - bx;
+  c.labelY = y - by;
+  return c;
 }
 
 QString SketchEditor::labelText(const Constraint& c) const {
@@ -2768,14 +3015,16 @@ void SketchEditor::rebuild() {
     const auto& c = sk_.constraints[i];
     if (sketch::isDimension(c.type) ? !display_.dimensions : !display_.constraints) continue;
     if (onlyProjected(c)) continue;
+    const Quantity_Color labelColour = selected(Hit::Label, i) ? kSelected
+                                       : hovered(Hit::Label, i) ? kHover
+                                       : sketch::isDimension(c.type) ? qc(themeColors().sketchLabel)
+                                                                     : qc(themeColors().sketchGlyph);
+    if (sketch::isDimension(c.type)) addDimensionGraphics(c, anchor->first, anchor->second, labelColour, objects_);
     Handle(AIS_TextLabel) t = new AIS_TextLabel();
     t->SetText(ext(labelText(c)));
     t->SetPosition(sketch::toWorld(frame_, anchor->first, anchor->second));
     t->SetHeight(sketch::isDimension(c.type) ? 14 : 12);
-    t->SetColor(selected(Hit::Label, i) ? kSelected
-                : hovered(Hit::Label, i) ? kHover
-                : sketch::isDimension(c.type) ? qc(themeColors().sketchLabel)
-                                             : qc(themeColors().sketchGlyph));
+    t->SetColor(labelColour);
     t->SetHJustification(Graphic3d_HTA_CENTER);
     t->SetVJustification(Graphic3d_VTA_CENTER);
     ctx->Display(t, 0, -1, false);
@@ -2881,6 +3130,25 @@ void SketchEditor::clearPreview() {
 
 void SketchEditor::updatePreview(double x, double y) {
   clearPreview();
+  if (tool_ == Tool::Dimension && view_ && !view_->aisContext().IsNull()) {
+    if (const auto c = dimensionCandidate(x, y)) {
+      addDimensionGraphics(*c, x, y, kPreview, preview_);
+      Handle(AIS_TextLabel) t = new AIS_TextLabel();
+      Constraint shown = *c;
+      shown.value = currentValue(*c);
+      t->SetText(ext(labelText(shown)));
+      t->SetPosition(sketch::toWorld(frame_, x, y));
+      t->SetHeight(14);
+      t->SetColor(kPreview);
+      t->SetHJustification(Graphic3d_HTA_CENTER);
+      t->SetVJustification(Graphic3d_VTA_CENTER);
+      view_->aisContext()->Display(t, 0, -1, false);
+      view_->aisContext()->SetZLayer(t, Graphic3d_ZLayerId_Topmost);
+      preview_.push_back(t);
+    }
+    view_->redraw();
+    return;
+  }
   const bool drawing = tool_ == Tool::Line || tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle ||
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
                        tool_ == Tool::Slot || tool_ == Tool::Spline;

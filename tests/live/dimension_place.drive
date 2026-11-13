@@ -1,0 +1,39 @@
+# Live: the Dimension tool as in the familiar sketcher. Click a sloped line;
+# the dimension follows the cursor; placed above the line it measures the
+# horizontal span (40 mm typed). Click a circle and place its diameter (25).
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 30 20
+key Escape
+key Escape
+click sketch.circle
+sclick 70 0
+sclick 80 0
+key Escape
+key d
+sclick 15 10              # the line
+smove 15 30
+wait 200
+shot /tmp/live_dimension_follow.png
+sclick 15 35              # above it: horizontal
+wait 300
+type 40
+key Return
+wait 300
+sclick 80 0               # the circle
+smove 90 15
+wait 200
+sclick 90 16              # beside it: its diameter
+wait 300
+type 25
+key Return
+wait 300
+key Escape
+shot /tmp/live_dimension_placed.png
+click palette.finish
+wait 600
