@@ -651,6 +651,8 @@ void Viewport::boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardMod
   }
   if (!profiles.empty() || !subs.empty() || !pickTypes_.empty() || planePicking_) {
     context_->ClearSelected(false);
+    // No command and no Shift / Ctrl: the box replaces what was selected.
+    if (pickTypes_.empty() && !planePicking_ && scheme == AIS_SelectionScheme_Replace) emit selectionChanged();
     boxPicking_ = true;
     for (const auto& [sketch, index] : profiles) emit profileClicked(sketch, index);
     for (const auto& [body, shape] : subs) emit subShapeClicked(body, shape);
@@ -661,6 +663,21 @@ void Viewport::boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardMod
     emit selectionChanged();
   }
   updateView();
+}
+
+std::vector<std::pair<QString, TopoDS_Shape>> Viewport::selectedSubShapes() const {
+  std::vector<std::pair<QString, TopoDS_Shape>> out;
+  if (context_.IsNull()) return out;
+  for (context_->InitSelected(); context_->MoreSelected(); context_->NextSelected()) {
+    const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(context_->SelectedOwner());
+    if (brep.IsNull() || !brep->HasShape()) continue;
+    const TopAbs_ShapeEnum t = brep->Shape().ShapeType();
+    if (t != TopAbs_FACE && t != TopAbs_EDGE && t != TopAbs_VERTEX) continue;
+    const Handle(AIS_InteractiveObject) obj = context_->SelectedInteractive();
+    for (const auto& [name, shape] : shapes_)
+      if (shape == obj) out.emplace_back(QString::fromStdString(name), brep->Shape());
+  }
+  return out;
 }
 
 void Viewport::clearSelection() {

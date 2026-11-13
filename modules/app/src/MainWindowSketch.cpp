@@ -3,6 +3,8 @@
 #include "CommandDialog.h"
 #include "Icons.h"
 #include "MainWindow.h"
+
+#include <QGuiApplication>
 #include <limits>
 #include <TopoDS.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -351,11 +353,19 @@ void MainWindow::syncSketchTools() {
 // Profile picking (Extrude)
 
 void MainWindow::updateProfilePicking() {
-  const bool on = active_ && active_->hasProfilesInput();
+  // Profiles are clickable while a command wants them, and with no command
+  // running (picked first, then E extrudes them).
+  const bool idle = !active_ && !editor_;
+  const bool on = idle || (active_ && active_->hasProfilesInput());
   viewport_->setProfilePicking(on);
   if (!on) return;
-  QString sketchName = active_->currentSketch();
+  QString sketchName = idle ? preSketch_ : active_->currentSketch();
+  const QString picks = idle ? preProfiles_.join(QLatin1Char(';')) : active_->currentProfiles();
   const auto& d = session_.document();
+  if (idle && sketchName.isEmpty()) {
+    viewport_->setPickedProfiles({}, {});
+    return;
+  }
   if (sketchName.isEmpty()) {
     const auto all = d.sketches();
     if (all.empty()) return;
@@ -367,7 +377,7 @@ void MainWindow::updateProfilePicking() {
   try {
     const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
     const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
-    for (const QString& item : active_->currentProfiles().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+    for (const QString& item : picks.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
       const auto xy = item.split(QLatin1Char(','));
       if (xy.size() != 2) continue;
       const int i = sketch::profileAt(profiles, frame, xy[0].toDouble(), xy[1].toDouble());
@@ -567,6 +577,40 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
 }
 
 void MainWindow::onProfileClicked(const QString& sketchName, int index) {
+  if (!active_ && !editor_) {
+    // No command: the profile is selected for the next one (Shift / Ctrl add).
+    const auto rec = session_.document().sketch(sketchName.toStdString());
+    if (!rec) return;
+    try {
+      const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
+      const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+      if (index < 0 || index >= static_cast<int>(profiles.size())) return;
+      const QString item = QStringLiteral("%1,%2").arg(profiles[index].x, 0, 'g', 12).arg(profiles[index].y, 0, 'g', 12);
+      const bool add = viewport_->boxPicking() ||
+                       (QGuiApplication::keyboardModifiers() & (Qt::ShiftModifier | Qt::ControlModifier));
+      if (!add || preSketch_ != sketchName) {
+        const bool same = preSketch_ == sketchName && preProfiles_ == QStringList{item};
+        preProfiles_.clear();
+        viewport_->clearSelection();
+        if (same && !viewport_->boxPicking()) {   // clicking the one picked profile again deselects it
+          preSketch_.clear();
+          updateProfilePicking();
+          return;
+        }
+      }
+      preSketch_ = sketchName;
+      if (preProfiles_.contains(item)) {
+        if (!viewport_->boxPicking()) preProfiles_.removeAll(item);
+      } else {
+        preProfiles_ << item;
+      }
+      statusBar()->showMessage(tr("%n profile(s) selected.", nullptr, static_cast<int>(preProfiles_.size())), 3000);
+    } catch (const std::exception&) {
+      return;
+    }
+    updateProfilePicking();
+    return;
+  }
   if (!active_ || !active_->hasProfilesInput()) return;
   const auto rec = session_.document().sketch(sketchName.toStdString());
   if (!rec) return;

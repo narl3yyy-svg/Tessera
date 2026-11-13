@@ -24,6 +24,7 @@
 #include <QCursor>
 #include <QSettings>
 #include <QApplication>
+#include <QGuiApplication>
 #include <QMouseEvent>
 #include <QFrame>
 #include <QCloseEvent>
@@ -288,6 +289,13 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     if (active_ && active_->pickBody(name)) viewport_->clearSelection();
   });
   connect(viewport_, &Viewport::selectionChanged, this, [this] {
+    // A click elsewhere (without Shift / Ctrl) drops the profiles picked before.
+    if (!active_ && !editor_ && !preProfiles_.isEmpty() &&
+        !(QGuiApplication::keyboardModifiers() & (Qt::ShiftModifier | Qt::ControlModifier))) {
+      preSketch_.clear();
+      preProfiles_.clear();
+      updateProfilePicking();
+    }
     const QStringList sel = viewport_->selectedBodies();
     if (sel.isEmpty()) statusBar()->clearMessage();
     else statusBar()->showMessage(tr("Selected: %1").arg(sel.join(QStringLiteral(", "))));
@@ -514,6 +522,7 @@ void MainWindow::buildRibbon() {
     auto* title = new QToolButton;
     title->setText(qs(panel).toUpper() + QStringLiteral(" \u25BE"));
     title->setPopupMode(QToolButton::InstantPopup);
+    title->setObjectName(qs("panel." + panel));
     title->setMenu(menu);
     title->setAutoRaise(true);
     title->setToolButtonStyle(Qt::ToolButtonTextOnly);
@@ -726,7 +735,7 @@ void MainWindow::buildShortcuts() {
       viewport_->setPlanePicking(false);
       statusBar()->showMessage(tr("Create Sketch cancelled."), 3000);
     } else if (active_) active_->reject();
-    else viewport_->clearSelection();
+    else clearPreSelection();
   });
   // Space: the last command again (in a sketch, the last sketch tool).
   add(QKeySequence(Qt::Key_Space), [this] {
@@ -843,11 +852,50 @@ CommandDialog* MainWindow::startCommand(const QString& commandId) {
     statusBar()->showMessage(tr("Finish the current command first (OK or Esc)."), 3000);
     return nullptr;
   }
+  // What was selected before: goes into the command.
+  const auto preSubs = viewport_->selectedSubShapes();
+  const QStringList preBodies = preSubs.empty() ? viewport_->selectedBodies() : QStringList();
+  const QString preSketch = preSketch_;
+  const QStringList preProfiles = preProfiles_;
   auto cmd = session_.begin(commandId.toStdString());
   if (!cmd) return nullptr;
   lastCommand_ = commandId;
   editingFeature_ = -1;
-  return showDialog(std::move(cmd));
+  skipAutoProfile_ = !preSubs.empty() || !preProfiles.isEmpty();
+  auto* dlg = showDialog(std::move(cmd));
+  skipAutoProfile_ = false;
+  if (dlg) applyPreSelection(dlg, preSketch, preProfiles, preSubs, preBodies);
+  else clearPreSelection();
+  return dlg;
+}
+
+void MainWindow::clearPreSelection() {
+  const bool had = !preProfiles_.isEmpty();
+  preSketch_.clear();
+  preProfiles_.clear();
+  viewport_->clearSelection();
+  if (had) updateProfilePicking();
+}
+
+void MainWindow::applyPreSelection(CommandDialog* dlg, const QString& sketch, const QStringList& profiles,
+                                   const std::vector<std::pair<QString, TopoDS_Shape>>& subs,
+                                   const QStringList& bodies) {
+  preSketch_.clear();
+  preProfiles_.clear();
+  viewport_->clearSelection();
+  if (!profiles.isEmpty() && dlg->hasProfilesInput()) dlg->setProfiles(sketch, profiles.join(QLatin1Char(';')));
+  for (const auto& [body, shape] : subs) {
+    if (active_ != dlg) return;
+    onEdgeClicked(body, shape);
+  }
+  for (const QString& body : bodies) {
+    if (active_ != dlg) return;
+    emit viewport_->bodyClicked(body);
+  }
+  if (active_ != dlg) return;
+  updateProfilePicking();
+  syncPickedShapes();
+  updateDragArrow();
 }
 
 CommandDialog* MainWindow::editFeature(int featureId) {
@@ -942,7 +990,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   // Started fresh (not editing): Extrude waits for a pick, except that the
   // single profile of a just-finished sketch is taken at once.
   if (dlg->commandId() == QLatin1String(doc::kCmdExtrude) && !dlg->isEditingFeature()) {
-    if (!autoProfile.second.isEmpty()) dlg->setProfiles(autoProfile.first, autoProfile.second);
+    if (!autoProfile.second.isEmpty() && !skipAutoProfile_) dlg->setProfiles(autoProfile.first, autoProfile.second);
     dlg->setRequireSelection(true);   // satisfied while something is picked
   }
   updateDragArrow();
@@ -1162,6 +1210,7 @@ void MainWindow::refresh() {
   }
   refreshBrowser(name);
   refreshTimeline();
+  updateProfilePicking();   // profiles stay clickable with no command running
 }
 
 // Right-click in the Browser: Create Sketch on a plane, Edit Sketch, and

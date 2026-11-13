@@ -12,6 +12,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QMenu>
 #include <QAbstractSlider>
 #include <QAbstractSpinBox>
 #include <QComboBox>
@@ -631,6 +632,15 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   for (QWidget* top : QApplication::topLevelWidgets())
     if (top != &w && top->isVisible() && !top->objectName().isEmpty() && !widgets.contains(top->objectName()))
       widgets[top->objectName()] = rect(top);
+  // Entries of an open menu, by action name.
+  for (QWidget* top : QApplication::topLevelWidgets())
+    if (auto* m = qobject_cast<QMenu*>(top); m && m->isVisible())
+      for (QAction* a : m->actions()) {
+        if (a->objectName().isEmpty() || !a->isVisible() || widgets.contains(a->objectName())) continue;
+        const QRect r = m->actionGeometry(a);
+        const QPoint p = m->mapToGlobal(r.topLeft());
+        widgets[a->objectName()] = QJsonArray{p.x(), p.y(), r.width(), r.height()};
+      }
   o[QStringLiteral("widgets")] = widgets;
   {
     // Timeline items by feature name (centre, global coordinates).

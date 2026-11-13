@@ -126,6 +126,8 @@ public:
   void setPanTool(bool on);     // left-drag pans
 
   QStringList selectedBodies() const;
+  // Faces, edges and vertices selected (with a selection filter), by body.
+  std::vector<std::pair<QString, TopoDS_Shape>> selectedSubShapes() const;
   void clearSelection();
 
   // Window / crossing selection, as in the familiar tool: drag left to right

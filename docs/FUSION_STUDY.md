@@ -47,7 +47,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Window selection left-to-right (fully inside, solid blue box) vs right-to-left (crossing, dashed green box), in the canvas, in sketches and while a command picks edges / faces / profiles; Shift adds, Ctrl removes.
 - [ ] Selection priority (bodies / faces / edges / sketch) and the select-through hold; freeform and paint selection.
 - [x] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy; a sketch-mode ring; OK / Cancel inside a command.
-- [ ] Pre-selection: selected items carried into the next command (select a face, then press E).
+- [x] Pre-selection: selected items carried into the next command: click a profile (no command running), then E; select edges (Select Edges filter), then F; selected bodies go into body inputs. Not yet: face/edge priority as the default click (Tessera's default filter is still whole bodies).
 - [ ] Hovering a body shows its name tooltip; double-click selects a tangent chain / loop.
 - [x] Timeline: drag the rollback marker; drag features to reorder (blue drop bar; refused if it breaks a feature); right-click Edit Feature / Edit Profile Sketch / Suppress / Delete / Roll History Marker Here / Roll to End. Not yet: feature groups, playback buttons.
 

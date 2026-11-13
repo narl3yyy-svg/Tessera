@@ -143,6 +143,14 @@ private:
   QWidget* buildSketchTab();
   void syncSketchTools();
   void updateProfilePicking();
+  // Pre-selection, as in the familiar tool: what is selected before a command
+  // starts (profiles, faces, edges, bodies) goes into it.
+  void clearPreSelection();
+  void applyPreSelection(CommandDialog* dlg, const QString& sketch, const QStringList& profiles,
+                         const std::vector<std::pair<QString, TopoDS_Shape>>& subs, const QStringList& bodies);
+  QString preSketch_;          // profiles clicked with no command running
+  QStringList preProfiles_;    // their inside points "x,y" (sketch cm)
+  bool skipAutoProfile_ = false;
   void onProfileClicked(const QString& sketch, int index);
   void onEdgeClicked(const QString& body, const TopoDS_Shape& edge);
   void updateEdgePicking();
