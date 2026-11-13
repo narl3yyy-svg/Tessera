@@ -63,8 +63,9 @@ struct UserParameter {
 };
 
 struct Body {
-  std::string name;
+  std::string name;      // the name features use (generated on replay: Body1, Body2 ...)
   TopoDS_Shape shape;
+  std::string display;   // what the person called it (Browser, API); name if never renamed
 };
 
 struct SketchRecord {
@@ -219,6 +220,15 @@ public:
   };
   const FeatureEffect* featureEffect(int id);
   void setRegistry(const CommandRegistry* registry) { registry_ = registry; }
+
+  // Renaming. Bodies keep the names the replay generates; a rename stores
+  // the name shown, and every name a body had (old or new) still finds it.
+  // Sketches and features are renamed outright and every feature input that
+  // refers to the old name is updated. All require a transaction.
+  void renameBody(const std::string& name, const std::string& newName);
+  std::string bodyName(const std::string& nameOrAlias) const;   // the internal name
+  void renameSketch(const std::string& name, const std::string& newName);
+  void renameFeature(int id, const std::string& newName);
   // Called by commands while they apply: the tool they combined with `target`.
   void noteTool(const TopoDS_Shape& tool, const std::string& op, const std::string& target) {
     pendingTools_.push_back({tool, op, target});

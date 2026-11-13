@@ -39,6 +39,10 @@ public:
   std::unique_ptr<CommandSession> editFeature(int featureId);
   std::string editFeature(int featureId, const Inputs& changes);   // non-interactive
   std::string deleteFeature(int featureId);
+  // Renames (one undo step each); empty on success, else why not.
+  std::string renameBody(const std::string& name, const std::string& newName);
+  std::string renameSketch(const std::string& name, const std::string& newName);
+  std::string renameFeature(int featureId, const std::string& newName);
   std::string setFeatureSuppressed(int featureId, bool suppressed);
 
   // User parameters (Change Parameters). Each call is one undo step that

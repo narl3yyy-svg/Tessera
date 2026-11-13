@@ -37,6 +37,7 @@ constexpr int kPlanesTag = 5;
 constexpr int kAxesTag = 6;
 constexpr int kPointsTag = 7;
 constexpr int kComponentsTag = 8;
+constexpr int kBodyNamesTag = 9;   // body renames: "alias:<name>" -> internal, "show:<internal>" -> shown
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -146,6 +147,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kAxesTag, true);
   doc_->Main().FindChild(kPointsTag, true);
   doc_->Main().FindChild(kComponentsTag, true);
+  doc_->Main().FindChild(kBodyNamesTag, true);
 }
 
 void Document::requireTransaction(const char* what) const {
@@ -370,12 +372,102 @@ void Document::evaluateFeatureExpressions(const Command& cmd, Inputs& in) const 
 
 std::vector<Body> Document::bodies() const {
   std::vector<Body> out;
+  Handle(TDataStd_NamedData) names;
+  doc_->Main().FindChild(kBodyNamesTag, false).FindAttribute(TDataStd_NamedData::GetID(), names);
   for (TDF_ChildIterator it(doc_->Main().FindChild(kBodiesTag, false)); it.More(); it.Next()) {
     Handle(TNaming_NamedShape) ns;
     if (!it.Value().FindAttribute(TNaming_NamedShape::GetID(), ns) || ns->IsEmpty()) continue;
-    out.push_back({nameOf(it.Value()), ns->Get()});
+    const std::string n = nameOf(it.Value());
+    std::string shown = names.IsNull() ? std::string() : stringOf(names, ("show:" + n).c_str());
+    out.push_back({n, ns->Get(), shown.empty() ? n : shown});
   }
   return out;
+}
+
+std::string Document::bodyName(const std::string& nameOrAlias) const {
+  for (const auto& b : bodies())
+    if (b.name == nameOrAlias) return b.name;
+  Handle(TDataStd_NamedData) names;
+  if (doc_->Main().FindChild(kBodyNamesTag, false).FindAttribute(TDataStd_NamedData::GetID(), names)) {
+    const std::string internal = stringOf(names, ("alias:" + nameOrAlias).c_str());
+    if (!internal.empty()) return internal;
+  }
+  return nameOrAlias;
+}
+
+void Document::renameBody(const std::string& name, const std::string& newName) {
+  requireTransaction("renameBody");
+  const std::string internal = bodyName(name);
+  if (!body(internal)) throw DocumentError("no body named '" + name + "'");
+  if (newName.empty()) throw DocumentError("a body needs a name");
+  for (const auto& b : bodies())
+    if (b.name != internal && (b.name == newName || b.display == newName))
+      throw DocumentError("there is already a body named '" + newName + "'");
+  const TDF_Label l = doc_->Main().FindChild(kBodyNamesTag, true);
+  Handle(TDataStd_NamedData) names;
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), names)) names = TDataStd_NamedData::Set(l);
+  names->SetString(ext("show:" + internal), ext(newName));
+  names->SetString(ext("alias:" + newName), ext(internal));
+}
+
+namespace {
+// Replaces `from` by `to` in every string input of every feature: whole
+// values and items of ';' lists.
+void replaceReferences(Document& doc, const std::string& from, const std::string& to) {
+  for (const auto& f : doc.features()) {
+    Inputs in = f.inputs;
+    bool changed = false;
+    for (auto& [k, v] : in) {
+      auto* s = std::get_if<std::string>(&v);
+      if (!s || s->empty()) continue;
+      std::string out;
+      size_t start = 0;
+      bool hit = false;
+      while (start <= s->size()) {
+        const size_t end = std::min(s->find(';', start), s->size());
+        std::string item = s->substr(start, end - start);
+        if (item == from) {
+          item = to;
+          hit = true;
+        }
+        out += (start ? ";" : "") + item;
+        start = end + 1;
+      }
+      if (hit) {
+        *s = out;
+        changed = true;
+      }
+    }
+    if (changed) doc.setFeatureInputs(f.id, in);
+  }
+}
+} // namespace
+
+void Document::renameSketch(const std::string& name, const std::string& newName) {
+  requireTransaction("renameSketch");
+  if (!sketch(name)) throw DocumentError("no sketch named '" + name + "'");
+  if (newName.empty()) throw DocumentError("a sketch needs a name");
+  if (sketch(newName)) throw DocumentError("there is already a sketch named '" + newName + "'");
+  for (const auto& f : features())
+    if (f.name == name && f.commandId == "tsr.sketch.create") {
+      Inputs in = f.inputs;
+      in["name"] = newName;   // the sketch keeps this name on every replay
+      setFeatureInputs(f.id, in);
+      TDataStd_Name::Set(doc_->Main().FindChild(kFeaturesTag, false).FindChild(f.id, false), ext(newName));
+    }
+  replaceReferences(*this, name, newName);
+}
+
+void Document::renameFeature(int id, const std::string& newName) {
+  requireTransaction("renameFeature");
+  const auto f = feature(id);
+  if (!f) throw DocumentError("no feature with id " + std::to_string(id));
+  if (f->commandId == "tsr.sketch.create") return renameSketch(f->name, newName);
+  if (newName.empty()) throw DocumentError("a feature needs a name");
+  for (const auto& g : features())
+    if (g.id != id && g.name == newName) throw DocumentError("there is already a feature named '" + newName + "'");
+  TDataStd_Name::Set(doc_->Main().FindChild(kFeaturesTag, false).FindChild(id, false), ext(newName));
+  replaceReferences(*this, f->name, newName);
 }
 
 void Document::addBody(const std::string& name, const TopoDS_Shape& shape) {
@@ -387,22 +479,23 @@ void Document::addBody(const std::string& name, const TopoDS_Shape& shape) {
 }
 
 std::optional<Body> Document::body(const std::string& name) const {
+  const std::string internal = bodyName(name);   // a renamed body answers to its new name too
   for (auto& b : bodies())
-    if (b.name == name) return b;
+    if (b.name == internal) return b;
   return std::nullopt;
 }
 
 void Document::replaceBody(const std::string& name, const TopoDS_Shape& shape) {
   requireTransaction("replaceBody");
   if (shape.IsNull()) throw DocumentError("cannot set a null body");
-  const TDF_Label l = findBodyLabel(doc_, name);
+  const TDF_Label l = findBodyLabel(doc_, bodyName(name));
   if (l.IsNull()) throw DocumentError("no body named '" + name + "'");
   TNaming_Builder(l).Generated(shape);
 }
 
 void Document::removeBody(const std::string& name) {
   requireTransaction("removeBody");
-  const TDF_Label l = findBodyLabel(doc_, name);
+  const TDF_Label l = findBodyLabel(doc_, bodyName(name));
   if (l.IsNull()) throw DocumentError("no body named '" + name + "'");
   l.ForgetAllAttributes(true);
 }

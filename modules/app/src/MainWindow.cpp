@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include <QInputDialog>
 #include <QKeyEvent>
 #include "tsr/sketch/Sketch.h"
 #include <cstring>
@@ -97,7 +98,28 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   browser_->setObjectName(QStringLiteral("browser"));
   browser_->setHeaderHidden(true);
   browser_->setAccessibleName(tr("Browser"));
+  // Renaming in place, as in the familiar Browser: click a selected name again, or F2.
+  browser_->setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
   connect(browser_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int) {
+    {
+      const QString text = item->text(0).trimmed();
+      const QString body = item->data(0, kBodyRole).toString();
+      const QString sketch = item->data(0, kSketchRole).toString();
+      // Renamed: done after this signal returns, because the rename refreshes
+      // the Browser, which deletes the item being edited.
+      const auto b = body.isEmpty() ? std::nullopt : session_.document().body(body.toStdString());
+      const bool renameBody = b && qs(b->display) != text;
+      const bool renameSketch = body.isEmpty() && !sketch.isEmpty() && sketch != text;
+      if (renameBody || renameSketch) {
+        QTimer::singleShot(0, this, [this, body, sketch, text, renameBody] {
+          const std::string err = renameBody ? session_.renameBody(body.toStdString(), text.toStdString())
+                                             : session_.renameSketch(sketch.toStdString(), text.toStdString());
+          if (!err.empty()) statusBar()->showMessage(qs(err), 5000);
+          refresh();
+        });
+        return;
+      }
+    }
     const QString body = item->data(0, kBodyRole).toString();
     if (!body.isEmpty()) viewport_->setBodyVisible(body, item->checkState(0) == Qt::Checked);
     const QString sketch = item->data(0, kSketchRole).toString();
@@ -1018,6 +1040,12 @@ void MainWindow::showTimelineMenu(const QPoint& pos) {
   if (!f) return;
   QMenu m(this);
   m.addAction(tr("Edit Feature"), this, [this, id] { editFeature(id); });
+  m.addAction(tr("Rename"), this, [this, id, f] {
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, tr("Rename"), tr("Name:"), QLineEdit::Normal, qs(f->name), &ok).trimmed();
+    if (ok && !name.isEmpty() && name != qs(f->name))
+      if (auto err = session_.renameFeature(id, name.toStdString()); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+  });
   // Features made from a sketch: open that sketch.
   if (auto s = f->inputs.find("sketch"); s != f->inputs.end())
     if (auto name = std::get_if<std::string>(&s->second); name && !name->empty())
@@ -1193,7 +1221,8 @@ void MainWindow::refreshBrowser(const QString& docName) {
   for (const auto& b : bodies) {
     const QString n = qs(b.name);
     const double v = kernel::massProperties(b.shape).volume * 1000.0; // cm³ -> mm³
-    auto* it = new QTreeWidgetItem(bodiesItem, {n});
+    auto* it = new QTreeWidgetItem(bodiesItem, {qs(b.display)});
+    it->setFlags(it->flags() | Qt::ItemIsEditable);   // click again (or F2) to rename
     it->setToolTip(0, tr("Volume %1 mm³").arg(v, 0, 'g', 6));
     it->setData(0, kBodyRole, n);
     it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
@@ -1237,6 +1266,7 @@ void MainWindow::refreshBrowser(const QString& docName) {
     for (const auto& s : sketches) {
       const QString n = qs(s.name);
       auto* it = new QTreeWidgetItem(sk, {n});
+      it->setFlags(it->flags() | Qt::ItemIsEditable);
       // Fully defined sketches show a lock, as in the familiar Browser.
       bool locked = false;
       try {

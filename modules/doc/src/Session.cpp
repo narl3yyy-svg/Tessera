@@ -120,6 +120,32 @@ std::string Session::editFeature(int featureId, const Inputs& changes) {
   return err;
 }
 
+std::string Session::renameBody(const std::string& name, const std::string& newName) {
+  if (doc_->hasOpenTransaction()) return "finish the current command first";
+  doc_->openTransaction("Rename body");
+  try {
+    doc_->renameBody(name, newName);
+  } catch (const std::exception& e) {
+    doc_->abortTransaction();
+    return e.what();
+  }
+  doc_->commitTransaction();
+  notifyChanged();
+  return {};
+}
+
+std::string Session::renameSketch(const std::string& name, const std::string& newName) {
+  auto err = historyEdit(*doc_, commands_, "Rename sketch", [&] { doc_->renameSketch(name, newName); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::renameFeature(int featureId, const std::string& newName) {
+  auto err = historyEdit(*doc_, commands_, "Rename feature", [&] { doc_->renameFeature(featureId, newName); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
 std::string Session::deleteFeature(int featureId) {
   auto err = historyEdit(*doc_, commands_, "Delete feature", [&] { doc_->removeFeature(featureId); });
   if (err.empty()) notifyChanged();

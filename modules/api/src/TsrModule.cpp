@@ -198,6 +198,20 @@ void bindTsr(py::module_& m) {
     if (!rec) throw std::runtime_error("no sketch named '" + name + "'");
     return rec->data;
   }, py::arg("sketch"), "A sketch as solved (JSON: points in cm, entities, constraints).");
+  m.def("rename", [](const std::string& kind, const std::string& name, const std::string& newName) {
+    std::string err;
+    if (kind == "body") err = activeSession().renameBody(name, newName);
+    else if (kind == "sketch") err = activeSession().renameSketch(name, newName);
+    else if (kind == "feature") {
+      int id = -1;
+      for (const auto& f : activeSession().document().features())
+        if (f.name == name) id = f.id;
+      err = id < 0 ? "no feature named '" + name + "'" : activeSession().renameFeature(id, newName);
+    } else {
+      err = "rename: kind is body, sketch or feature";
+    }
+    if (!err.empty()) throw std::runtime_error(err);
+  }, py::arg("kind"), py::arg("name"), py::arg("new_name"), "Rename a body, sketch or timeline feature (one undo step).");
   m.def("mass_properties", [](const std::string& name) {
     const auto b = activeSession().document().body(name);
     if (!b) throw std::runtime_error("no body named '" + name + "'");

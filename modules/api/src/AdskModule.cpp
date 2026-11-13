@@ -146,7 +146,7 @@ void bindAdsk(py::module_& adsk) {
       });
 
   py::class_<BRepBody>(fusion, "BRepBody")
-      .def_property_readonly("name", [](const BRepBody& b) { return b.get().name; })
+      .def_property_readonly("name", [](const BRepBody& b) { return b.get().display; })
       .def_property_readonly("volume", [](const BRepBody& b) { return kernel::massProperties(b.get().shape).volume; })
       .def_property_readonly("area", [](const BRepBody& b) { return kernel::massProperties(b.get().shape).area; });
 

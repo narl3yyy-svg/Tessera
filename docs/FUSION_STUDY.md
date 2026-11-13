@@ -91,7 +91,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Dragging a circle centre onto a line midpoint (triangle glyph) adds the midpoint constraint on release (Day 14).
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
-- [ ] Fully defined curves change colour (black in the light theme).
+- [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
 - [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); 3-point arc; Centerline linetype (Day 8).
 - [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
 - [ ] Dimension: where the cursor is dragged decides horizontal / vertical / aligned; dimensions can be named d1, d2 ... and used in others (Days 5, 8).
@@ -130,4 +130,4 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Hold Ctrl over a face to snap to points on it when placing joints (Day 17).
 - [x] Marking menu changes with what is under the cursor (Lesson 3).
 - [ ] Pin to Toolbar: the ⋮ beside a menu entry adds it to the ribbon (Lesson 3).
-- [ ] Rename a sketch or body in the Browser: click once to select, again to edit (Days 3, 6).
+- [x] Rename a sketch or body in the Browser: click once to select, again (or F2) to edit (Days 3, 6); timeline right-click > Rename.
