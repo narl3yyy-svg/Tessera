@@ -78,6 +78,9 @@ struct Constraint {
   // default place next to the geometry.
   bool hasLabel = false;
   double labelX = 0, labelY = 0;
+  // Dimensions only: a driven (reference) dimension shows what the geometry
+  // measures and does not drive it; the solver ignores it.
+  bool driven = false;
 };
 
 bool isDimension(ConstraintType t);

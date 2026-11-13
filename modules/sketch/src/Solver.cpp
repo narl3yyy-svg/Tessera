@@ -143,6 +143,7 @@ private:
   }
 
   void add(const Constraint& c, std::vector<double>& r) const {
+    if (c.driven) return;   // reference only: it follows the geometry
     const auto& p = c.points;
     const auto& e = c.entities;
     auto bad = [&] { throw SketchError(std::string("malformed '") + typeName(c.type) + "' constraint"); };
@@ -393,6 +394,10 @@ SolveResult solve(Sketch& s, const std::vector<int>& lockedList) {
 }
 
 std::string addConstraintChecked(Sketch& s, const Constraint& c) {
+  if (c.driven) {   // constrains nothing: always fits
+    s.constraints.push_back(c);
+    return {};
+  }
   Sketch trial = s;
   const SolveResult before = solve(trial);
   if (!before.ok) return before.message;

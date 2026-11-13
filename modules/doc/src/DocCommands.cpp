@@ -61,7 +61,7 @@ Document& docOf(CommandContext& ctx) {
 // Gives every dimension that carries an expression its current value.
 void evaluateDimensions(const Document& doc, sketch::Sketch& s) {
   for (auto& c : s.constraints) {
-    if (c.expression.empty() || !sketch::isDimension(c.type)) continue;
+    if (c.expression.empty() || !sketch::isDimension(c.type) || c.driven) continue;
     const Unit unit = c.type == sketch::ConstraintType::Angle ? Unit::Degree : Unit::Millimeter;
     try {
       c.value = doc.evaluate(c.expression, unit);

@@ -281,6 +281,7 @@ std::string Sketch::toJson() const {
       jc["lx"] = c.labelX;
       jc["ly"] = c.labelY;
     }
+    if (c.driven) jc["driven"] = true;
     cons.push_back(jc);
   }
   return j.dump();
@@ -335,6 +336,7 @@ Sketch Sketch::fromJson(const std::string& text) {
       c.value = jc.value("v", 0.0);
       c.value2 = jc.value("v2", 0.0);
       c.expression = jc.value("expr", std::string{});
+      c.driven = jc.value("driven", false);
       if (jc.contains("lx") && jc.contains("ly")) {
         c.hasLabel = true;
         c.labelX = jc["lx"].get<double>();

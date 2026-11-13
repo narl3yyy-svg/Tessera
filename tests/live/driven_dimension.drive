@@ -1,0 +1,37 @@
+# Live: a dimension that would over-constrain the sketch is offered as a
+# driven one, as in the familiar sketcher. A line from the origin gets its
+# horizontal (40) and vertical (20) spans; its length then over-constrains:
+# the dialog's OK makes a driven dimension showing (44.72).
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 30 20
+key Escape
+key Escape
+key d
+sclick 15 10
+sclick 15 35              # above: horizontal span
+wait 300
+type 40
+key Return
+wait 300
+sclick 20 10
+sclick 55 10              # beside: vertical span
+wait 300
+type 20
+key Return
+wait 300
+sclick 20 10
+sclick -5 25              # off the corner: the length
+waitfor drivenDimension
+wait 300
+key Return
+wait 400
+key Escape
+shot /tmp/live_driven.png
+click palette.finish
+wait 600

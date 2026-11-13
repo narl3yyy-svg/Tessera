@@ -57,7 +57,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 ### Sketch
 - [x] Line tool: click-drag from an end makes a tangent arc; automatic midpoint / perpendicular / parallel / tangent inference; dashed inference lines to points however far away (no constraint added); a point dropped on the sketch's origin axes stays on them (tied to the origin).
 - [x] Dimension tool: the dimension follows the cursor after the pick and a click places it (beside a sloped line or point pair: horizontal / vertical, else aligned); dimensions drawn with extension lines, arrows, leaders and angle arcs; the value can be dragged with Select; angle between two lines by clicking both.
-- [ ] Driven (reference) dimensions, offered when a dimension would over-constrain the sketch.
+- [x] Driven (reference) dimensions, offered when a dimension would over-constrain the sketch: shown in brackets, following the geometry, ignored by the solver.
+- [ ] Dimension text drawn along sloped dimension lines (Tessera's text is always level).
 - [ ] Sketch text, ellipse, conic, 3-point rectangle / circle / arc, tangent circle, centre-point arc slot, overall slot.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).

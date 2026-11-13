@@ -32,6 +32,7 @@
 #include <QLineEdit>
 #include <QRegularExpression>
 #include <QGuiApplication>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QTimer>
 
@@ -1892,7 +1893,9 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
   if (picks_.empty()) {
     if (h.kind == Hit::None) return;
     if (h.kind == Hit::Label) {
-      if (sketch::isDimension(sk_.constraints[h.index].type)) askValue(sk_.constraints[h.index], widgetPos, h.index);
+      const Constraint& k = sk_.constraints[h.index];
+      if (k.driven) emit message(tr("A driven dimension follows the geometry; it has no value to type."));
+      else if (sketch::isDimension(k.type)) askValue(k, widgetPos, h.index);
       return;
     }
     if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Spline) {
@@ -1928,6 +1931,30 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
   picks_.clear();
   clearPreview();
   rebuild();
+  {
+    // Would it over-constrain (or only repeat) what is there? Then, as the
+    // familiar sketcher asks, offer a driven (reference) dimension.
+    sketch::Sketch trial = sk_;
+    Constraint atValue = *c;
+    atValue.value = currentValue(*c);
+    if (!sketch::addConstraintChecked(trial, atValue).empty()) {
+      QMessageBox box(QMessageBox::Question, tr("Driven dimension"),
+                      tr("Adding this dimension will over-constrain the sketch.\n"
+                         "Create a driven (reference) dimension instead?"),
+                      QMessageBox::Ok | QMessageBox::Cancel, view_);
+      box.setObjectName(QStringLiteral("drivenDimension"));
+      box.setDefaultButton(QMessageBox::Ok);
+      if (box.exec() != QMessageBox::Ok) return;
+      Constraint d = *c;
+      d.driven = true;
+      d.value = 0;
+      checkpoint();
+      sk_.constraints.push_back(d);
+      emit message(tr("Driven dimension: it shows the size and follows the geometry."));
+      solveAndShow();
+      return;
+    }
+  }
   askValue(*c, widgetPos);
 }
 
@@ -2777,7 +2804,9 @@ void SketchEditor::addDimensionGraphics(const Constraint& c, double lx, double l
       const double nx = -dy, ny = dx;   // across the measurement
       // The dimension line runs through the value, a little below it.
       double h = (lx - x1) * nx + (ly - y1) * ny;
-      const double gap = 8 * px;
+      // The text is level: beside a steep dimension line it needs half its
+      // width of room, above a level one just its half height.
+      const double gap = (std::abs(dy) > std::abs(dx) ? 26 : 8) * px;
       if (std::abs(h) > 2 * gap) h -= std::copysign(gap, h);
       const double h1 = h, h2 = h + (x1 - x2) * nx + (y1 - y2) * ny;   // offsets from each point
       const double ax = x1 + nx * h1, ay = y1 + ny * h1;   // dimension line ends
@@ -2909,6 +2938,13 @@ std::optional<Constraint> SketchEditor::dimensionCandidate(double x, double y) c
 }
 
 QString SketchEditor::labelText(const Constraint& c) const {
+  if (c.driven) {   // a reference dimension: what the geometry measures, in brackets
+    Constraint measured = c;
+    measured.driven = false;
+    measured.expression.clear();
+    measured.value = currentValue(c);
+    return QStringLiteral("(%1)").arg(labelText(measured));
+  }
   switch (c.type) {
     case ConstraintType::Horizontal: return QStringLiteral("H");
     case ConstraintType::Vertical: return QStringLiteral("V");
