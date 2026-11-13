@@ -61,7 +61,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [ ] Dimension text drawn along sloped dimension lines (Tessera's text is always level).
 - [x] 3-Point Rectangle (square corners kept), 2-Point Circle, 3-Point Circle, 3-Point Arc; clicks on existing geometry stay on the new circle.
 - [x] 2-Tangent Circle (placed in the corner by the cursor), 3-Tangent Circle (the one nearest the picks: a triangle's incircle), Overall Slot, Center Point Arc Slot.
-- [ ] Sketch text, ellipse, conic.
+- [x] Ellipse (centre, one axis end, the other half axis): a closed profile; points can be kept on it.
+- [ ] Ellipse dimensions (major / minor radius), trim and offset of ellipses; sketch text; conic curve.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 

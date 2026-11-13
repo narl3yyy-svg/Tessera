@@ -42,6 +42,7 @@ const char* entityTypeName(EntityType t) {
     case EntityType::Circle: return "circle";
     case EntityType::Arc: return "arc";
     case EntityType::Spline: return "spline";
+    case EntityType::Ellipse: return "ellipse";
   }
   return "?";
 }
@@ -130,6 +131,18 @@ int Sketch::addSpline(const std::vector<int>& fitPoints, bool construction) {
   return static_cast<int>(entities.size()) - 1;
 }
 
+int Sketch::addEllipse(int center, int axisEnd, double otherRadius, bool construction) {
+  Entity e;
+  e.type = EntityType::Ellipse;
+  e.center = center;
+  e.a = axisEnd;
+  e.b = -1;
+  e.radius = otherRadius;
+  e.construction = construction;
+  entities.push_back(e);
+  return static_cast<int>(entities.size()) - 1;
+}
+
 int Sketch::addConstraint(Constraint c) {
   constraints.push_back(std::move(c));
   return static_cast<int>(constraints.size()) - 1;
@@ -142,6 +155,7 @@ std::vector<int> Sketch::entityPoints(int id) const {
     case EntityType::Circle: return {e.center};
     case EntityType::Arc: return {e.center, e.a, e.b};
     case EntityType::Spline: return e.fit;
+    case EntityType::Ellipse: return {e.center, e.a};
   }
   return {};
 }
@@ -236,6 +250,7 @@ void Sketch::checkIndices() const {
         if (e.fit.size() < 2) throw SketchError("spline with fewer than two points");
         for (int p : e.fit) pt(p, true);
         break;
+      case EntityType::Ellipse: pt(e.center, true); pt(e.a, true); break;
     }
   }
   for (const auto& c : constraints) {
@@ -304,6 +319,7 @@ Sketch Sketch::fromJson(const std::string& text) {
       if (t == "line") e.type = EntityType::Line;
       else if (t == "circle") e.type = EntityType::Circle;
       else if (t == "arc") e.type = EntityType::Arc;
+      else if (t == "ellipse") e.type = EntityType::Ellipse;
       else if (t == "spline") {
         e.type = EntityType::Spline;
         e.fit = je.at("fit").get<std::vector<int>>();

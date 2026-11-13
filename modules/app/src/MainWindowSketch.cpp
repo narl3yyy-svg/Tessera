@@ -274,6 +274,7 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::ThreeTangentCircle, QStringLiteral("circle-3tan"), tr("3-Tangent Circle"), {});
   toolButton(create, T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {});
   toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
+  toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {});
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
   toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
   toolButton(create, T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {});

@@ -306,6 +306,10 @@ std::string mirrorEntities(Sketch& s, const std::vector<int>& entities, int mirr
         c.a = c.fit.front();
         c.b = c.fit.back();
         break;
+      case EntityType::Ellipse:
+        c.center = mirrored(e.center);
+        c.a = mirrored(e.a);
+        break;
     }
     c.projected = false;
     s.entities.push_back(c);
@@ -332,7 +336,7 @@ std::vector<ChainSegment> chainOf(const Sketch& s, int entity, bool* closed) {
     if (closed) *closed = true;
     return {{entity, true}};
   }
-  if (e0.type == EntityType::Spline) return {};
+  if (e0.type == EntityType::Spline || e0.type == EntityType::Ellipse) return {};
   Joints j(s);
   std::vector<bool> used(s.entities.size(), false);
   used[entity] = true;

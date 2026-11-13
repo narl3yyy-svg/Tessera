@@ -40,7 +40,7 @@ public:
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
-    TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot,
+    TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse,
   };
 
   // featureId < 0: a new sketch named `name`.

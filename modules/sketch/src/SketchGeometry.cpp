@@ -20,6 +20,7 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Elips.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -96,6 +97,17 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         GC_MakeArcOfCircle arc(c, P(e.a), P(e.b), true);
         if (!arc.IsDone()) return {};
         return BRepBuilderAPI_MakeEdge(arc.Value()).Edge();
+      }
+      case EntityType::Ellipse: {
+        const gp_Pnt c = P(e.center), a = P(e.a);
+        const double A = c.Distance(a), B = std::abs(e.radius);
+        if (A < 1e-7 || B < 1e-7) return {};
+        // OCCT wants the major radius first: if the drawn axis is the short
+        // one, the long axis runs across it.
+        gp_Dir major(gp_Vec(c, a));
+        if (A < B) major = f.Direction().Crossed(major);
+        const gp_Elips el(gp_Ax2(c, f.Direction(), major), std::max(A, B), std::min(A, B));
+        return BRepBuilderAPI_MakeEdge(el).Edge();
       }
       case EntityType::Spline: {
         // Fit points, without repeats; a closed spline is periodic.

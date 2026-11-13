@@ -336,6 +336,16 @@ void slotArcIcon(QPainter& p) {   // a curved slot round a centre
   dot(p, 32, 32);
 }
 
+void ellipseIcon(QPainter& p) {
+  stroke(p);
+  p.save();
+  p.translate(32, 32);
+  p.rotate(-25);
+  p.drawEllipse(QPointF(0, 0), 25, 14);
+  p.restore();
+  dot(p, 32, 32);
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -1017,6 +1027,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("circle-3tan")) circleTanIcon(p, true);
   else if (name == QLatin1String("slot-overall")) slotOverallIcon(p);
   else if (name == QLatin1String("slot-arc")) slotArcIcon(p);
+  else if (name == QLatin1String("ellipse")) ellipseIcon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

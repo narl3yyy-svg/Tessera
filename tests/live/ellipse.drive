@@ -1,0 +1,16 @@
+# Live: the Ellipse tool: centre, the end of one axis, a point for the other.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.ellipse
+sclick 20 20              # centre
+sclick 50 20              # one axis: 30 mm
+smove 30 36
+wait 200
+shot /tmp/live_ellipse.png
+sclick 30 40              # the other: 20 mm (on the grid)
+key Escape
+click palette.finish
+wait 600

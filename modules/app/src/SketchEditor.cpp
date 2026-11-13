@@ -221,6 +221,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::ThreeTangentCircle: emit message(tr("3-Tangent Circle: click three lines.")); break;
     case Tool::OverallSlot: emit message(tr("Overall Slot: click both ends of the slot, then a point for the width.")); break;
     case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
+    case Tool::Ellipse: emit message(tr("Ellipse: click the centre, the end of one axis, then a point for the other.")); break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
@@ -767,7 +768,20 @@ SketchEditor::Snap SketchEditor::snapAt(double x, double y, int exclude) const {
     const auto& e = sk_.entities[i];
     if (e.type == EntityType::Spline || e.a == exclude || e.b == exclude) continue;
     double px, py;
-    if (e.type == EntityType::Line) {
+    if (e.type == EntityType::Ellipse) {
+      // The nearest point of the outline (finely sampled, then projected).
+      const auto pts = curveSamples(i);
+      double bd = 1e300;
+      px = py = 0;
+      for (size_t k = 1; k < pts.size(); ++k) {
+        const double ax = pts[k - 1].first, ay = pts[k - 1].second;
+        const double dx = pts[k].first - ax, dy = pts[k].second - ay, l2 = dx * dx + dy * dy;
+        const double t = l2 > 0 ? std::clamp(((x - ax) * dx + (y - ay) * dy) / l2, 0.0, 1.0) : 0;
+        const double qx = ax + t * dx, qy = ay + t * dy, dd = std::hypot(qx - x, qy - y);
+        if (dd < bd) bd = dd, px = qx, py = qy;
+      }
+      if (pts.empty()) continue;
+    } else if (e.type == EntityType::Line) {
       const auto &a = sk_.points[e.a], &b = sk_.points[e.b];
       const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
       if (l2 < 1e-18) continue;
@@ -1010,7 +1024,7 @@ SketchEditor::Hit SketchEditor::hitEntity(double x, double y) const {
       const auto& a = sk_.points[e.a];
       const auto& b = sk_.points[e.b];
       d = segDistance(x, y, a.x, a.y, b.x, b.y);
-    } else if (e.type == EntityType::Spline) {
+    } else if (e.type == EntityType::Spline || e.type == EntityType::Ellipse) {
       d = entityDistance(i, x, y);
     } else {
       const auto& c = sk_.points[e.center];
@@ -1052,16 +1066,7 @@ SketchEditor::Hit SketchEditor::hitTest(double x, double y, bool pointsFirst) co
     }
   const Hit e = hitEntity(x, y);
   if (e.kind != Hit::None) {
-    double ed = 0;
-    const auto& en = sk_.entities[e.index];
-    if (en.type == EntityType::Line) {
-      const auto& a = sk_.points[en.a];
-      const auto& b = sk_.points[en.b];
-      ed = segDistance(x, y, a.x, a.y, b.x, b.y);
-    } else {
-      const auto& c = sk_.points[en.center];
-      ed = std::abs(std::hypot(x - c.x, y - c.y) - en.radius);
-    }
+    const double ed = entityDistance(e.index, x, y);
     if (label.kind == Hit::None || ed <= labelD) return e;
   }
   if (label.kind != Hit::None) return label;
@@ -1632,6 +1637,27 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       if (!res_.ok) undo();
       return;
     }
+    case Tool::Ellipse: {
+      if (steps_.size() < 2) {
+        const Pick p = pickPoint(x, y);
+        if (!steps_.empty() && std::hypot(p.x - steps_[0].x, p.y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(p);
+        return;
+      }
+      const Pick c = steps_[0], a = steps_[1];
+      const Pick q = pickPoint(x, y);
+      const double A = std::hypot(a.x - c.x, a.y - c.y);
+      // The other half axis: how far the click is across the first axis.
+      const double B = std::abs((q.x - c.x) * -(a.y - c.y) / A + (q.y - c.y) * (a.x - c.x) / A);
+      if (B < tolerance() / 4) return;
+      checkpoint();
+      const int pc = materialize(c), pa = materialize(a);
+      sk_.addEllipse(pc, pa, B, construction_);
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
     case Tool::Project:
       projectAt(widgetPos);
       return;
@@ -1862,6 +1888,9 @@ void SketchEditor::selectInBox(const QPointF& from, const QPointF& to, Qt::Keybo
       }
       case EntityType::Spline:
         for (int p : en.fit) out.emplace_back(pts[p].x, pts[p].y);
+        break;
+      case EntityType::Ellipse:
+        out = curveSamples(static_cast<int>(&en - sk_.entities.data()));
         break;
     }
     return out;
@@ -2139,6 +2168,10 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
     }
     if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Spline) {
       emit message(tr("Splines follow their points: dimension the points instead."));
+      return;
+    }
+    if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Ellipse) {
+      emit message(tr("Dimension an ellipse by its centre and axis points."));
       return;
     }
     picks_.push_back({h, x, y});
@@ -2639,8 +2672,9 @@ void SketchEditor::trimAt(double x, double y) {
   const int ei = h.index;
   const auto& P = sk_.points;
   const Entity target = sk_.entities[ei];
-  if (target.type == EntityType::Spline) {
-    emit message(tr("Trim does not work on splines yet."));
+  if (target.type == EntityType::Spline || target.type == EntityType::Ellipse) {
+    emit message(target.type == EntityType::Spline ? tr("Trim does not work on splines yet.")
+                                                   : tr("Trim does not work on ellipses yet."));
     return;
   }
 
@@ -2667,7 +2701,7 @@ void SketchEditor::trimAt(double x, double y) {
   for (int j = 0; j < static_cast<int>(sk_.entities.size()); ++j) {
     if (j == ei) continue;
     const Entity& o = sk_.entities[j];
-    if (o.type == EntityType::Spline) continue;   // no crossings with splines yet
+    if (o.type == EntityType::Spline || o.type == EntityType::Ellipse) continue;   // no crossings with these yet
     if (target.type == EntityType::Line) {
       const auto &a = P[target.a], &b = P[target.b];
       if (o.type == EntityType::Line) {
@@ -3546,7 +3580,7 @@ void SketchEditor::updatePreview(double x, double y) {
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
                        tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
                        tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc ||
-                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot;
+                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (view_ && tool_ == Tool::TwoTangentCircle && tangentLines_.size() == 2) {
     double cx, cy, r;
@@ -3701,6 +3735,18 @@ void SketchEditor::updatePreview(double x, double y) {
       } else {
         tmp.addLine(a.x, a.y, steps_[1].x, steps_[1].y);
       }
+      break;
+    }
+    case Tool::Ellipse: {
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+        break;
+      }
+      const auto& e = steps_[1];
+      const double A = std::hypot(e.x - a.x, e.y - a.y);
+      const double B = A > 1e-12 ? std::abs((x - a.x) * -(e.y - a.y) / A + (y - a.y) * (e.x - a.x) / A) : 0;
+      if (B > 1e-9) tmp.addEllipse(tmp.addPoint(a.x, a.y), tmp.addPoint(e.x, e.y), B);
+      else tmp.addLine(a.x, a.y, e.x, e.y);
       break;
     }
     case Tool::OverallSlot: {

@@ -41,7 +41,7 @@ Layout makeLayout(const Sketch& s, const std::set<int>& locked) {
       L.py[i] = L.n++;
     }
   for (size_t i = 0; i < s.entities.size(); ++i)
-    if (isRound(s.entities[i].type)) L.rad[i] = L.n++;
+    if (isRound(s.entities[i].type) || s.entities[i].type == EntityType::Ellipse) L.rad[i] = L.n++;
   return L;
 }
 
@@ -151,6 +151,11 @@ private:
     for (int i : e)
       if (E(i).type == EntityType::Spline)
         throw SketchError(std::string("'") + typeName(c.type) + "' cannot apply to a spline; constrain its points");
+    // Ellipses: a point can lie on one; other relations act on its centre
+    // and axis point.
+    for (int i : e)
+      if (E(i).type == EntityType::Ellipse && c.type != ConstraintType::PointOnEntity)
+        throw SketchError(std::string("'") + typeName(c.type) + "' cannot apply to an ellipse; constrain its centre and axis point");
     switch (c.type) {
       case ConstraintType::Coincident:
         if (p.size() != 2) bad();
@@ -220,8 +225,19 @@ private:
       }
       case ConstraintType::PointOnEntity:
         if (p.size() != 1 || e.size() != 1) bad();
-        if (isRound(e[0])) r.push_back(dist(p[0], E(e[0]).center) - E(e[0]).radius);
-        else r.push_back(pointLineDistance(p[0], e[0]));
+        if (isRound(e[0])) {
+          r.push_back(dist(p[0], E(e[0]).center) - E(e[0]).radius);
+        } else if (E(e[0]).type == EntityType::Ellipse) {
+          // In the ellipse's own axes: (s/A)^2 + (t/B)^2 = 1, as a distance.
+          const Entity& el = E(e[0]);
+          const double ux = P(el.a).x - P(el.center).x, uy = P(el.a).y - P(el.center).y;
+          const double A = std::max(std::hypot(ux, uy), 1e-12), B = std::max(std::abs(el.radius), 1e-12);
+          const double dx = P(p[0]).x - P(el.center).x, dy = P(p[0]).y - P(el.center).y;
+          const double s = (dx * ux + dy * uy) / A, t = (-dx * uy + dy * ux) / A;
+          r.push_back((std::hypot(s / A, t / B) - 1) * std::min(A, B));
+        } else {
+          r.push_back(pointLineDistance(p[0], e[0]));
+        }
         return;
       case ConstraintType::Midpoint: {
         if (p.size() != 1 || e.size() != 1 || isRound(e[0])) bad();

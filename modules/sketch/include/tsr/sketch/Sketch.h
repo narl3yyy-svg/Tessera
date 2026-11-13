@@ -11,6 +11,8 @@
 //   Arc     center, a = start, b = end, radius; runs counter-clockwise a -> b
 //   Spline  fit = points the curve passes through, in order (a = first,
 //           b = last; closed when first == last)
+//   Ellipse center, a = the end of one axis (its direction and half
+//           length), radius = the other half axis (b = -1)
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -27,7 +29,7 @@ struct Point {
   double x = 0, y = 0;
 };
 
-enum class EntityType { Line, Circle, Arc, Spline };
+enum class EntityType { Line, Circle, Arc, Spline, Ellipse };
 inline bool isRound(EntityType t) { return t == EntityType::Circle || t == EntityType::Arc; }
 
 struct Entity {
@@ -106,6 +108,7 @@ public:
   // A smooth curve through the points (at least 2). Closed if the first and
   // last are the same point.
   int addSpline(const std::vector<int>& fitPoints, bool construction = false);
+  int addEllipse(int center, int axisEnd, double otherRadius, bool construction = false);
   int addConstraint(Constraint c);   // no solving; see SolveResult / addConstraintChecked
 
   // Removes entities (and constraints that reference them), then the points
