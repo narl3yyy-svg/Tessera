@@ -119,16 +119,24 @@ int Sketch::addArc(int center, int start, int end, bool construction) {
   return static_cast<int>(entities.size()) - 1;
 }
 
-int Sketch::addSpline(const std::vector<int>& fitPoints, bool construction) {
+int Sketch::addSpline(const std::vector<int>& fitPoints, bool construction, SplineKind kind) {
   if (fitPoints.size() < 2) throw SketchError("a spline needs at least two points");
   Entity e;
   e.type = EntityType::Spline;
+  e.kind = kind;
   e.fit = fitPoints;
   e.a = fitPoints.front();
   e.b = fitPoints.back();
   e.construction = construction;
   entities.push_back(e);
   return static_cast<int>(entities.size()) - 1;
+}
+
+int Sketch::addConic(int start, int vertex, int end, double rho, bool construction) {
+  if (!(rho > 0 && rho < 1)) throw SketchError("a conic's rho must be between 0 and 1");
+  const int id = addSpline({start, vertex, end}, construction, SplineKind::Conic);
+  entities[id].radius = rho;
+  return id;
 }
 
 int Sketch::addEllipse(int center, int axisEnd, double otherRadius, bool construction) {
@@ -266,6 +274,8 @@ void Sketch::checkIndices() const {
       case EntityType::Arc: pt(e.center, true); pt(e.a, true); pt(e.b, true); break;
       case EntityType::Spline:
         if (e.fit.size() < 2) throw SketchError("spline with fewer than two points");
+        if (e.kind == SplineKind::Conic && (e.fit.size() != 3 || !(e.radius > 0 && e.radius < 1)))
+          throw SketchError("a conic needs a start, a vertex and an end, and rho between 0 and 1");
         for (int p : e.fit) pt(p, true);
         break;
       case EntityType::Ellipse: pt(e.center, true); pt(e.a, true); break;
@@ -289,6 +299,11 @@ std::string Sketch::toJson() const {
     if (e.projected) je["projected"] = true;
     if (e.type == EntityType::Spline) {
       je["fit"] = e.fit;
+      if (e.kind == SplineKind::Control) je["kind"] = "control";
+      if (e.kind == SplineKind::Conic) {
+        je["kind"] = "conic";
+        je["rho"] = e.radius;
+      }
       if (e.construction) je["construction"] = true;
       ents.push_back(je);
       continue;
@@ -356,6 +371,8 @@ Sketch Sketch::fromJson(const std::string& text) {
         if (e.fit.size() < 2) throw SketchError("spline with fewer than two points");
         e.a = e.fit.front();
         e.b = e.fit.back();
+        const std::string kind = je.value("kind", std::string("fit"));
+        e.kind = kind == "control" ? SplineKind::Control : kind == "conic" ? SplineKind::Conic : SplineKind::Fit;
       }
       else throw SketchError("unknown sketch entity type '" + t + "'");
       if (je.contains("p")) {
@@ -363,7 +380,7 @@ Sketch Sketch::fromJson(const std::string& text) {
         e.b = je["p"].at(1).get<int>();
       }
       e.center = je.value("c", -1);
-      e.radius = je.value("r", 0.0);
+      e.radius = je.value("r", je.value("rho", 0.0));
       e.construction = je.value("construction", false);
       e.projected = je.value("projected", false);
       s.entities.push_back(e);

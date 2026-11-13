@@ -71,3 +71,9 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 - Wireframe with Hidden Edges / Visible Edges Only compute exact hidden lines in orthographic views only. In a perspective view they draw every edge, hidden ones dashed through the see-through faces only where the depth allows, so the result is approximate.
 - Hidden lines are recomputed as the view turns; very large models may orbit slowly in these two styles.
+
+## Splines and conics
+
+- A conic's rho is set when drawn (0.5) and changed by double-clicking the curve; it cannot yet be a dimension or an expression.
+- Fit point splines have no tangent handles to drag; control point splines are cubic (fewer frame points: lower degree) and cannot be closed.
+- Trim and Break do not work on splines or conics.

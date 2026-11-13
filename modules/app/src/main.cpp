@@ -369,7 +369,7 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   ed->clickAt(10, 0);
   ed->clickAt(12, 3);
   ed->clickAt(11, 6);
-  ed->escape();
+  ed->commitCurve();   // Enter keeps it (Esc would throw it away)
   if (ed->sketch().entities.back().type != tsr::sketch::EntityType::Spline || ed->sketch().entities.back().fit.size() != 3)
     return fail("spline");
   if (!w.finishSketch()) return fail("finish sketch with fillet/offset/spline");

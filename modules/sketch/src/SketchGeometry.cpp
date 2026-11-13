@@ -13,6 +13,11 @@
 #include <BRep_Tool.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GeomAPI_Interpolate.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <Geom_BezierCurve.hxx>
 #include <TColgp_HArray1OfPnt.hxx>
 #include <GProp_GProps.hxx>
 #include <Poly_Triangulation.hxx>
@@ -113,6 +118,39 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         return BRepBuilderAPI_MakeEdge(el).Edge();
       }
       case EntityType::Spline: {
+        if (e.kind == SplineKind::Conic) {
+          // A rational quadratic Bezier: start, vertex, end; the vertex's
+          // weight rho / (1 - rho) gives the conic its rho.
+          const double rho = e.radius;
+          if (e.fit.size() != 3 || !(rho > 0 && rho < 1)) return {};
+          TColgp_Array1OfPnt poles(1, 3);
+          TColStd_Array1OfReal weights(1, 3);
+          for (int i = 0; i < 3; ++i) poles.SetValue(i + 1, P(e.fit[i]));
+          if (poles(1).Distance(poles(3)) < 1e-7) return {};
+          weights.SetValue(1, 1);
+          weights.SetValue(2, rho / (1 - rho));
+          weights.SetValue(3, 1);
+          return BRepBuilderAPI_MakeEdge(Handle(Geom_BezierCurve)(new Geom_BezierCurve(poles, weights))).Edge();
+        }
+        if (e.kind == SplineKind::Control) {
+          // A clamped B-spline of degree 3 (less with fewer points) on its
+          // control frame: it starts and ends on the frame's ends.
+          std::vector<gp_Pnt> pts;
+          for (int i : e.fit) pts.push_back(P(i));
+          const int n = static_cast<int>(pts.size());
+          if (n < 2 || (n < 4 && pts.front().Distance(pts.back()) < 1e-7)) return {};
+          const int deg = std::min(3, n - 1);
+          TColgp_Array1OfPnt poles(1, n);
+          for (int i = 0; i < n; ++i) poles.SetValue(i + 1, pts[i]);
+          const int nk = n - deg + 1;
+          TColStd_Array1OfReal knots(1, nk);
+          TColStd_Array1OfInteger mults(1, nk);
+          for (int i = 1; i <= nk; ++i) {
+            knots.SetValue(i, static_cast<double>(i - 1));
+            mults.SetValue(i, (i == 1 || i == nk) ? deg + 1 : 1);
+          }
+          return BRepBuilderAPI_MakeEdge(Handle(Geom_BSplineCurve)(new Geom_BSplineCurve(poles, knots, mults, deg))).Edge();
+        }
         // Fit points, without repeats; a closed spline is periodic.
         const bool closed = e.fit.size() > 2 && e.fit.front() == e.fit.back();
         std::vector<gp_Pnt> pts;

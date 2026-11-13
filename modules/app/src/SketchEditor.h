@@ -42,7 +42,7 @@ public:
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
-    RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc,
+    RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc, ControlSpline, Conic,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -92,6 +92,8 @@ public:
   bool hasSelection() const { return !selection_.empty(); }
   // Esc: abandons the current drawing step, then the tool.
   void escape();
+  // Enter: finishes a spline being drawn (Esc throws it away).
+  void commitCurve();
 
   // Adds a constraint if it keeps the sketch solvable; empty or an error.
   std::string constrain(const sketch::Constraint& c);

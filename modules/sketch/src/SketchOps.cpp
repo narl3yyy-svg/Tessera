@@ -607,7 +607,8 @@ std::string placeEntities(Sketch& s, const std::vector<int>& entities, const Pla
   pts.erase(0);   // the origin never moves
   for (int p : pts) s.points[p] = place.apply(s.points[p]);
   for (int id : ents)
-    if (s.entities[id].type != EntityType::Line) s.entities[id].radius *= place.scale;
+    if (s.entities[id].type != EntityType::Line && s.entities[id].type != EntityType::Spline)
+      s.entities[id].radius *= place.scale;   // a conic's rho is a shape, not a size
   const bool level = std::abs(std::remainder(place.angle, 2 * std::numbers::pi)) < 1e-12;
   std::vector<Constraint> kept;
   for (Constraint c : s.constraints) {

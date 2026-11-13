@@ -119,7 +119,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
 - [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7: text on a point done, the box not); Centerline linetype (Day 8). (3-point arc: done.)
-- [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
+- [x] Spline: Enter or a double-click commits, Esc throws an unfinished spline away (Days 2, 4). Control Point Spline (cubic on a dashed frame) and Conic Curve (start, end, vertex; rho, double-click to change) in CREATE.
+- [ ] Spline: drag fit points and their tangent handles; rho as a dimension (Days 2, 4).
 - [x] Dimension: where the cursor is dragged decides horizontal / vertical / aligned (Day 5).
 - [x] Dimensions named d1, d2 ... (model parameters, listed under their sketch in Change Parameters, named on hover) and used in other dimensions and feature values, e.g. d1 / 2 (Day 8).
 - [x] Feature values (extrude distance, fillet radius ...) as named model parameters too; renaming any parameter (users follow); favourites (star) and a filter in Change Parameters.

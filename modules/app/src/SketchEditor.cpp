@@ -52,6 +52,17 @@
 
 namespace tsr::app {
 
+namespace {
+// A plain line between two existing points (previews, spline frames).
+sketch::Entity lineEntity(int a, int b) {
+  sketch::Entity e;
+  e.type = sketch::EntityType::Line;
+  e.a = a;
+  e.b = b;
+  return e;
+}
+} // namespace
+
 using sketch::Constraint;
 using sketch::ConstraintType;
 using sketch::Entity;
@@ -225,6 +236,8 @@ void SketchEditor::setTool(Tool t) {
     case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
     case Tool::ThreePointCircle: emit message(tr("3-Point Circle: click three points on the circle.")); break;
     case Tool::ThreePointArc: emit message(tr("3-Point Arc: click the start, the end, then a point the arc passes through.")); break;
+    case Tool::ControlSpline: emit message(tr("Control Point Spline: click the points of its frame; Enter or double-click finishes, Esc throws it away.")); break;
+    case Tool::Conic: emit message(tr("Conic Curve: click the start, the end, then the vertex where its end tangents meet (rho 0.5; double-click the curve to change it).")); break;
     case Tool::TangentArc: emit message(tr("Tangent Arc: click the end of a line or arc, then where the arc ends. Each arc carries on from the last.")); break;
     case Tool::TwoTangentCircle: emit message(tr("2-Tangent Circle: click two lines, then place the circle.")); break;
     case Tool::ThreeTangentCircle: emit message(tr("3-Tangent Circle: click three lines.")); break;
@@ -270,10 +283,7 @@ void SketchEditor::escape() {
     valueBox_ = nullptr;
     return;
   }
-  if (tool_ == Tool::Spline && steps_.size() >= 2) {
-    finishSpline(false);
-    return;
-  }
+  // An unfinished spline is thrown away (Enter or a double-click keeps it).
   if (!steps_.empty() || !picks_.empty()) {
     resetSteps();
     rebuild();
@@ -1389,10 +1399,34 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::Trim:
       trimAt(x, y);
       return;
+    case Tool::Conic: {
+      if (steps_.size() < 2) {
+        if (!steps_.empty() && std::hypot(x - steps_[0].x, y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick v = pickPoint(x, y);
+      const Pick s = steps_[0], e = steps_[1];
+      // The vertex must stand off the chord.
+      const double cross = (e.x - s.x) * (v.y - s.y) - (e.y - s.y) * (v.x - s.x);
+      if (std::abs(cross) < 1e-9 * std::max(1.0, std::hypot(e.x - s.x, e.y - s.y))) {
+        emit message(tr("The vertex must be off the line between the ends."));
+        return;
+      }
+      checkpoint();
+      const int ps = materialize(s), pe = materialize(e), pv = materialize(v);
+      sk_.addConic(ps, pv, pe, 0.5, construction_);
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::ControlSpline:
     case Tool::Spline: {
       const Pick p = pickPoint(x, y);
       // Clicking the first point again closes the curve.
-      if (steps_.size() >= 3 && std::hypot(p.x - steps_.front().x, p.y - steps_.front().y) < tolerance()) {
+      if (tool_ == Tool::Spline && steps_.size() >= 3 &&
+          std::hypot(p.x - steps_.front().x, p.y - steps_.front().y) < tolerance()) {
         finishSpline(true);
         return;
       }
@@ -2203,9 +2237,30 @@ void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
     rebuild();
     return;
   }
-  if (tool_ == Tool::Spline) {
+  if (tool_ == Tool::Spline || tool_ == Tool::ControlSpline) {
     if (steps_.size() >= 2) finishSpline(false);
     return;
+  }
+  // Double-click a conic (with Select): change its rho.
+  if (tool_ == Tool::Select) {
+    const Hit c = hitEntity(x, y);
+    if (c.kind == Hit::Entity && sk_.entities[c.index].type == EntityType::Spline &&
+        sk_.entities[c.index].kind == sketch::SplineKind::Conic) {
+      const auto v = askFields(tr("Conic Curve"), {{{tr("Rho (0 to 1)"), QStringLiteral("rho"),
+                                                    QString::number(sk_.entities[c.index].radius)}}});
+      if (v) {
+        bool ok = false;
+        const double rho = (*v)[0].toDouble(&ok);
+        if (!ok || !(rho > 0 && rho < 1)) {
+          emit message(tr("Rho must be between 0 and 1 (0.5 is a parabola)."));
+          return;
+        }
+        checkpoint();
+        sk_.entities[c.index].radius = rho;
+        solveAndShow();
+      }
+      return;
+    }
   }
   const Hit h = hitTest(x, y);
   if (h.kind == Hit::Label && sketch::isDimension(sk_.constraints[h.index].type))
@@ -3035,7 +3090,8 @@ bool SketchEditor::keyPress(QKeyEvent* e) {
     emit message(tr("Mirror: click the mirror line."));
     return true;
   }
-  if (tool_ == Tool::Spline && steps_.size() >= 2 && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+  if ((tool_ == Tool::Spline || tool_ == Tool::ControlSpline) && steps_.size() >= 2 &&
+      (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
     finishSpline(false);
     return true;
   }
@@ -3943,6 +3999,19 @@ void SketchEditor::rebuild() {
     ctx->Display(a, AIS_WireFrame, -1, false);
     ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);   // never hidden behind bodies
     objects_.push_back(a);
+    if (e.type == EntityType::Spline && e.kind != sketch::SplineKind::Fit && e.fit.size() >= 2) {
+      // Its frame (control points, or a conic's tangents to the vertex), dashed.
+      sketch::Sketch frame;
+      frame.points = sk_.points;
+      for (size_t k = 1; k < e.fit.size(); ++k) frame.entities.push_back(lineEntity(e.fit[k - 1], e.fit[k]));
+      const TopoDS_Shape fs = sketch::curves(frame, frame_, false);
+      if (!fs.IsNull()) {
+        Handle(AIS_Shape) fa = wire(fs, colour, 1.0, Aspect_TOL_DOT);
+        ctx->Display(fa, AIS_WireFrame, -1, false);
+        ctx->SetZLayer(fa, Graphic3d_ZLayerId_Topmost);
+        objects_.push_back(fa);
+      }
+    }
   }
   for (int i = 0; i < static_cast<int>(sk_.texts.size()); ++i) {
     const TopoDS_Shape ts = sketch::textShape(sk_, frame_, i);
@@ -4005,9 +4074,13 @@ void SketchEditor::finishSpline(bool closed) {
     resetSteps();
     return;
   }
-  sk_.addSpline(fit, construction_);
+  sk_.addSpline(fit, construction_, tool_ == Tool::ControlSpline ? sketch::SplineKind::Control : sketch::SplineKind::Fit);
   resetSteps();
   solveAndShow();
+}
+
+void SketchEditor::commitCurve() {
+  if ((tool_ == Tool::Spline || tool_ == Tool::ControlSpline) && steps_.size() >= 2) finishSpline(false);
 }
 
 std::vector<std::pair<double, double>> SketchEditor::curveSamples(int entity) const {
@@ -4110,7 +4183,8 @@ void SketchEditor::updatePreview(double x, double y) {
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
                        tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
                        tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc ||
-                       tool_ == Tool::TangentArc || tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
+                       tool_ == Tool::TangentArc || tool_ == Tool::ControlSpline || tool_ == Tool::Conic ||
+                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (view_ && tool_ == Tool::TwoTangentCircle && tangentLines_.size() == 2) {
     double cx, cy, r;
@@ -4158,11 +4232,32 @@ void SketchEditor::updatePreview(double x, double y) {
     special = c;
   };
   switch (tool_) {
+    case Tool::ControlSpline:
     case Tool::Spline: {
       std::vector<int> fit;
       for (const auto& p : steps_) fit.push_back(tmp.addPoint(p.x, p.y));
       if (std::hypot(x - steps_.back().x, y - steps_.back().y) > 1e-9) fit.push_back(tmp.addPoint(x, y));
-      if (fit.size() >= 2) tmp.addSpline(fit);
+      if (fit.size() >= 2) {
+        tmp.addSpline(fit, false, tool_ == Tool::ControlSpline ? sketch::SplineKind::Control : sketch::SplineKind::Fit);
+        if (tool_ == Tool::ControlSpline)   // the frame too
+          for (size_t i = 1; i < fit.size(); ++i) tmp.entities.push_back(lineEntity(fit[i - 1], fit[i]));
+      }
+      break;
+    }
+    case Tool::Conic: {
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+        break;
+      }
+      const int ps = tmp.addPoint(a.x, a.y), pe = tmp.addPoint(steps_[1].x, steps_[1].y), pv = tmp.addPoint(x, y);
+      const double cross = (steps_[1].x - a.x) * (y - a.y) - (steps_[1].y - a.y) * (x - a.x);
+      if (std::abs(cross) > 1e-9) {
+        tmp.addConic(ps, pv, pe, 0.5);
+        tmp.entities.push_back(lineEntity(ps, pv));
+        tmp.entities.push_back(lineEntity(pv, pe));
+      } else {
+        tmp.entities.push_back(lineEntity(ps, pe));
+      }
       break;
     }
     case Tool::Fillet: {

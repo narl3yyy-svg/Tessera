@@ -30,6 +30,10 @@ struct Point {
 };
 
 enum class EntityType { Line, Circle, Arc, Spline, Ellipse };
+// A spline's points: ones it passes through (Fit), the frame it is drawn
+// in (Control: a cubic B-spline through its ends), or a conic's start,
+// vertex (where the end tangents meet) and end (Conic: rho in `radius`).
+enum class SplineKind { Fit, Control, Conic };
 inline bool isRound(EntityType t) { return t == EntityType::Circle || t == EntityType::Arc; }
 
 struct Entity {
@@ -40,6 +44,7 @@ struct Entity {
   bool construction = false;
   bool projected = false;   // copied from a body edge (drawn purple, its points fixed)
   std::vector<int> fit;   // spline fit points
+  SplineKind kind = SplineKind::Fit;   // splines: what `fit` holds
 };
 
 enum class ConstraintType {
@@ -119,7 +124,10 @@ public:
   int addArc(int center, int start, int end, bool construction = false);
   // A smooth curve through the points (at least 2). Closed if the first and
   // last are the same point.
-  int addSpline(const std::vector<int>& fitPoints, bool construction = false);
+  int addSpline(const std::vector<int>& fitPoints, bool construction = false, SplineKind kind = SplineKind::Fit);
+  // A conic from `start` to `end` whose end tangents meet at `vertex`;
+  // rho in (0, 1): below 0.5 an ellipse's arc, 0.5 a parabola, above a hyperbola.
+  int addConic(int start, int vertex, int end, double rho, bool construction = false);
   int addEllipse(int center, int axisEnd, double otherRadius, bool construction = false);
   int addText(int point, const std::string& text, double height, double angle = 0, const std::string& font = {});
   int addConstraint(Constraint c);   // no solving; see SolveResult / addConstraintChecked

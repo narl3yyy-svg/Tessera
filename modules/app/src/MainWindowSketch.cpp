@@ -325,7 +325,10 @@ QWidget* MainWindow::buildSketchTab() {
             {{T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {}},
              {T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {}},
              {T::ArcSlot, QStringLiteral("slot-arc"), tr("Center Point Arc Slot"), {}}});
-  toolButton(create, T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {});
+  toolGroup(create, QStringLiteral("spline"),
+            {{T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {}},
+             {T::ControlSpline, QStringLiteral("spline-control"), tr("Control Point Spline"), {}}});
+  toolButton(create, T::Conic, QStringLiteral("conic"), tr("Conic Curve"), {});
   toolButton(create, T::Mirror, QStringLiteral("sketch-mirror"), tr("Mirror"), {});
   toolButton(create, T::CircPattern, QStringLiteral("sketch-circular-pattern"), tr("Circular Pattern"), {});
   toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {});

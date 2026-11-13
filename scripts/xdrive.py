@@ -330,6 +330,9 @@ def main():
             time.sleep(0.3)
         elif cmd == "sclick":
             click(*sketch_point(float(a[0]), float(a[1])))
+        elif cmd == "sdclick":
+            click(*sketch_point(float(a[0]), float(a[1])), 2)
+            time.sleep(0.3)
         elif cmd == "smove":
             move(*sketch_point(float(a[0]), float(a[1])))
             time.sleep(0.15)

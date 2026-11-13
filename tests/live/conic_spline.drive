@@ -1,0 +1,34 @@
+# Live: CREATE > Conic Curve and Spline > Control Point Spline, as in the
+# familiar tool. A conic from its two ends and the vertex where the end
+# tangents meet; double-click it to set rho. A control point spline from
+# its frame, Enter to finish. Esc throws an unfinished fit spline away.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.conic
+sclick 0 0
+sclick 40 0
+sclick 20 20              # the vertex: a parabola (rho 0.5) peaking at 10 mm
+menu sketch.group-spline sketch.spline-control
+sclick 0 -30
+sclick 10 -10
+sclick 30 -10
+sclick 40 -30
+key Return
+menu sketch.group-spline sketch.spline
+sclick 60 0
+sclick 70 10
+sclick 80 0
+key Escape                # unfinished: gone
+click sketch.select
+sdclick 20 10             # the conic's peak
+waitfor rho
+key ctrl+a
+type 0.3
+key Return
+wait 400
+shot /tmp/live_conic_spline.png
+click palette.finish
+wait 600
