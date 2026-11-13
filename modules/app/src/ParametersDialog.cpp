@@ -163,6 +163,20 @@ void ParametersDialog::rebuild() {
       row->setData(kParameter, kInputRole, qs(in.id));
       row->setData(kParameter, kPathRole, qs(f.name + "." + in.id));
     }
+    // A sketch's named dimensions (d1, d2 ...): usable in any expression.
+    // Changed in the sketch (double-click the dimension).
+    for (const auto& m : doc.modelParameters()) {
+      if (m.owner != f.name) continue;
+      if (!group) group = new QTreeWidgetItem(model, {qs(f.name)});
+      const Unit u = m.angle ? Unit::Degree : length;
+      const QString value = withUnit(m.value, u);
+      auto* row = new QTreeWidgetItem(group, {qs(m.name), qs(std::string(unitSymbol(u))),
+                                              m.expression.empty() ? value : qs(m.expression), value, QString()});
+      row->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+      row->setToolTip(kParameter, tr("Sketch dimension; edit it in the sketch."));
+      row->setData(kParameter, kKindRole, QStringLiteral("dimension"));
+      row->setData(kParameter, kPathRole, qs(m.name));
+    }
   }
   tree_->expandAll();
   for (int c = 0; c < kComment; ++c) tree_->resizeColumnToContents(c);

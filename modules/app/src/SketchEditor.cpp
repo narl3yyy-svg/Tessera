@@ -1522,6 +1522,14 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
   const Hit h = hitTest(x, y);
   const bool changedHover = h.kind != hover_.kind || h.index != hover_.index;
   hover_ = h;
+  if (changedHover && h.kind == Hit::Label && h.index < static_cast<int>(sk_.constraints.size())) {
+    const auto& c = sk_.constraints[h.index];
+    if (sketch::isDimension(c.type) && !c.name.empty()) {
+      QString text = QString::fromStdString(c.name) + QStringLiteral(" = ");
+      if (!c.expression.empty()) text += QString::fromStdString(c.expression) + QStringLiteral(" = ");
+      emit message(text + labelText(c));
+    }
+  }
   updatePreview(x, y);
   if (changedHover) rebuild();
 }
@@ -2016,7 +2024,8 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
     const std::string text = box->text().trimmed().toStdString();
     std::optional<double> value;
     try {
-      value = session_.document().evaluate(text, unit == Unit::Degree ? Unit::Degree : Unit::Millimeter);
+      value = session_.document().evaluate(text, unit == Unit::Degree ? Unit::Degree : Unit::Millimeter,
+                                           localDimensions(editIndex));
     } catch (const std::exception& e) {
       emit message(tr("'%1': %2").arg(box->text(), QString::fromUtf8(e.what())));
       return;
@@ -2035,6 +2044,7 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
       checkpoint();
       sk_.constraints[editIndex].value = *value;
       sk_.constraints[editIndex].expression = expression;
+      refreshLocalExpressions();   // dimensions that use this one follow
       const auto r = sketch::solve(sk_);
       if (!r.ok) {
         sk_ = undo_.back();
@@ -2049,6 +2059,10 @@ void SketchEditor::askValue(const Constraint& c, const QPointF& widgetPos, int e
     Constraint c2 = base;
     c2.value = *value;
     c2.expression = expression;
+    // Named as in the familiar tool (d1, d2 ...): a model parameter.
+    std::vector<std::string> taken;
+    for (const auto& k : sk_.constraints) taken.push_back(k.name);
+    c2.name = session_.document().nextDimensionName(taken);
     constrain(c2);
   });
   connect(box, &QLineEdit::editingFinished, this, [this, box] {
@@ -2583,7 +2597,41 @@ bool SketchEditor::submitValue(const QString& text) {
 QStringList SketchEditor::parameterNames() const {
   QStringList n;
   for (const auto& prm : session_.document().userParameters()) n << QString::fromStdString(prm.name);
+  for (const auto& [name, q] : localDimensions()) n << QString::fromStdString(name);
+  for (const auto& m : session_.document().modelParameters())
+    if (!n.contains(QString::fromStdString(m.name))) n << QString::fromStdString(m.name);
   return n;
+}
+
+std::map<std::string, Quantity> SketchEditor::localDimensions(int skip) const {
+  std::map<std::string, Quantity> out;
+  for (int i = 0; i < static_cast<int>(sk_.constraints.size()); ++i) {
+    const auto& c = sk_.constraints[i];
+    if (i == skip || c.name.empty() || c.driven || !sketch::isDimension(c.type)) continue;
+    out[c.name] = quantityOf(c.value, c.type == ConstraintType::Angle ? Unit::Degree : Unit::Millimeter);
+  }
+  return out;
+}
+
+void SketchEditor::refreshLocalExpressions() {
+  // A few passes: a dimension may use another that uses a third.
+  for (int pass = 0; pass < 8; ++pass) {
+    bool changed = false;
+    for (int i = 0; i < static_cast<int>(sk_.constraints.size()); ++i) {
+      auto& c = sk_.constraints[i];
+      if (c.expression.empty() || c.driven || !sketch::isDimension(c.type)) continue;
+      try {
+        const double v = session_.document().evaluate(
+            c.expression, c.type == ConstraintType::Angle ? Unit::Degree : Unit::Millimeter, localDimensions(i));
+        if (std::abs(v - c.value) > 1e-12) {
+          c.value = v;
+          changed = true;
+        }
+      } catch (const std::exception&) {
+      }
+    }
+    if (!changed) return;
+  }
 }
 
 bool SketchEditor::toggleSelectedConstruction() {

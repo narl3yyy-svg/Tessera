@@ -23,6 +23,7 @@
 #include "tsr/core/Units.h"
 
 #include <array>
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -230,6 +231,11 @@ private:
   // (where the cursor is decides horizontal / vertical / aligned).
   std::optional<sketch::Constraint> dimensionCandidate(double x, double y) const;
   int dragLabel_ = -1;   // Select: a dimension's value being dragged
+  // This sketch's named dimensions (d1, d2 ...) as expression names; `skip`
+  // leaves one out (a dimension cannot use itself).
+  std::map<std::string, Quantity> localDimensions(int skip = -1) const;
+  // Dimensions with expressions take their values again (after an edit).
+  void refreshLocalExpressions();
   QString labelText(const sketch::Constraint& c) const;
 
   // On-canvas size boxes (the heads-up inputs). After the first click of a

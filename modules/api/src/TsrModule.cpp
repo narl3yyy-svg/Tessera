@@ -139,6 +139,19 @@ void bindTsr(py::module_& m) {
     }
     return out;
   }, "User parameters (values in internal units: cm, rad).");
+  m.def("model_parameters", [] {
+    py::list out;
+    for (const auto& p : activeSession().document().modelParameters()) {
+      py::dict d;
+      d["name"] = p.name;
+      d["expression"] = p.expression;
+      d["owner"] = p.owner;
+      d["value"] = p.value;
+      d["angle"] = p.angle;
+      out.append(d);
+    }
+    return out;
+  }, "Sketch dimensions as model parameters (d1, d2 ...; values in cm or rad).");
   m.def("set_parameter", [](const std::string& name, const std::string& expression, py::object comment) {
     auto p = activeSession().document().userParameter(name);
     if (!p) throw std::runtime_error("no parameter named '" + name + "'");

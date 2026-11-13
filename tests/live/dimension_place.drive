@@ -1,6 +1,7 @@
 # Live: the Dimension tool as in the familiar sketcher. Click a sloped line;
 # the dimension follows the cursor; placed above the line it measures the
-# horizontal span (40 mm typed). Click a circle and place its diameter (25).
+# horizontal span (40 mm typed, named d1). Click a circle and place its
+# diameter, typed as d1 / 2 (named d2).
 waitfor tsr.sketch.create
 click tsr.sketch.create
 plane XY
@@ -30,7 +31,7 @@ smove 90 15
 wait 200
 sclick 90 16              # beside it: its diameter
 wait 300
-type 25
+type d1 / 2
 key Return
 wait 300
 key Escape

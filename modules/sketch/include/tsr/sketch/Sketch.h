@@ -81,6 +81,9 @@ struct Constraint {
   // Dimensions only: a driven (reference) dimension shows what the geometry
   // measures and does not drive it; the solver ignores it.
   bool driven = false;
+  // Dimensions only: the model parameter name (d1, d2 ... as in the familiar
+  // tool), usable in other expressions. Empty: unnamed.
+  std::string name;
 };
 
 bool isDimension(ConstraintType t);

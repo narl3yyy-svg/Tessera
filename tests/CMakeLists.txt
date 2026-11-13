@@ -51,6 +51,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_thin_extrude.py)
   add_test(NAME api_rename
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_rename.py)
+  add_test(NAME api_model_parameters
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_model_parameters.py)
   add_test(NAME api_timeline
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_timeline.py)
   add_test(NAME api_chamfer_types

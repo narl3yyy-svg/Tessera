@@ -101,7 +101,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); 3-point arc; Centerline linetype (Day 8).
 - [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
 - [x] Dimension: where the cursor is dragged decides horizontal / vertical / aligned (Day 5).
-- [ ] Dimensions named d1, d2 ... and used in other dimensions (Day 8).
+- [x] Dimensions named d1, d2 ... (model parameters, listed under their sketch in Change Parameters, named on hover) and used in other dimensions and feature values, e.g. d1 / 2 (Day 8).
+- [ ] Feature values (extrude distance, fillet radius ...) as named model parameters too; renaming d-parameters.
 
 ### Solid
 - [x] Rectangular / Circular Pattern of Features picked in the timeline, Extent / Spacing, a drag arrow per direction (Days 1, 5, 8).

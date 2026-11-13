@@ -58,16 +58,40 @@ Document& docOf(CommandContext& ctx) {
   return *d;
 }
 
-// Gives every dimension that carries an expression its current value.
+// Gives every dimension that carries an expression its current value. An
+// expression may use the named dimensions (d1, d2 ...) of earlier sketches
+// (stored, computed) and of this one (in an order that lets each use the
+// ones it needs).
 void evaluateDimensions(const Document& doc, sketch::Sketch& s) {
-  for (auto& c : s.constraints) {
-    if (c.expression.empty() || !sketch::isDimension(c.type) || c.driven) continue;
-    const Unit unit = c.type == sketch::ConstraintType::Angle ? Unit::Degree : Unit::Millimeter;
-    try {
-      c.value = doc.evaluate(c.expression, unit);
-    } catch (const DocumentError& e) {
-      throw CommandError(std::string(sketch::typeName(c.type)) + " dimension '" + c.expression + "': " + e.what());
+  std::map<std::string, Quantity> own;   // this sketch's named dimensions known so far
+  auto note = [&](const sketch::Constraint& c) {
+    if (c.name.empty() || c.driven || !sketch::isDimension(c.type)) return;
+    own[c.name] = quantityOf(c.value, c.type == sketch::ConstraintType::Angle ? Unit::Degree : Unit::Millimeter);
+  };
+  std::vector<size_t> pending;
+  for (size_t i = 0; i < s.constraints.size(); ++i) {
+    const auto& c = s.constraints[i];
+    if (!sketch::isDimension(c.type) || c.driven) continue;
+    if (c.expression.empty()) note(c);
+    else pending.push_back(i);
+  }
+  // Expressions in an order that lets each use the ones before it.
+  while (!pending.empty()) {
+    std::vector<size_t> left;
+    std::string lastError;
+    for (size_t i : pending) {
+      auto& c = s.constraints[i];
+      const Unit unit = c.type == sketch::ConstraintType::Angle ? Unit::Degree : Unit::Millimeter;
+      try {
+        c.value = doc.evaluate(c.expression, unit, own);
+        note(c);
+      } catch (const DocumentError& e) {
+        left.push_back(i);
+        lastError = std::string(sketch::typeName(c.type)) + " dimension '" + c.expression + "': " + e.what();
+      }
     }
+    if (left.size() == pending.size()) throw CommandError(lastError);   // unknown names or a cycle
+    pending = std::move(left);
   }
 }
 

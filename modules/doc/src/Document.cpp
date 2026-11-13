@@ -290,6 +290,8 @@ ExpressionEnv Document::expressionEnv() const {
   auto values = std::make_shared<std::map<std::string, Quantity>>();
   for (const auto& p : userParameters())
     (*values)[p.name] = quantityOf(p.value, parseUnit(p.unit).value_or(Unit::None));
+  for (const auto& m : modelParameters())
+    if (!values->count(m.name)) (*values)[m.name] = quantityOf(m.value, m.angle ? Unit::Degree : Unit::Millimeter);
   env.lookup = [values](const std::string& n) -> std::optional<Quantity> {
     auto it = values->find(n);
     if (it == values->end()) return std::nullopt;
@@ -306,6 +308,59 @@ double Document::evaluate(const std::string& text, Unit unit) const {
   } catch (const ExpressionError& e) {
     throw DocumentError(e.what());
   }
+}
+
+double Document::evaluate(const std::string& text, Unit unit, const std::map<std::string, Quantity>& extra) const {
+  ExpressionEnv env = expressionEnv();
+  auto base = env.lookup;
+  env.lookup = [base, &extra](const std::string& n) -> std::optional<Quantity> {
+    if (auto it = extra.find(n); it != extra.end()) return it->second;
+    return base(n);
+  };
+  const Unit expected = dimensionOf(unit) == Dimension::Length ? env.lengthUnit : unit;
+  try {
+    return tsr::evaluateExpression(text, expected, env);
+  } catch (const ExpressionError& e) {
+    throw DocumentError(e.what());
+  }
+}
+
+// Read from the computed sketches (their data holds each dimension's
+// evaluated value), so open, undo and redo need nothing extra.
+std::vector<ModelParameter> Document::modelParameters() const {
+  std::vector<ModelParameter> out;
+  for (const auto& rec : sketches()) {
+    try {
+      for (const auto& c : sketch::Sketch::fromJson(rec.data).constraints)
+        if (!c.name.empty() && !c.driven && sketch::isDimension(c.type))
+          out.push_back({c.name, c.expression, rec.name, c.value, c.type == sketch::ConstraintType::Angle});
+    } catch (const std::exception&) {
+    }
+  }
+  return out;
+}
+
+std::string Document::nextDimensionName(const std::vector<std::string>& alsoTaken) const {
+  int top = 0;
+  auto take = [&](const std::string& n) {
+    if (n.size() < 2 || n.size() > 9 || n[0] != 'd') return;
+    for (size_t i = 1; i < n.size(); ++i)
+      if (!std::isdigit(static_cast<unsigned char>(n[i]))) return;
+    top = std::max(top, std::stoi(n.substr(1)));
+  };
+  for (const auto& n : alsoTaken) take(n);
+  // Every sketch feature, computed or not (rolled back, failed), keeps its names.
+  for (const auto& f : features()) {
+    if (f.commandId != "tsr.sketch.create") continue;
+    const auto it = f.inputs.find("data");
+    const auto* data = it == f.inputs.end() ? nullptr : std::get_if<std::string>(&it->second);
+    if (!data) continue;
+    try {
+      for (const auto& c : sketch::Sketch::fromJson(*data).constraints) take(c.name);
+    } catch (const std::exception&) {
+    }
+  }
+  return "d" + std::to_string(top + 1);
 }
 
 void Document::reevaluateParameters() {

@@ -62,6 +62,16 @@ struct UserParameter {
   double value = 0;       // evaluated, internal units
 };
 
+// A sketch dimension as a model parameter (d1, d2 ...): usable by name in
+// any expression once its sketch has been computed.
+struct ModelParameter {
+  std::string name;
+  std::string expression;   // empty: a plain value
+  std::string owner;        // the sketch it belongs to
+  double value = 0;         // internal units
+  bool angle = false;
+};
+
 struct Body {
   std::string name;      // the name features use (generated on replay: Body1, Body2 ...)
   TopoDS_Shape shape;
@@ -148,6 +158,13 @@ public:
   // `unit` is an input's display unit: a length unit stands for the
   // document's length unit. Throws DocumentError.
   double evaluate(const std::string& text, Unit unit) const;
+  // The same with extra names (a sketch being edited: its own dimensions).
+  double evaluate(const std::string& text, Unit unit, const std::map<std::string, Quantity>& extra) const;
+  // Sketch dimensions as model parameters: the named dimensions of the
+  // computed sketches, in timeline order.
+  std::vector<ModelParameter> modelParameters() const;
+  // The next free dimension name: d1, d2 ... (over every sketch feature)
+  std::string nextDimensionName(const std::vector<std::string>& alsoTaken = {}) const;
   double evaluateExpression(const std::string& text, Unit unit) override { return evaluate(text, unit); }
 
   std::vector<Body> bodies() const;
