@@ -1,6 +1,6 @@
 # Live: pre-selection. With no command running, click the small square's
-# profile, then E: Extrude starts with it picked; OK. Then select an edge
-# (Select Edges filter) and press F: Fillet starts with that edge.
+# profile, then E: Extrude starts with it picked; OK. Then click an edge
+# (faces and edges are what a click picks) and press F: Fillet starts with it.
 waitfor tsr.feature.extrude
 wait 600
 wclick 70 10 0            # the 20 x 20 profile
@@ -11,10 +11,12 @@ wait 500
 shot /tmp/live_preselect_extrude.png
 click panelOk
 wait 800
-click panel.Select
+# (faces and edges are the default selection now)
 wait 400
-click ui.filterEdges
 wait 300
+wmove 70 0 0              # hover: the edge lights up, not the face
+wait 500
+shot /tmp/live_preselect_hover.png
 wclick 70 0 0             # the new body's front bottom edge
 wait 400
 key f

@@ -115,7 +115,7 @@ public:
   NavPreset navPreset() const { return navPreset_; }
   bool perspective() const { return perspective_; }
 
-  // What a normal click selects: empty = whole bodies.
+  // What a normal click selects: empty = whole bodies; default faces and edges.
   void setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types);
   const std::vector<TopAbs_ShapeEnum>& selectionFilter() const { return selectFilter_; }
 
@@ -254,6 +254,9 @@ protected:
   // AIS_ViewController
   void OnSelectionChanged(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
   void handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
+  // Hover: near an edge of the face under the cursor, the edge lights up.
+  void handleMoveTo(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
+  Handle(SelectMgr_EntityOwner) frontEdgeOwner() const;
 
 private:
   void bindLeftButton();
@@ -327,7 +330,9 @@ private:
   NavPreset navPreset_ = NavPreset::Fusion;
   bool reverseZoom_ = false;
   bool perspective_ = false;
-  std::vector<TopAbs_ShapeEnum> selectFilter_;
+  // As in the familiar tool, a click picks the face or edge under the cursor
+  // (empty: whole bodies, the Select Bodies filter).
+  std::vector<TopAbs_ShapeEnum> selectFilter_{TopAbs_FACE, TopAbs_EDGE};
   void bindNavigation();
 
   bool orbitTool_ = false;

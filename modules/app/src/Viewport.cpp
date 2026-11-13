@@ -15,6 +15,7 @@
 #include <Prs3d_LineAspect.hxx>
 #include <Prs3d_ShadingAspect.hxx>
 #include <Standard_Failure.hxx>
+#include <SelectMgr_ViewerSelector.hxx>
 #include <StdSelect_BRepOwner.hxx>
 
 #include <QGuiApplication>
@@ -631,11 +632,47 @@ void Viewport::hideSelectionBox() {
   if (selectionBox_) selectionBox_->hide();
 }
 
+// The edge or vertex picked at the last MoveTo that lies on the frontmost
+// surface (within a few pixels of depth), if any.
+Handle(SelectMgr_EntityOwner) Viewport::frontEdgeOwner() const {
+  const Handle(SelectMgr_ViewerSelector)& sel = context_->MainSelector();
+  if (sel->NbPicked() == 0) return {};
+  const double front = sel->PickedData(1).Depth;
+  const double tol = 8.0 * modelPerPixel();
+  for (int i = 1; i <= sel->NbPicked(); ++i) {
+    if (sel->PickedData(i).Depth > front + tol) break;
+    const Handle(StdSelect_BRepOwner) o = Handle(StdSelect_BRepOwner)::DownCast(sel->Picked(i));
+    if (!o.IsNull() && o->HasShape() &&
+        (o->Shape().ShapeType() == TopAbs_EDGE || o->Shape().ShapeType() == TopAbs_VERTEX))
+      return o;
+  }
+  return {};
+}
+
+void Viewport::handleMoveTo(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) {
+  AIS_ViewController::handleMoveTo(ctx, view);
+  if (interactor_ || !pickTypes_.empty() || planePicking_ || !ctx->HasDetected()) return;
+  const Handle(SelectMgr_EntityOwner) edge = frontEdgeOwner();
+  if (edge.IsNull() || ctx->DetectedOwner() == edge) return;
+  for (int guard = 0; guard < 16 && ctx->HasNextDetected() && ctx->DetectedOwner() != edge; ++guard)
+    ctx->HilightNextDetected(view, false);
+}
+
 void Viewport::clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods) {
   const Graphic3d_Vec2i p = toPixels(pos);
   context_->MoveTo(p.x(), p.y(), view_, false);
-  context_->SelectDetected((mods & (Qt::ShiftModifier | Qt::ControlModifier)) ? AIS_SelectionScheme_XOR
-                                                                               : AIS_SelectionScheme_Replace);
+  const AIS_SelectionScheme scheme =
+      (mods & (Qt::ShiftModifier | Qt::ControlModifier)) ? AIS_SelectionScheme_XOR : AIS_SelectionScheme_Replace;
+  // Near an edge (or vertex) of the frontmost face, the edge wins, as in the
+  // familiar tool; one behind the face (deeper by more than a few pixels) does not.
+  const Handle(SelectMgr_EntityOwner) edge = frontEdgeOwner();
+  if (!edge.IsNull()) {
+    AIS_NArray1OfEntityOwner owners(1, 1);
+    owners.SetValue(1, edge);
+    context_->Select(owners, scheme);
+  } else {
+    context_->SelectDetected(scheme);
+  }
   OnSelectionChanged(context_, view_);
   updateView();
 }

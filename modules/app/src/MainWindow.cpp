@@ -296,9 +296,26 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       preProfiles_.clear();
       updateProfilePicking();
     }
-    const QStringList sel = viewport_->selectedBodies();
-    if (sel.isEmpty()) statusBar()->clearMessage();
-    else statusBar()->showMessage(tr("Selected: %1").arg(sel.join(QStringLiteral(", "))));
+    QStringList sel = viewport_->selectedBodies();
+    sel.removeDuplicates();
+    if (sel.isEmpty()) {
+      statusBar()->clearMessage();
+      return;
+    }
+    // Faces / edges picked: say how many, and on which bodies.
+    int faces = 0, edges = 0, vertices = 0;
+    for (const auto& [body, shape] : viewport_->selectedSubShapes()) {
+      if (shape.ShapeType() == TopAbs_FACE) ++faces;
+      else if (shape.ShapeType() == TopAbs_EDGE) ++edges;
+      else ++vertices;
+    }
+    QStringList what;
+    if (faces) what << tr("%n face(s)", nullptr, faces);
+    if (edges) what << tr("%n edge(s)", nullptr, edges);
+    if (vertices) what << tr("%n vertex(es)", nullptr, vertices);
+    const QString bodies = sel.join(QStringLiteral(", "));
+    statusBar()->showMessage(what.isEmpty() ? tr("Selected: %1").arg(bodies)
+                                            : tr("Selected: %1 (%2)").arg(what.join(QStringLiteral(", ")), bodies));
   });
   if (!viewport_->unavailableReason().isEmpty()) statusBar()->showMessage(viewport_->unavailableReason());
   buildNavBar();
@@ -888,7 +905,13 @@ void MainWindow::applyPreSelection(CommandDialog* dlg, const QString& sketch, co
     if (active_ != dlg) return;
     onEdgeClicked(body, shape);
   }
-  for (const QString& body : bodies) {
+  // Commands that take bodies (no faces / edges / vertices) get the bodies
+  // of the faces and edges picked.
+  QStringList bodyPicks = bodies;
+  if (!dlg->hasFacesInput() && !dlg->hasEdgesInput() && !dlg->hasVerticesInput())
+    for (const auto& [body, shape] : subs)
+      if (!bodyPicks.contains(body)) bodyPicks << body;
+  for (const QString& body : bodyPicks) {
     if (active_ != dlg) return;
     emit viewport_->bodyClicked(body);
   }

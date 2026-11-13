@@ -113,6 +113,8 @@ void MainWindow::buildUiCommands() {
   planned("Insert", "ui.decal", "Decal", "image");
   add("Select", "ui.select", "Select", "select", "Window selection of bodies (Esc clears).", "",
       [this] { viewport_->setOrbitTool(false); viewport_->setPanTool(false); });
+  add("Select", "ui.filterDefault", "Select Faces and Edges", "face", "Selection filter (the default): the face or edge under the cursor.", "",
+      [this] { setSelectionFilter({TopAbs_FACE, TopAbs_EDGE}); });
   add("Select", "ui.filterBodies", "Select Bodies", "body", "Selection filter: whole bodies.", "",
       [this] { setSelectionFilter({}); });
   add("Select", "ui.filterFaces", "Select Faces", "face", "Selection filter: faces.", "",
@@ -400,7 +402,11 @@ ParametersDialog* MainWindow::showParameters() {
 
 void MainWindow::setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types) {
   viewport_->setSelectionFilter(types);
-  const char* what = types.empty() ? "bodies" : types[0] == TopAbs_FACE ? "faces" : types[0] == TopAbs_EDGE ? "edges" : "vertices";
+  const char* what = types.empty()                ? "bodies"
+                     : types.size() > 1             ? "faces and edges"
+                     : types[0] == TopAbs_FACE      ? "faces"
+                     : types[0] == TopAbs_EDGE      ? "edges"
+                                                    : "vertices";
   statusBar()->showMessage(tr("Selection filter: %1.").arg(QString::fromLatin1(what)), 3000);
 }
 

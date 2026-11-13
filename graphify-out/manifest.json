@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794557038.8735642,
-    "seen": 1794557178.3486276,
-    "ast_hash": "2f26af8d2fcf995a6601ec89d42aeee8",
+    "mtime": 1794557837.62015,
+    "seen": 1794558333.0048132,
+    "ast_hash": "b6bac459856cc305705bea0e32d31169",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -150,9 +150,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
-    "mtime": 1794513206.2511165,
-    "seen": 1794532264.6008458,
-    "ast_hash": "d33c60cdd423caf4607dadb4947defab",
+    "mtime": 1794557825.0609572,
+    "seen": 1794558333.0048175,
+    "ast_hash": "fe90dc87e9e4741a9dd977d8206493a3",
     "semantic_hash": ""
   },
   "modules/app/src/MarkingMenu.cpp": {
@@ -228,15 +228,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.cpp": {
-    "mtime": 1794557219.787797,
-    "seen": 1794557421.4794502,
-    "ast_hash": "a7fb006fbdc5ea380e2dc73d5618266a",
+    "mtime": 1794558165.7164795,
+    "seen": 1794558333.004829,
+    "ast_hash": "7b8611decacbc25aadcb800dfa1b4847",
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794557219.7866518,
-    "seen": 1794557421.4794512,
-    "ast_hash": "9cd624da7ba02b42e40e4db7dbec398a",
+    "mtime": 1794558165.7164795,
+    "seen": 1794558333.0048296,
+    "ast_hash": "fab8bdc4f100c9796b385a1f6363a0aa",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794557079.0653646,
-    "seen": 1794557178.3490946,
-    "ast_hash": "225794fd7872c0c98c19a8062923a389",
+    "mtime": 1794558327.786291,
+    "seen": 1794558333.005156,
+    "ast_hash": "1f173226e97644d82df248a431609409",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794557416.2736351,
-    "seen": 1794557421.4797041,
-    "ast_hash": "dd6d2feaa58e1d222ff0cca9fd4318ea",
+    "mtime": 1794558327.7849972,
+    "seen": 1794558333.005159,
+    "ast_hash": "766e0dcf8e4804d5c02c7336b9822624",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
