@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build Tessera from this source tree and install it.
 #
-#   ./install.sh                 build, test, install to /usr/local (asks for sudo only for the copy step)
+#   ./install.sh                 build and install to /usr/local (asks for sudo only for the copy step)
 #   ./install.sh --user          install to ~/.local instead (no sudo at all)
 #   ./install.sh --deps          also apt-install missing build dependencies first
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX=/usr/local
 BUILD_DIR="$SRC/build-release"
-RUN_TESTS=1
+RUN_TESTS=0   # the tests run in development builds (scripts/build.sh), not here
 INSTALL_DEPS=0
 JOBS="$(nproc 2>/dev/null || echo 2)"
 
@@ -28,7 +28,8 @@ Usage: ./install.sh [options]
   --prefix DIR     install location (default: /usr/local)
   --user           install to ~/.local (same as --prefix ~/.local, no sudo needed)
   --deps           apt-install any missing build dependencies first (uses sudo)
-  --no-tests       skip the test suite before installing
+  --tests          also build and run the test suite before installing
+                   (development builds run it: scripts/build.sh)
   --build-dir DIR  build directory (default: build-release in the source tree)
   --jobs N         parallel build jobs (default: $JOBS)
   -h, --help       show this help
@@ -45,7 +46,8 @@ while [[ $# -gt 0 ]]; do
     --prefix=*)  PREFIX="${1#*=}"; shift ;;
     --user)      PREFIX="$HOME/.local"; shift ;;
     --deps)      INSTALL_DEPS=1; shift ;;
-    --no-tests)  RUN_TESTS=0; shift ;;
+    --tests)     RUN_TESTS=1; shift ;;
+    --no-tests)  RUN_TESTS=0; shift ;;   # the default; kept for old scripts
     --build-dir) BUILD_DIR="${2:?--build-dir needs a directory}"; shift 2 ;;
     --jobs)      JOBS="${2:?--jobs needs a number}"; shift 2 ;;
     -h|--help)   usage; exit 0 ;;

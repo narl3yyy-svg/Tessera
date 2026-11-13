@@ -47,7 +47,7 @@ scope.
 Kubuntu / Ubuntu 26.04. From the top of the source folder, as your normal user (not `sudo`):
 
 ```bash
-./install.sh            # build, test and install to /usr/local (asks for sudo only to copy the files)
+./install.sh            # build and install to /usr/local (asks for sudo only to copy the files)
 ./install.sh --user     # or install to ~/.local without sudo
 ./install.sh --deps     # also install missing build packages first
 ```
