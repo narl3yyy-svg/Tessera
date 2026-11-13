@@ -192,15 +192,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794553229.7710576,
-    "seen": 1794553508.3604853,
-    "ast_hash": "d0863e350a28a088138a513aa6830386",
+    "mtime": 1794561698.645389,
+    "seen": 1794561928.912533,
+    "ast_hash": "2812ad318d2f340ca508a0972f5b518b",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
-    "mtime": 1794553229.768057,
-    "seen": 1794553508.3604875,
-    "ast_hash": "99aad6b187687bdec7545e5d9baf8db2",
+    "mtime": 1794561698.6423886,
+    "seen": 1794561928.912535,
+    "ast_hash": "38224769e2eb79b400969286c8e79158",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.cpp": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794560871.386142,
-    "seen": 1794560876.7768624,
-    "ast_hash": "d98ece29700de7476d5a9550c27578fd",
+    "mtime": 1794561923.5282822,
+    "seen": 1794561928.912978,
+    "ast_hash": "9330cae883ea06b7db5b154c866cd0be",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794560746.236906,
-    "seen": 1794560876.7768795,
-    "ast_hash": "56ff6d42e300d4ac8d33b39e3a88f667",
+    "mtime": 1794561714.8249853,
+    "seen": 1794561928.9129944,
+    "ast_hash": "fe7ef7e0c2101a98628bae9f5e764f40",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2121,6 +2121,12 @@
     "mtime": 1794560746.124294,
     "seen": 1794560876.7765656,
     "ast_hash": "32a135b047fb32a7879cf2ebf7dcf2a4",
+    "semantic_hash": ""
+  },
+  "tests/live/axis_snap_check.py": {
+    "mtime": 1794561796.7425523,
+    "seen": 1794561928.912649,
+    "ast_hash": "c1a84b6cdc88400cfa910280ca8b9e28",
     "semantic_hash": ""
   }
 }

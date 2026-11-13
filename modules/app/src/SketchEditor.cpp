@@ -346,6 +346,12 @@ SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) cons
   if (s.kind == Snap::BodyEdge && s.bodyArc >= 0) p.bodyArc = s.bodyArc;
   if (s.tangent) p.tangentTo = s.reference;
   if (s.kind == Snap::BodyVertex) p.bodyPoint = true;
+  // Lined up with the origin: the point is on an origin axis, and stays on it
+  // (as the familiar sketcher makes it coincident with the axis).
+  if (s.kind == Snap::Free || s.kind == Snap::Grid) {
+    p.onXAxis = s.alignY == 0;
+    p.onYAxis = s.alignX == 0;
+  }
   if (s.kind == Snap::BodyEdge) {
     p.bodyPoint = s.bodySegment < 0 && s.bodyArc < 0;
     p.bodySegment = s.bodySegment;
@@ -524,6 +530,8 @@ int SketchEditor::materialize(const Pick& p) {
   } else if (p.bodyPoint) {
     sk_.addConstraint({ConstraintType::Fix, {pt}, {}, p.x, p.y});
   }
+  if (p.onXAxis) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Horizontal, {0, pt}, {}});
+  if (p.onYAxis) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Vertical, {0, pt}, {}});
   return pt;
 }
 
@@ -903,7 +911,9 @@ void SketchEditor::showSnap(const Snap& s) {
   const auto& ctx = view_->aisContext();
   if (ctx.IsNull()) return;
   const double px = view_->modelPerPixel();
-  // Guide lines: dashed from the previous point (H/V), dotted from aligned points.
+  // Inference lines, dashed as in the familiar sketcher: from the previous
+  // point (H/V, perpendicular, parallel) and from points lined up with the
+  // cursor, however far away.
   sketch::Sketch guides;
   if (s.horizontal || s.vertical || s.tangent || s.perpendicular || s.parallel) guides.addLine(s.fromX, s.fromY, s.x, s.y);
   // Highlight the line the new one is parallel / perpendicular to.
@@ -916,7 +926,7 @@ void SketchEditor::showSnap(const Snap& s) {
   if (s.alignY >= 0) guides.addLine(sk_.points[s.alignY].x, sk_.points[s.alignY].y, s.x, s.y);
   const TopoDS_Shape gs = sketch::curves(guides, frame_, false);
   if (!gs.IsNull() && TopExp_Explorer(gs, TopAbs_EDGE).More()) {
-    Handle(AIS_Shape) g = wire(gs, Quantity_Color(0.55, 0.85, 0.22, Quantity_TOC_sRGB), 1.0, Aspect_TOL_DOT);
+    Handle(AIS_Shape) g = wire(gs, Quantity_Color(0.55, 0.85, 0.22, Quantity_TOC_sRGB), 1.0, Aspect_TOL_DASH);
     ctx->Display(g, AIS_WireFrame, -1, false);
     ctx->SetZLayer(g, Graphic3d_ZLayerId_Topmost);
     preview_.push_back(g);
@@ -931,6 +941,9 @@ void SketchEditor::showSnap(const Snap& s) {
     case Snap::BodyEdge: glyph = QStringLiteral("◇"); break;        // hollow diamond: body edge
     default: break;
   }
+  // On an origin axis: the on-curve glyph (the point will stay on the axis).
+  if (glyph.isEmpty() && (s.kind == Snap::Free || s.kind == Snap::Grid) && (s.alignX == 0 || s.alignY == 0))
+    glyph = QStringLiteral("○");
   if (s.horizontal) glyph += QStringLiteral(" H");
   if (s.vertical) glyph += QStringLiteral(" V");
   if (s.perpendicular) glyph += QStringLiteral(" \u27C2");   // perpendicular

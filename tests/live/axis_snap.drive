@@ -1,0 +1,19 @@
+# Live: a line started just off the sketch's X axis lands on it and stays
+# there (kept on the axis), ended next to a far point's vertical line it
+# lines up with that point without being tied to it.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.point
+sclick 50 40              # a point far away
+key Escape
+click sketch.line
+sclick 12 0.4             # just above the X axis: snaps onto it
+sclick 50.4 15            # just right of the point's vertical: lines up with it
+key Escape
+wait 200
+shot /tmp/live_axis_snap.png
+click palette.finish
+wait 600

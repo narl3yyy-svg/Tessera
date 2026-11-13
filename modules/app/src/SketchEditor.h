@@ -137,6 +137,8 @@ private:
     int bodyArc = -1;           // on this curved body edge: it is projected too
     bool bodyPoint = false;     // on body geometry: the point is projected (fixed)
     int bodySegment = -1;       // on this straight body edge: the edge is projected too
+    bool onXAxis = false;       // on the sketch's X axis (lined up with the origin): kept there
+    bool onYAxis = false;       // on the sketch's Y axis
   };
 
   // Where the cursor snaps while drawing, like the familiar sketcher:

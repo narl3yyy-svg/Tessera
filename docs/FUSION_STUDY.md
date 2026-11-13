@@ -55,7 +55,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Timeline: drag the rollback marker; drag features to reorder (blue drop bar; refused if it breaks a feature); right-click Edit Feature / Edit Profile Sketch / Suppress / Delete / Roll History Marker Here / Roll to End. Not yet: feature groups, playback buttons.
 
 ### Sketch
-- [ ] Line tool: click-drag from an end makes a tangent arc (done); automatic midpoint / perpendicular / parallel / tangent inference (done); dashed inference lines to points far away; snap to the sketch's own projected origin axes.
+- [x] Line tool: click-drag from an end makes a tangent arc; automatic midpoint / perpendicular / parallel / tangent inference; dashed inference lines to points however far away (no constraint added); a point dropped on the sketch's origin axes stays on them (tied to the origin).
 - [ ] Dimension tool: placing a dimension follows the cursor before the click; driven (reference) dimensions; angular dimension between lines by clicking both.
 - [ ] Sketch text, ellipse, conic, 3-point rectangle / circle / arc, tangent circle, centre-point arc slot, overall slot.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
