@@ -13,6 +13,10 @@
 #include <BRep_Tool.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GeomAPI_Interpolate.hxx>
+#include <NCollection_UtfIterator.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
+#include <Font_TextFormatter.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array1OfPnt.hxx>
@@ -197,10 +201,70 @@ TopoDS_Shape textShape(const Sketch& s, const gp_Ax3& f, int id) {
     const TCollection_AsciiString family(t.font.empty() ? "sans-serif" : t.font.c_str());
     if (!font.FindAndInit(family, Font_FontAspect_Regular, t.height, Font_StrictLevel_Any)) return {};
     const Point& p = s.points.at(t.point);
+    Font_BRepTextBuilder builder;
+    if (t.path >= 0) {
+      // Text on a path: each letter stands on the curve, upright to it.
+      const TopoDS_Shape c = curve(s, f, t.path);
+      if (c.IsNull()) return {};
+      BRepAdaptor_Curve ac(TopoDS::Edge(c));
+      const double L = GCPnts_AbscissaPoint::Length(ac);
+      // Letters and their advances.
+      std::vector<Standard_Utf32Char> chars;
+      for (NCollection_Utf8Iter it(t.text.c_str()); *it != 0; ++it) chars.push_back(*it);
+      std::vector<double> adv(chars.size());
+      double width = 0;
+      for (size_t i = 0; i < chars.size(); ++i) {
+        adv[i] = font.AdvanceX(chars[i], i + 1 < chars.size() ? chars[i + 1] : 0);
+        width += adv[i];
+      }
+      double at = t.hAlign == "center" ? (L - width) / 2 : t.hAlign == "right" ? L - width : 0;
+      TopoDS_Compound out;
+      BRep_Builder bb;
+      bb.MakeCompound(out);
+      for (size_t i = 0; i < chars.size(); ++i) {
+        const double s0 = std::clamp(at, 0.0, L);
+        const double along = t.flip ? L - s0 : s0;
+        GCPnts_AbscissaPoint ap(ac, along, ac.FirstParameter());
+        if (!ap.IsDone()) break;
+        gp_Pnt q;
+        gp_Vec d;
+        ac.D1(ap.Parameter(), q, d);
+        if (d.Magnitude() < 1e-12) break;
+        if (t.flip) d.Reverse();
+        if (chars[i] != ' ') {
+          char32_t one[2] = {chars[i], 0};
+          const NCollection_String letter(reinterpret_cast<const Standard_Utf32Char*>(one));
+          const TopoDS_Shape g = builder.Perform(font, letter, gp_Ax3(q, f.Direction(), gp_Dir(d)), Graphic3d_HTA_LEFT,
+                                                 Graphic3d_VTA_BOTTOM);
+          if (!g.IsNull()) bb.Add(out, g);
+        }
+        at += adv[i];
+      }
+      return out;
+    }
     gp_Dir x = f.XDirection();
     x.Rotate(gp_Ax1(f.Location(), f.Direction()), t.angle);
+    const gp_Dir y = f.Direction().Crossed(x);
+    if (t.corner >= 0) {
+      // A text box: the lines aligned between its corners (in the text's
+      // own, possibly turned, frame).
+      const Point& c = s.points.at(t.corner);
+      const gp_Vec d(toWorld(f, p.x, p.y), toWorld(f, c.x, c.y));
+      const double u = d.Dot(gp_Vec(x)), v = d.Dot(gp_Vec(y));
+      const double u0 = std::min(0.0, u), u1 = std::max(0.0, u), v0 = std::min(0.0, v), v1 = std::max(0.0, v);
+      const double au = t.hAlign == "center" ? (u0 + u1) / 2 : t.hAlign == "right" ? u1 : u0;
+      const double av = t.vAlign == "middle" ? (v0 + v1) / 2 : t.vAlign == "top" ? v1 : v0;
+      const gp_Pnt anchor = toWorld(f, p.x, p.y).Translated(gp_Vec(x) * au + gp_Vec(y) * av);
+      Handle(Font_TextFormatter) fmt = new Font_TextFormatter();
+      fmt->SetupAlignment(t.hAlign == "center" ? Graphic3d_HTA_CENTER : t.hAlign == "right" ? Graphic3d_HTA_RIGHT
+                                                                                            : Graphic3d_HTA_LEFT,
+                         t.vAlign == "middle" ? Graphic3d_VTA_CENTER : t.vAlign == "top" ? Graphic3d_VTA_TOP
+                                                                                        : Graphic3d_VTA_BOTTOM);
+      fmt->Append(NCollection_String(t.text.c_str()), *font.FTFont());
+      fmt->Format();
+      return builder.Perform(font, fmt, gp_Ax3(anchor, f.Direction(), x));
+    }
     const gp_Ax3 pen(toWorld(f, p.x, p.y), f.Direction(), x);
-    Font_BRepTextBuilder builder;
     return builder.Perform(font, NCollection_String(t.text.c_str()), pen, Graphic3d_HTA_LEFT, Graphic3d_VTA_BOTTOM);
   } catch (const Standard_Failure&) {
     return {};

@@ -1,12 +1,13 @@
-# Live: the Text tool. Click where the text starts, type it in the panel
-# (height 10 mm), Enter.
+# Live: the Text tool. Click two corners of the text box, type the text in
+# the panel (height 10 mm), Enter.
 waitfor tsr.sketch.create
 click tsr.sketch.create
 plane XY
 waitfor sketch.line
 wait 500
-click sketch.text
+menu sketch.group-text sketch.text
 sclick 10 10
+sclick 45 25
 waitfor sketchText
 wait 300
 type TO

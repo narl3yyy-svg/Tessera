@@ -77,3 +77,9 @@ One line per item: id, what differs, why, and the phase that closes it.
 - A conic's rho is set when drawn (0.5) and changed by double-clicking the curve; it cannot yet be a dimension or an expression.
 - Fit point splines have no tangent handles to drag; control point splines are cubic (fewer frame points: lower degree) and cannot be closed.
 - Trim and Break do not work on splines or conics.
+
+## Sketch text
+
+- A text box aligns its lines between the corners but does not wrap or shrink text to fit; text longer than the box runs past it.
+- Text on Path starts at the curve's start (a circle: its rightmost point, anticlockwise); letters past the curve's end pile up at the end. No character spacing, bold or italic yet.
+- Include 3D Geometry is not available: sketches are flat; Project (P) brings body edges onto the plane instead.

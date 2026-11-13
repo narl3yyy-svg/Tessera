@@ -333,7 +333,9 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::CircPattern, QStringLiteral("sketch-circular-pattern"), tr("Circular Pattern"), {});
   toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
-  toolButton(create, T::Text, QStringLiteral("text"), tr("Text"), {});
+  toolGroup(create, QStringLiteral("text"),
+            {{T::Text, QStringLiteral("text"), tr("Text"), {}},
+             {T::TextOnPath, QStringLiteral("text-path"), tr("Text on Path"), {}}});
   toolGroup(create, QStringLiteral("project"),
             {{T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P")},
              {T::Intersect, QStringLiteral("intersect"), tr("Intersect"), {}}});

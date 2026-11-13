@@ -68,7 +68,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Ellipse (centre, one axis end, the other half axis): a closed profile; points can be kept on it.
 - [x] Ellipse dimensions: the Dimension tool gives the half axis the cursor is along (the drawn one, or the other as a radius).
 - [x] Sketch text: the Text tool's panel (text, height, angle, font); the letters stand on a point (moves and constrains like any point), are profiles (each letter with its holes) and extrude into solid letters; double-click a text to change it.
-- [ ] Text along a path, text box (multi-line, alignment); trim and offset of ellipses; conic curve.
+- [x] Text in a box (two corners; several lines; left / center / right, top / middle / bottom), Text on Path (alignment along the curve, Flip); Conic Curve.
+- [ ] Trim and offset of ellipses.
 - [x] Rectangular and Circular sketch patterns, Move/Copy (M; turn about the picked curves' middle, Create Copy) and Sketch Scale: pick curves (or start with them selected), Enter, then the values; constraints that still hold come along.
 - [x] CREATE panel as split buttons (Rectangle, Circle, Arc, Slot): the button runs the tool it shows, its arrow lists the others.
 - [x] Intersect (Project ▾): where a clicked body crosses the sketch plane becomes fixed curves (lines, circles, others as splines). Break: a curve split at the crossings either side of the click, every piece kept (collinear lines / arcs of one circle).
@@ -118,7 +119,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
-- [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7: text on a point done, the box not); Centerline linetype (Day 8). (3-point arc: done.)
+- [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text box drawn corner to corner (Day 7: done; dragging its corners after is the sketch's usual point drag); Centerline linetype (Day 8). (3-point arc: done.)
 - [x] Spline: Enter or a double-click commits, Esc throws an unfinished spline away (Days 2, 4). Control Point Spline (cubic on a dashed frame) and Conic Curve (start, end, vertex; rho, double-click to change) in CREATE.
 - [ ] Spline: drag fit points and their tangent handles; rho as a dimension (Days 2, 4).
 - [x] Dimension: where the cursor is dragged decides horizontal / vertical / aligned (Day 5).

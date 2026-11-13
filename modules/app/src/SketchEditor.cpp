@@ -35,6 +35,7 @@
 #include <QDialogButtonBox>
 #include <QDialog>
 #include <QComboBox>
+#include <QPlainTextEdit>
 #include <QStyle>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -244,7 +245,8 @@ void SketchEditor::setTool(Tool t) {
     case Tool::OverallSlot: emit message(tr("Overall Slot: click both ends of the slot, then a point for the width.")); break;
     case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
     case Tool::Ellipse: emit message(tr("Ellipse: click the centre, the end of one axis, then a point for the other.")); break;
-    case Tool::Text: emit message(tr("Text: click where the text starts (bottom left). Double-click a text to change it.")); break;
+    case Tool::Text: emit message(tr("Text: click two corners of the text box (the same place twice: text on a point). Double-click a text to change it.")); break;
+    case Tool::TextOnPath: emit message(tr("Text on Path: click the curve the letters stand on.")); break;
     case Tool::Break: emit message(tr("Break: click a curve to split it where it crosses others.")); break;
     case Tool::Intersect: emit message(tr("Intersect: click a body; where it crosses the sketch plane becomes curves.")); break;
     case Tool::RectPattern:
@@ -1839,11 +1841,40 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         }
         return;
       }
+      // Two corners make a box (the text aligned in it); the same place
+      // twice puts the text on that point.
       const Pick p = pickPoint(x, y);
+      if (steps_.empty()) {
+        steps_.push_back(p);
+        return;
+      }
+      const Pick first = steps_[0];
+      const bool box = std::hypot(p.x - first.x, p.y - first.y) > tolerance() / 2;
+      resetSteps();
       sketch::Text t;
+      if (box) t.corner = 0;   // tells the panel it is a box
+      if (!editText(t, true)) {
+        rebuild();
+        return;
+      }
+      checkpoint();
+      t.point = materialize(first);
+      if (box) t.corner = materialize(p);
+      sk_.texts.push_back(t);
+      solveAndShow();
+      return;
+    }
+    case Tool::TextOnPath: {
+      const Hit h = hitEntity(x, y);
+      if (h.kind != Hit::Entity) {
+        emit message(tr("Text on Path: click a line, arc, circle or spline."));
+        return;
+      }
+      sketch::Text t;
+      t.path = h.index;
       if (!editText(t, true)) return;
       checkpoint();
-      t.point = materialize(p);
+      t.point = sk_.entityPoints(h.index).front();
       sk_.texts.push_back(t);
       solveAndShow();
       return;
@@ -2157,8 +2188,29 @@ bool SketchEditor::editText(sketch::Text& t, bool isNew) {
   dlg.setObjectName(QStringLiteral("sketchText"));
   dlg.setWindowTitle(tr("Text"));
   auto* form = new QFormLayout(&dlg);
-  auto* words = new QLineEdit(isNew ? QString() : QString::fromStdString(t.text));
+  // Several lines in a box (Enter starts a new line; Tab moves on).
+  auto* words = new QPlainTextEdit(isNew ? QString() : QString::fromStdString(t.text));
   words->setObjectName(QStringLiteral("textValue"));
+  words->setTabChangesFocus(true);
+  words->setFixedHeight(t.corner >= 0 ? 64 : 30);
+  if (t.corner < 0) words->setLineWrapMode(QPlainTextEdit::NoWrap);
+  const bool aligned = t.corner >= 0 || t.path >= 0;
+  auto* hAlign = new QComboBox;
+  hAlign->setObjectName(QStringLiteral("textHAlign"));
+  hAlign->addItem(tr("Left"), QStringLiteral("left"));
+  hAlign->addItem(tr("Center"), QStringLiteral("center"));
+  hAlign->addItem(tr("Right"), QStringLiteral("right"));
+  hAlign->setCurrentIndex(std::max(0, hAlign->findData(QString::fromStdString(t.hAlign))));
+  auto* vAlign = new QComboBox;
+  vAlign->setObjectName(QStringLiteral("textVAlign"));
+  vAlign->addItem(tr("Top"), QStringLiteral("top"));
+  vAlign->addItem(tr("Middle"), QStringLiteral("middle"));
+  vAlign->addItem(tr("Bottom"), QStringLiteral("bottom"));
+  vAlign->setCurrentIndex(std::max(0, vAlign->findData(QString::fromStdString(t.vAlign))));
+  auto* flip = new QCheckBox(tr("Flip"));
+  flip->setObjectName(QStringLiteral("textFlip"));
+  flip->setToolTip(tr("Run the text from the other end, on the other side of the curve"));
+  flip->setChecked(t.flip);
   auto* height = new QLineEdit(QString::number(fromInternal(isNew ? lastHeight : t.height, unit_), 'g', 6) +
                                QStringLiteral(" ") + QString::fromUtf8(unitSymbol(unit_).data()));
   height->setObjectName(QStringLiteral("textHeight"));
@@ -2177,8 +2229,13 @@ bool SketchEditor::editText(sketch::Text& t, bool isNew) {
   form->addRow(tr("Height"), height);
   form->addRow(tr("Angle"), angle);
   form->addRow(tr("Font"), font);
+  if (aligned) form->addRow(t.path >= 0 ? tr("Alignment") : tr("Horizontal"), hAlign);
+  if (t.corner >= 0) form->addRow(tr("Vertical"), vAlign);
+  if (t.path >= 0) form->addRow(QString(), flip);
+  if (t.path >= 0) angle->setEnabled(false);   // the path turns the letters
   auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
   buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("textOk"));
+  buttons->button(QDialogButtonBox::Ok)->setDefault(true);
   form->addRow(buttons);
   connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
   connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
@@ -2188,9 +2245,14 @@ bool SketchEditor::editText(sketch::Text& t, bool isNew) {
     try {
       const double h = session_.document().evaluate(height->text().toStdString(), Unit::Millimeter, localDimensions());
       const double a = session_.document().evaluate(angle->text().toStdString(), Unit::Degree);
-      if (words->text().trimmed().isEmpty()) throw std::runtime_error(tr("type the text").toStdString());
+      const QString typed = words->toPlainText();
+      if (typed.trimmed().isEmpty()) throw std::runtime_error(tr("type the text").toStdString());
       if (!(h > 0)) throw std::runtime_error(tr("the height must be greater than zero").toStdString());
-      t.text = words->text().toStdString();
+      // One line unless it is a box.
+      t.text = (t.corner >= 0 ? typed : QString(typed).replace(QLatin1Char('\n'), QLatin1Char(' '))).toStdString();
+      t.hAlign = hAlign->currentData().toString().toStdString();
+      t.vAlign = t.corner >= 0 ? vAlign->currentData().toString().toStdString() : std::string("bottom");
+      t.flip = t.path >= 0 && flip->isChecked();
       t.height = h;
       t.angle = a;
       t.font = font->currentData().toString().isEmpty() && font->currentIndex() != 0 ? font->currentText().toStdString()
@@ -4021,6 +4083,25 @@ void SketchEditor::rebuild() {
     ctx->Display(a, AIS_WireFrame, -1, false);
     ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
     objects_.push_back(a);
+    if (const auto& t = sk_.texts[i]; t.corner >= 0) {
+      // The text box, dashed, in the text's own frame.
+      const double c = std::cos(t.angle), sn = std::sin(t.angle);
+      const auto& p0 = sk_.points[t.point];
+      const auto& p1 = sk_.points[t.corner];
+      const double u = (p1.x - p0.x) * c + (p1.y - p0.y) * sn, v = -(p1.x - p0.x) * sn + (p1.y - p0.y) * c;
+      auto at = [&](double uu, double vv) { return std::make_pair(p0.x + uu * c - vv * sn, p0.y + uu * sn + vv * c); };
+      sketch::Sketch frame;
+      const std::pair<double, double> corners[4] = {at(0, 0), at(u, 0), at(u, v), at(0, v)};
+      for (int k = 0; k < 4; ++k)
+        frame.addLine(corners[k].first, corners[k].second, corners[(k + 1) % 4].first, corners[(k + 1) % 4].second);
+      const TopoDS_Shape fs = sketch::curves(frame, frame_, false);
+      if (!fs.IsNull()) {
+        Handle(AIS_Shape) fa = wire(fs, kConstruction, 1.0, Aspect_TOL_DASH);
+        ctx->Display(fa, AIS_WireFrame, -1, false);
+        ctx->SetZLayer(fa, Graphic3d_ZLayerId_Topmost);
+        objects_.push_back(fa);
+      }
+    }
   }
   for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {
     if (!display_.points && i != 0 && !selected(Hit::Point, i) && !hovered(Hit::Point, i)) continue;
@@ -4346,6 +4427,15 @@ void SketchEditor::updatePreview(double x, double y) {
       double cx, cy, r;
       if (steps_.size() == 1) tmp.addLine(a.x, a.y, x, y);
       else if (circumcircle(a.x, a.y, steps_[1].x, steps_[1].y, x, y, cx, cy, r)) tmp.addCircle(cx, cy, r);
+      break;
+    }
+    case Tool::Text: {
+      if (std::abs(x - a.x) > 1e-9 && std::abs(y - a.y) > 1e-9) {
+        tmp.addLine(a.x, a.y, x, a.y);
+        tmp.addLine(x, a.y, x, y);
+        tmp.addLine(x, y, a.x, y);
+        tmp.addLine(a.x, y, a.x, a.y);
+      }
       break;
     }
     case Tool::TangentArc: {

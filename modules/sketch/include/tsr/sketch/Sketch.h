@@ -100,11 +100,20 @@ const char* typeName(ConstraintType t);
 // as closed outlines that are profiles. `height` is the font size (cm),
 // `angle` turns the text about its point (radians, from the sketch's X).
 struct Text {
-  int point = -1;
-  std::string text;
+  int point = -1;     // on a point: the start (bottom left); in a box: one corner
+  std::string text;   // lines split by '\n'
   double height = 0.5;
   double angle = 0;
   std::string font;   // a font family; empty: the default sans-serif
+  // A text box (as the familiar Text command): `point` to `corner`, the
+  // lines aligned in it. -1: text on a point.
+  int corner = -1;
+  std::string hAlign = "left";     // left, center, right (also along a path)
+  std::string vAlign = "bottom";   // top, middle, bottom
+  // Text on Path: the curve the letters stand on (-1: none); flip runs it
+  // from the other end, the letters on the other side.
+  int path = -1;
+  bool flip = false;
 };
 
 class Sketch {

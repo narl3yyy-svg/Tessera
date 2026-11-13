@@ -152,7 +152,13 @@ int Sketch::addEllipse(int center, int axisEnd, double otherRadius, bool constru
 }
 
 int Sketch::addText(int point, const std::string& text, double height, double angle, const std::string& font) {
-  texts.push_back({point, text, height, angle, font});
+  Text t;
+  t.point = point;
+  t.text = text;
+  t.height = height;
+  t.angle = angle;
+  t.font = font;
+  texts.push_back(t);
   return static_cast<int>(texts.size()) - 1;
 }
 
@@ -208,8 +214,10 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
     }
   }
   std::set<int> used = {0};
-  for (const auto& t : texts)
+  for (const auto& t : texts) {
     if (!forcePoints.count(t.point)) used.insert(t.point);
+    if (t.corner >= 0 && !forcePoints.count(t.corner)) used.insert(t.corner);
+  }
   for (const auto& e : keptE) {
     for (int p : {e.a, e.b, e.center})
       if (p >= 0) used.insert(p);
@@ -245,9 +253,11 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
   }
   std::vector<Text> keptT;
   for (const auto& t : texts)
-    if (!dropP.count(t.point)) {
+    if (!dropP.count(t.point) && !(t.corner >= 0 && dropP.count(t.corner)) && !(t.path >= 0 && gone.count(t.path))) {
       keptT.push_back(t);
       keptT.back().point = pointMap.at(t.point);
+      if (t.corner >= 0) keptT.back().corner = pointMap.at(t.corner);
+      if (t.path >= 0) keptT.back().path = entityMap.at(t.path);
     }
   points = std::move(keptP);
   entities = std::move(keptE);
@@ -265,6 +275,8 @@ void Sketch::checkIndices() const {
   };
   for (const auto& t : texts) {
     pt(t.point, true);
+    pt(t.corner, false);
+    if (t.path != -1 && (t.path < 0 || t.path >= ne)) throw SketchError("text on a missing path");
     if (!(t.height > 0)) throw SketchError("text with no height");
   }
   for (const auto& e : entities) {
@@ -325,6 +337,11 @@ std::string Sketch::toJson() const {
       jt["h"] = t.height;
       if (t.angle != 0) jt["a"] = t.angle;
       if (!t.font.empty()) jt["font"] = t.font;
+      if (t.corner >= 0) jt["corner"] = t.corner;
+      if (t.path >= 0) jt["path"] = t.path;
+      if (t.flip) jt["flip"] = true;
+      if (t.hAlign != "left") jt["halign"] = t.hAlign;
+      if (t.vAlign != "bottom") jt["valign"] = t.vAlign;
       tx.push_back(jt);
     }
   }
@@ -392,6 +409,11 @@ Sketch Sketch::fromJson(const std::string& text) {
       t.height = jt.value("h", 0.5);
       t.angle = jt.value("a", 0.0);
       t.font = jt.value("font", std::string{});
+      t.corner = jt.value("corner", -1);
+      t.path = jt.value("path", -1);
+      t.flip = jt.value("flip", false);
+      t.hAlign = jt.value("halign", std::string("left"));
+      t.vAlign = jt.value("valign", std::string("bottom"));
       s.texts.push_back(t);
     }
     for (const auto& jc : j.value("constraints", nlohmann::json::array())) {

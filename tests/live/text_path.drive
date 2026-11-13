@@ -1,0 +1,23 @@
+# Live: CREATE > Text > Text on Path, as in the familiar tool. Click a line;
+# the panel takes the text, centred along it.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 60 20
+key Escape
+menu sketch.group-text sketch.text-path
+sclick 30 10              # the line's middle
+waitfor sketchText
+wait 300
+type AB
+choose textHAlign 1      # Center
+click textOk
+wait 500
+key Escape
+shot /tmp/live_text_path.png
+click palette.finish
+wait 600
