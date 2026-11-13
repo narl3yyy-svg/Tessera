@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794573504.454367,
-    "seen": 1794574120.7527013,
-    "ast_hash": "eb4b815daa792321853d2e7bfd88fa9f",
+    "mtime": 1794574155.0178726,
+    "seen": 1794574432.0550075,
+    "ast_hash": "cccfed10f0671b0494529b1abf9bae5a",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -234,9 +234,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794573557.2733355,
-    "seen": 1794574120.7527277,
-    "ast_hash": "186db24a955c1254d5994f95275de5f7",
+    "mtime": 1794574149.0298657,
+    "seen": 1794574432.0550241,
+    "ast_hash": "b9ee64dd2eec443774a3224c1fc7ee95",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/ViewportSketch.cpp": {
-    "mtime": 1794560442.40063,
-    "seen": 1794560567.0130978,
-    "ast_hash": "bfdcbb5be153b408f1b2bf4df9b57383",
+    "mtime": 1794574149.0298657,
+    "seen": 1794574432.0550268,
+    "ast_hash": "ccded4bfbc2afb285a4013d60b2fe1fa",
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794574115.0912235,
-    "seen": 1794574120.7531946,
-    "ast_hash": "a37c4823ea79079f90d1ca3dd7901af8",
+    "mtime": 1794574426.6205125,
+    "seen": 1794574432.0552957,
+    "ast_hash": "06575e614d32bf1a0d6efbf296c474b2",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {

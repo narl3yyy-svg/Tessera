@@ -73,7 +73,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Intersect (Project ▾): where a clicked body crosses the sketch plane becomes fixed curves (lines, circles, others as splines). Break: a curve split at the crossings either side of the click, every piece kept (collinear lines / arcs of one circle).
 - [x] Project: any curve now (tilted circles, splines ... as fixed splines through points along them).
 - [ ] Patterns kept parametric (edit count / spacing later); Include (live link to the body).
-- [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
+- [x] Fully constrained curves turn black (dark theme: white), under-defined ones stay blue: while editing and in finished sketches in the canvas; the Browser shows a lock on fully constrained sketches.
 
 ### Solid
 - [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: profiles and open curves); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).

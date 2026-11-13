@@ -55,7 +55,8 @@ public:
 struct SketchDisplay {
   std::string name;
   gp_Ax3 frame;
-  TopoDS_Shape curves;
+  TopoDS_Shape curves;        // under-defined curves (blue, as in the familiar tool)
+  TopoDS_Shape fixedCurves;   // fully defined ones (black; white on the dark theme)
   TopoDS_Shape construction;
   std::vector<sketch::Profile> profiles;
   bool visible = true;

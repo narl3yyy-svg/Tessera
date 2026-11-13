@@ -146,6 +146,13 @@ void Viewport::rebuildSketches() {
       context_->Display(c, AIS_WireFrame, -1, false);
       sketchCurves_.push_back(c);
     }
+    if (!sk.fixedCurves.IsNull()) {
+      Handle(AIS_Shape) c = new AIS_Shape(sk.fixedCurves);
+      const QColor fc = themeColors().sketchFixed;
+      lineStyle(c, rgb(fc.red(), fc.green(), fc.blue()), 2.0, Aspect_TOL_SOLID);
+      context_->Display(c, AIS_WireFrame, -1, false);
+      sketchCurves_.push_back(c);
+    }
     if (!sk.construction.IsNull()) {
       Handle(AIS_Shape) c = new AIS_Shape(sk.construction);
       lineStyle(c, rgb(230, 130, 40), 1.2, Aspect_TOL_DASH);

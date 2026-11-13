@@ -23,6 +23,9 @@
 #include <QActionGroup>
 #include <QCursor>
 #include <QSettings>
+#include <BRep_Builder.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopExp_Explorer.hxx>
 #include <QApplication>
 #include <QGuiApplication>
 #include <QMouseEvent>
@@ -1202,7 +1205,28 @@ void MainWindow::refresh() {
       try {
         sd.frame = d.planeFrame(rec.plane, rec.offset);
         const auto s = sketch::Sketch::fromJson(rec.data);
-        sd.curves = sketch::curves(s, sd.frame, false);
+        // Fully defined curves apart from the rest, as the familiar tool
+        // shows them (the solver says which are fixed).
+        sketch::Sketch solvedCopy = s;
+        const auto solved = sketch::solve(solvedCopy);
+        TopoDS_Compound freeC, fixedC;
+        BRep_Builder bb;
+        bb.MakeCompound(freeC);
+        bb.MakeCompound(fixedC);
+        bool anyFixed = false;
+        for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
+          if (s.entities[i].construction) continue;
+          const TopoDS_Shape e = sketch::curve(s, sd.frame, i);
+          if (e.IsNull()) continue;
+          const bool fixed = solved.ok && i < static_cast<int>(solved.entityFixed.size()) && solved.entityFixed[i];
+          bb.Add(fixed ? fixedC : freeC, e);
+          anyFixed = anyFixed || fixed;
+        }
+        for (int i = 0; i < static_cast<int>(s.texts.size()); ++i)
+          if (const TopoDS_Shape t = sketch::textShape(s, sd.frame, i); !t.IsNull())
+            for (TopExp_Explorer x(t, TopAbs_EDGE); x.More(); x.Next()) bb.Add(freeC, x.Current());
+        sd.curves = freeC;
+        if (anyFixed) sd.fixedCurves = fixedC;
         sd.construction = sketch::curves(s, sd.frame, true);
         sd.profiles = sketch::profiles(s, sd.frame);
       } catch (const std::exception&) {
