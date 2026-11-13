@@ -154,7 +154,7 @@ private:
     // Ellipses: a point can lie on one; other relations act on its centre
     // and axis point.
     for (int i : e)
-      if (E(i).type == EntityType::Ellipse && c.type != ConstraintType::PointOnEntity)
+      if (E(i).type == EntityType::Ellipse && c.type != ConstraintType::PointOnEntity && c.type != ConstraintType::Radius)
         throw SketchError(std::string("'") + typeName(c.type) + "' cannot apply to an ellipse; constrain its centre and axis point");
     switch (c.type) {
       case ConstraintType::Coincident:
@@ -293,7 +293,9 @@ private:
       }
       case ConstraintType::Radius:
       case ConstraintType::Diameter:
-        if (e.size() != 1 || !isRound(e[0])) bad();
+        // An ellipse's radius is its second half axis (the first is the
+        // distance from the centre to its axis point).
+        if (e.size() != 1 || !(isRound(e[0]) || (E(e[0]).type == EntityType::Ellipse && c.type == ConstraintType::Radius))) bad();
         r.push_back((c.type == ConstraintType::Diameter ? 2 : 1) * E(e[0]).radius - c.value);
         return;
       case ConstraintType::Angle: {

@@ -1,4 +1,5 @@
-# Live: the Ellipse tool: centre, the end of one axis, a point for the other.
+# Live: the Ellipse tool: centre, the end of one axis, a point for the other;
+# then its two half axes dimensioned (15 across, 40 along).
 waitfor tsr.sketch.create
 click tsr.sketch.create
 plane XY
@@ -12,5 +13,20 @@ wait 200
 shot /tmp/live_ellipse.png
 sclick 30 40              # the other: 20 mm (on the grid)
 key Escape
+key d
+sclick 20 40              # the ellipse's top
+sclick 20 55              # across the drawn axis: its radius
+wait 300
+type 15
+key Return
+wait 300
+sclick 45.98 27.5         # the ellipse, a little round from its axis point
+sclick 70 20              # along the axis: the drawn half axis
+wait 300
+type 40
+key Return
+wait 300
+key Escape
+shot /tmp/live_ellipse_dims.png
 click palette.finish
 wait 600

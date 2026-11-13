@@ -2156,7 +2156,8 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
   const Hit h = hitTest(x, y);
   auto isLine = [&](const Hit& p) { return p.kind == Hit::Entity && sk_.entities[p.index].type == EntityType::Line; };
   auto isRound = [&](const Hit& p) {
-    return p.kind == Hit::Entity && (sk_.entities[p.index].type == EntityType::Circle || sk_.entities[p.index].type == EntityType::Arc);
+    return p.kind == Hit::Entity && (sk_.entities[p.index].type == EntityType::Circle || sk_.entities[p.index].type == EntityType::Arc ||
+                                     sk_.entities[p.index].type == EntityType::Ellipse);
   };
   if (picks_.empty()) {
     if (h.kind == Hit::None) return;
@@ -2170,14 +2171,13 @@ void SketchEditor::dimensionPick(double x, double y, const QPointF& widgetPos) {
       emit message(tr("Splines follow their points: dimension the points instead."));
       return;
     }
-    if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Ellipse) {
-      emit message(tr("Dimension an ellipse by its centre and axis points."));
-      return;
-    }
+
     picks_.push_back({h, x, y});
     emit message(h.kind == Hit::Point ? tr("Pick a second point or a line.")
                  : isLine(h)          ? tr("Move to place the length (above or beside for horizontal / vertical) and "
                                            "click; or click another line (angle) or a point (distance).")
+                 : sk_.entities[h.index].type == EntityType::Ellipse
+                     ? tr("Move along the half axis to dimension and click.")
                                       : tr("Move to place the size and click."));
     updatePreview(x, y);
     rebuild();
@@ -3148,8 +3148,17 @@ void SketchEditor::addDimensionGraphics(const Constraint& c, double lx, double l
       const double cx = P[e.center].x, cy = P[e.center].y, r = e.radius;
       double ux = lx - cx, uy = ly - cy;
       const double d = std::hypot(ux, uy);
-      if (d < 1e-12) ux = 0.7071, uy = 0.7071;
-      else ux /= d, uy /= d;
+      if (e.type == EntityType::Ellipse) {   // across the drawn axis, on the value's side
+        double nx = -(P[e.a].y - cy), ny = P[e.a].x - cx;
+        const double nl = std::max(std::hypot(nx, ny), 1e-12);
+        nx /= nl, ny /= nl;
+        if (nx * ux + ny * uy < 0) nx = -nx, ny = -ny;
+        ux = nx, uy = ny;
+      } else if (d < 1e-12) {
+        ux = 0.7071, uy = 0.7071;
+      } else {
+        ux /= d, uy /= d;
+      }
       const double qx = cx + ux * r, qy = cy + uy * r;
       if (c.type == ConstraintType::Radius) {
         seg(cx, cy, qx, qy);
@@ -3308,7 +3317,16 @@ std::optional<Constraint> SketchEditor::dimensionCandidate(double x, double y) c
   const Hit a = picks_[0].hit;
   Constraint c;
   if (picks_.size() == 1) {
-    if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Circle) c = {ConstraintType::Diameter, {}, {a.index}};
+    if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Ellipse) {
+      // The half axis the cursor is along: the drawn one (centre to its axis
+      // point) or the other (the ellipse's radius).
+      const auto& el = sk_.entities[a.index];
+      const double ux = P[el.a].x - P[el.center].x, uy = P[el.a].y - P[el.center].y;
+      const double along = std::abs((x - P[el.center].x) * ux + (y - P[el.center].y) * uy);
+      const double across = std::abs(-(x - P[el.center].x) * uy + (y - P[el.center].y) * ux);
+      if (along >= across) c = {ConstraintType::Distance, {el.center, el.a}};
+      else c = {ConstraintType::Radius, {}, {a.index}};
+    } else if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Circle) c = {ConstraintType::Diameter, {}, {a.index}};
     else if (a.kind == Hit::Entity && sk_.entities[a.index].type == EntityType::Arc) c = {ConstraintType::Radius, {}, {a.index}};
     else if (isLine(a)) c = linear(sk_.entities[a.index].a, sk_.entities[a.index].b, a.index);
     else return std::nullopt;   // a point: a second pick is needed

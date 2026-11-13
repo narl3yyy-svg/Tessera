@@ -1,7 +1,7 @@
 # Graph Report - tessera  (2026-11-13)
 
 ## Corpus Check
-- 349 files · ~207,097 words
+- 349 files · ~207,329 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 40 file(s) not represented in the graph (top: .drive 32, (none) 5, .cmake 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1eeb3eed`
+- Built from commit: `5d3590b8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -599,7 +599,7 @@ Nodes (3): ChamferType, DistanceAngle, TwoDistances
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `optional` connect `optional` to `Viewport`, `DocCommands.cpp`, `MainWindow`, `QString`, `Kernel.cpp`, `Io.cpp`, `Unit`, `Session`, `SketchEditor.cpp`, `ViewportSketch.cpp`, `Inputs`, `SketchOps.cpp`, `CommandDialog.cpp`, `AnalysisSettings`, `Document.cpp`, `InputDef`, `ViewportAnalysis.cpp`, `.rebuild`, `ViewportArrow.cpp`, `TopoDS_Shape`, `Viewport.h`, `Feature`, `Document::reevaluateParameters`, `SketchRecord`, `string`, `ConstructionPoint`, `ConstructionAxis`?**
-  _High betweenness centrality (0.127) - this node is a cross-community bridge._
+  _High betweenness centrality (0.128) - this node is a cross-community bridge._
 - **What connects `ok`, `output`, `error` to the rest of the system?**
   _654 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Viewport` be split into smaller, more focused modules?**
