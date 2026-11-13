@@ -628,7 +628,7 @@ def measure():
         mp = tsr.mass_properties(b)
         vol += mp["volume"]
         area += mp["area"]
-        faces += mp["faces"]
+        faces += mp["patches"]   # the reference counts maximal smooth patches
         for k in range(3):
             com[k] += mp["center"][k] * mp["volume"]
         (x0, y0, z0), (x1, y1, z1) = tsr.bounding_box(b)

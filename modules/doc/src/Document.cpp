@@ -157,6 +157,7 @@ void Document::openTransaction(const std::string& name) {
   if (doc_->HasOpenCommand()) throw DocumentError("a transaction is already open");
   doc_->NewCommand();
   txnBodies_ = bodyShapes();
+  pendingTools_.clear();
   (void)name; // OCAF transaction names are not persisted; kept for the undo UI later.
 }
 
@@ -705,6 +706,7 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   nd->SetString("error", ext(""));
   nd->SetInteger("suppressed", 0);
   effects_[l.Tag()] = effectOf(txnBodies_, bodyShapes());
+  effects_[l.Tag()].tools = pendingTools_;
 }
 
 std::map<std::string, TopoDS_Shape> Document::bodyShapes() const {
@@ -766,6 +768,7 @@ void Document::recompute(const CommandRegistry& registry) {
   for (const Feature& f : features()) {
     std::string error;
     const auto before = bodyShapes();
+    pendingTools_.clear();
     if (!f.suppressed) {
       if (const Command* cmd = registry.find(f.commandId)) {
         try {
@@ -785,6 +788,7 @@ void Document::recompute(const CommandRegistry& registry) {
       }
     }
     effects_[f.id] = error.empty() ? effectOf(before, bodyShapes()) : FeatureEffect{};
+    if (error.empty()) effects_[f.id].tools = pendingTools_;
     Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
     if (stringOf(nd, "error") != error) nd->SetString("error", ext(error));
   }

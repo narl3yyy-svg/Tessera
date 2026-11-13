@@ -202,8 +202,10 @@ void bindTsr(py::module_& m) {
     d["area"] = mp.area;
     d["center"] = py::make_tuple(mp.centerOfMass.x, mp.centerOfMass.y, mp.centerOfMass.z);
     d["faces"] = kernel::topologyCounts(b->shape).faces;
+    d["patches"] = kernel::smoothPatchCount(b->shape);
     return d;
-  }, py::arg("body"), "A body's volume (cm3), area (cm2), centre of mass (cm) and face count.");
+  }, py::arg("body"), "A body's volume (cm3), area (cm2), centre of mass (cm), face count, and smooth patches (faces on one "
+     "surface that meet count once).");
   m.def("components", [] {
     py::list out;
     for (const auto& c : activeSession().document().components()) {

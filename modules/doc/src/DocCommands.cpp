@@ -3,6 +3,8 @@
 
 #include "tsr/kernel/Io.h"
 #include "tsr/kernel/Kernel.h"
+#include <TopoDS_Compound.hxx>
+#include <BRep_Builder.hxx>
 
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
@@ -206,6 +208,7 @@ void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, c
   if (!kernel::isValid(tool)) throw CommandError(what + ": kernel produced an invalid body");
   const std::string op = getString(in, "operation");
   if (op == "New Body") {
+    doc.noteTool(tool, "new", "");
     storeBodies(doc, doc.nextBodyName(), tool, true);
     return;
   }
@@ -220,6 +223,7 @@ void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, c
   const auto kind = op == "Join" ? kernel::BooleanOp::Join
                   : op == "Cut"  ? kernel::BooleanOp::Cut
                                  : kernel::BooleanOp::Intersect;
+  doc.noteTool(tool, op == "Join" ? "join" : op == "Cut" ? "cut" : "intersect", target);
   try {
     storeBodies(doc, target, kernel::boolean(kind, body->shape, tool), false);
   } catch (const kernel::KernelError& e) {
@@ -1344,6 +1348,7 @@ public:
           const TopoDS_Shape cone = BRepPrimAPI_MakeCone(gp_Ax2(start, into), sr + eps, r, h + eps).Shape();
           tool = kernel::boolean(kernel::BooleanOp::Join, tool, cone);
         }
+        doc.noteTool(tool, "cut", target);
         body = kernel::boolean(kernel::BooleanOp::Cut, body, tool);
       }
     } catch (const kernel::KernelError& e) {
@@ -1418,6 +1423,49 @@ void patternFeatures(Document& doc, const Inputs& in, const std::vector<CopyFn>&
     const Document::FeatureEffect* effect = id ? doc.featureEffect(*id) : nullptr;
     if (!effect) throw CommandError("Features: '" + name + "' made no geometry to copy");
     const auto bodies = effect->bodies;   // copied: a replay may refill the cache
+    const auto tools = effect->tools;
+    if (!tools.empty()) {
+      // The feature's own tools, moved to each copy and combined again (holes
+      // that overlap earlier cuts are whole holes at every copy).
+      for (const auto& t : tools) {
+        if (t.op == "new") {
+          // The body the feature made: copies join it or become new bodies (Result).
+          std::string made;
+          for (const auto& [name, change] : bodies)
+            if (change.first.IsNull() && doc.body(name)) made = name;
+          std::vector<TopoDS_Shape> shapes;
+          for (const auto& c : copies) shapes.push_back(c(t.shape));
+          if (made.empty())
+            for (const auto& m : shapes) doc.addBody(doc.nextBodyName(), m);
+          else
+            placeCopies(doc, made, shapes, join);
+          continue;
+        }
+        const std::string target = !t.target.empty() && doc.body(t.target) ? t.target : std::string();
+        if (target.empty()) continue;
+        const auto kind = t.op == "join" ? kernel::BooleanOp::Join
+                        : t.op == "cut"  ? kernel::BooleanOp::Cut
+                                         : kernel::BooleanOp::Intersect;
+        // All copies in one boolean (one tool compound): faster, and one
+        // consistent result where copies touch or overlap each other.
+        TopoDS_Compound all;
+        BRep_Builder bb;
+        bb.MakeCompound(all);
+        for (const auto& c : copies) bb.Add(all, c(t.shape));
+        TopoDS_Shape cur = doc.body(target)->shape;
+        if (kind == kernel::BooleanOp::Intersect) {
+          for (const auto& c : copies) cur = kernel::boolean(kind, cur, c(t.shape));
+        } else {
+          try {
+            cur = kernel::boolean(kind, cur, all);
+          } catch (const kernel::KernelError&) {
+            if (kind != kernel::BooleanOp::Cut) throw;   // copies that cut nothing are fine
+          }
+        }
+        storeBodies(doc, target, cur, false);
+      }
+      continue;
+    }
     for (const auto& [body, change] : bodies) {
       const auto& [before, after] = change;
       if (after.IsNull() || !doc.body(body)) continue;

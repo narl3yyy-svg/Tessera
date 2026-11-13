@@ -14,6 +14,7 @@
 14-combine-cut
 15-combine-intersect
 16-sweep
+17-loft
 19-l-bracket-constrained
 20-slot-constrained
 23-bracket-multifeature
@@ -23,6 +24,7 @@
 29-two-sided-and-partial-revolve
 30-fillet-after-shell
 31-fillet-l-all-edges
+32-boss-plate-fillets
 33-fillet-tangent-chain
 34-chamfer-then-fillet
 35-fillet-curved-curved
@@ -31,7 +33,10 @@
 39-tee-pipe
 40-box-sphere-torus
 41-tube-radial-holes
+42-overlapping-patterns
 43-cut-splits-body
+44-shell-l-bracket
+45-shell-boss-plate
 46-shell-two-open-faces
 48-pulley
 50-sweep-tight-bend

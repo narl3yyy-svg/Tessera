@@ -206,9 +206,23 @@ public:
   // registry and an open transaction). Null if the feature made no geometry.
   struct FeatureEffect {
     std::map<std::string, std::pair<TopoDS_Shape, TopoDS_Shape>> bodies;
+    // The tool solids the feature combined with a body ("join", "cut",
+    // "intersect") or added as new bodies ("new"). A pattern of the feature
+    // re-applies these at each copy, as the familiar tool does; features
+    // without tools are patterned by what they changed.
+    struct Tool {
+      TopoDS_Shape shape;
+      std::string op;
+      std::string target;
+    };
+    std::vector<Tool> tools;
   };
   const FeatureEffect* featureEffect(int id);
   void setRegistry(const CommandRegistry* registry) { registry_ = registry; }
+  // Called by commands while they apply: the tool they combined with `target`.
+  void noteTool(const TopoDS_Shape& tool, const std::string& op, const std::string& target) {
+    pendingTools_.push_back({tool, op, target});
+  }
 
   // Display unit for lengths: "mm" (default) or "in". Stored in the document.
   std::string defaultLengthUnit() const { return lengthUnit(); }
@@ -237,6 +251,7 @@ private:
   bool modified_ = false;
   std::map<int, FeatureEffect> effects_;           // in memory only
   std::map<std::string, TopoDS_Shape> txnBodies_;  // bodies when the transaction opened
+  std::vector<FeatureEffect::Tool> pendingTools_;    // tools noted by the command applying now
   const CommandRegistry* registry_ = nullptr;
   bool replaying_ = false;
 };

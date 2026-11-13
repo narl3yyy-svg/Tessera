@@ -191,5 +191,9 @@ bool isValid(const TopoDS_Shape& s);   // BRepCheck_Analyzer
 MassProperties massProperties(const TopoDS_Shape& s);
 BoundingBox boundingBox(const TopoDS_Shape& s);
 TopologyCounts topologyCounts(const TopoDS_Shape& s);
+// Faces counted as smooth patches: neighbouring faces lying on the same
+// surface (split by a seam or by a line where the body touches itself) count
+// once, as a person would count them.
+int smoothPatchCount(const TopoDS_Shape& s);
 
 } // namespace tsr::kernel

@@ -65,6 +65,17 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
+#include <ShapeFix_Solid.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt.hxx>
+#include <TColStd_Array2OfReal.hxx>
+#include <TColgp_Array2OfPnt.hxx>
+#include <Geom_BezierCurve.hxx>
+#include <Geom_BezierSurface.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
+#include <BRepTools_WireExplorer.hxx>
+#include <TopLoc_Location.hxx>
+#include <functional>
 #include <BRepAdaptor_CompCurve.hxx>
 #include <BRepPrimAPI_MakeHalfSpace.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -445,7 +456,9 @@ std::string completeEdgeReferences(const TopoDS_Shape& body, const std::string& 
   for (const auto& s : sigs) {
     std::string item = encode(s);
     if (!s.full) {
-      const auto e = edgesNear(body, {s.point}, std::max(0.05, 0.2 * frame.diag));
+      // The same rule as resolving a plain point (one rule everywhere: a
+      // point on a vertex prefers the edge it lies inside of, not a seam).
+      const auto e = resolveEdges(body, encode(s));
       item = edgeReference(body, e.front());
       // Keep the picked point (the signature midpoint may differ).
       item = encode(s) + item.substr(item.find('@'));
@@ -484,6 +497,16 @@ std::vector<TopoDS_Shape> resolveEdges(const TopoDS_Shape& body, const std::stri
         const TopoDS_Shape v = BRepBuilderAPI_MakeVertex(pnt(w.point)).Shape();
         BRepExtrema_DistShapeShape d(v, edges(i + 1));
         sc = d.IsDone() ? d.Value() / frame.diag : 1e300;
+        // A point at an edge's end vertex also touches the edges meeting
+        // there (on a cylinder: the seam). Prefer an edge the point lies
+        // inside of, then a non-seam edge.
+        if (d.IsDone() && d.NbSolution() > 0 && d.SupportTypeShape2(1) == BRepExtrema_IsVertex) sc += 1e-7;
+        if (const int fi = faces.FindIndex(edges(i + 1)); fi > 0)
+          for (const auto& f : faces(fi))
+            if (BRep_Tool::IsClosed(TopoDS::Edge(edges(i + 1)), TopoDS::Face(f))) {
+              sc += 1e-7;
+              break;
+            }
       } else {
         sc = score(w, have[i], frame.diag);
       }
@@ -706,28 +729,39 @@ TopoDS_Shape asSolid(const TopoDS_Shape& s) {
 
 TopoDS_Shape shell(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& openFaces, double thickness, bool outside) {
   requirePositive(thickness, "shell thickness");
-  TopoDS_Shape r;
-  try {
-    if (!openFaces.empty()) {
-      TopTools_ListOfShape faces;
-      for (const auto& f : openFaces) faces.Append(f);
-      BRepOffsetAPI_MakeThickSolid mk;
-      mk.MakeThickSolidByJoin(body, faces, outside ? thickness : -thickness, 1e-4);
-      if (mk.IsDone()) r = mk.Shape();
-    } else {
-      // Closed hollow: offset the whole body and subtract.
-      BRepOffsetAPI_MakeOffsetShape off;
-      off.PerformByJoin(body, outside ? thickness : -thickness, 1e-4);
-      if (off.IsDone()) {
-        const TopoDS_Shape other = asSolid(off.Shape());
-        if (!other.IsNull()) r = outside ? boolean(BooleanOp::Cut, other, body) : boolean(BooleanOp::Cut, body, other);
+  // Walls meet with sharp corners, as in the familiar tool: the offset faces
+  // are extended until they intersect (GeomAbs_Intersection). Rounded joins
+  // (GeomAbs_Arc) are the fallback for shapes where that cannot be solved.
+  auto attempt = [&](GeomAbs_JoinType join) -> TopoDS_Shape {
+    TopoDS_Shape out;
+    try {
+      if (!openFaces.empty()) {
+        TopTools_ListOfShape faces;
+        for (const auto& f : openFaces) faces.Append(f);
+        BRepOffsetAPI_MakeThickSolid mk;
+        mk.MakeThickSolidByJoin(body, faces, outside ? thickness : -thickness, 1e-4, BRepOffset_Skin, join == GeomAbs_Intersection,
+                                false, join);
+        if (mk.IsDone()) out = mk.Shape();
+      } else {
+        // Closed hollow: offset the whole body and subtract.
+        BRepOffsetAPI_MakeOffsetShape off;
+        off.PerformByJoin(body, outside ? thickness : -thickness, 1e-4, BRepOffset_Skin, join == GeomAbs_Intersection, false,
+                          join);
+        if (off.IsDone()) {
+          const TopoDS_Shape other = asSolid(off.Shape());
+          if (!other.IsNull()) out = outside ? boolean(BooleanOp::Cut, other, body) : boolean(BooleanOp::Cut, body, other);
+        }
       }
+    } catch (const Standard_Failure&) {
+      out.Nullify();
+    } catch (const KernelError&) {
+      out.Nullify();
     }
-  } catch (const Standard_Failure& f) {
-    throw KernelError(std::string("Shell: ") + f.GetMessageString());
-  } catch (const KernelError&) {
-    r.Nullify();
-  }
+    if (!out.IsNull() && !isValid(out)) out.Nullify();
+    return out;
+  };
+  TopoDS_Shape r = attempt(GeomAbs_Intersection);
+  if (r.IsNull()) r = attempt(GeomAbs_Arc);
   if (r.IsNull() || !isValid(r))
     throw KernelError("Shell: could not hollow the body with that thickness (try a smaller thickness)");
   return r;
@@ -1209,8 +1243,135 @@ TopoDS_Shape coil(Vec3 origin, Vec3 axis, Vec3 xdir, double diameter, double tur
   return result;
 }
 
+namespace {
+// A loft from a straight-sided polygon to a circle on its axis, built exactly: the circle
+// is split at the directions of the polygon's corners (seen from the
+// polygon's centre) and each side is ruled onto its arc,
+//   S(u, t) = (1 - t) L(u) + t C(u),
+// with L the side (linear in u) and C the arc as a rational quadratic Bezier
+// (weights 1, cos(D/2), 1). Written over C's weight function W(u) both rows
+// are degree 3 with the same weights, so each side is one exact rational
+// Bezier patch. Returns a null shape when the sections are not of this kind.
+TopoDS_Shape polygonToCircleLoft(const TopoDS_Wire& poly, const TopoDS_Edge& circleEdge) {
+  BRepAdaptor_Curve cc(circleEdge);
+  if (cc.GetType() != GeomAbs_Circle || !BRep_Tool::IsClosed(circleEdge)) return {};
+  const gp_Circ circ = cc.Circle();
+  const gp_Dir n = circ.Axis().Direction();
+  std::vector<gp_Pnt> corners;
+  for (BRepTools_WireExplorer x(poly); x.More(); x.Next()) {
+    BRepAdaptor_Curve c(x.Current());
+    if (c.GetType() != GeomAbs_Line) return {};
+    corners.push_back(BRep_Tool::Pnt(x.CurrentVertex()));
+  }
+  const size_t N = corners.size();
+  if (N < 3) return {};
+  gp_XYZ g(0, 0, 0);
+  for (const auto& p : corners) g += p.XYZ();
+  g /= static_cast<double>(N);
+  // The polygon must lie in a plane parallel to the circle, centred on the
+  // circle's axis: only then do the corner directions, seen from the common
+  // centre, say where the circle splits. Offset circles use the general loft.
+  for (const auto& p : corners)
+    if (std::abs(gp_Vec(gp_Pnt(g), p).Dot(gp_Vec(n))) > 1e-7) return {};
+  {
+    gp_Vec off(circ.Location(), gp_Pnt(g));
+    off -= gp_Vec(n) * off.Dot(gp_Vec(n));
+    if (off.Magnitude() > 1e-7) return {};
+  }
+  const gp_Dir xd = circ.XAxis().Direction(), yd = circ.YAxis().Direction();
+  std::vector<double> ang(N);
+  for (size_t i = 0; i < N; ++i) {
+    const gp_Vec d(gp_Pnt(g), corners[i]);
+    ang[i] = std::atan2(d.Dot(gp_Vec(yd)), d.Dot(gp_Vec(xd)));
+  }
+  // Corners must go round the same way as the circle; reverse them if not.
+  double turn = 0;
+  for (size_t i = 0; i < N; ++i) {
+    double dA = ang[(i + 1) % N] - ang[i];
+    while (dA <= -M_PI) dA += 2 * M_PI;
+    while (dA > M_PI) dA -= 2 * M_PI;
+    turn += dA;
+  }
+  if (turn < 0) {
+    std::reverse(corners.begin(), corners.end());
+    std::reverse(ang.begin(), ang.end());
+  }
+  const double r = circ.Radius();
+  const gp_Pnt c = circ.Location();
+  auto onCircle = [&](double a) { return c.Translated(gp_Vec(xd) * (r * std::cos(a)) + gp_Vec(yd) * (r * std::sin(a))); };
+  BRepBuilderAPI_Sewing sew(1e-6);
+  BRepBuilderAPI_MakeWire top;
+  for (size_t i = 0; i < N; ++i) {
+    const double a0 = ang[i];
+    double D = ang[(i + 1) % N] - a0;
+    while (D <= 0) D += 2 * M_PI;
+    if (D >= M_PI - 1e-9) return {};   // one rational quadratic arc spans less than half a turn
+    const double w = std::cos(D / 2);
+    const gp_Pnt Q0 = onCircle(a0), Q2 = onCircle(a0 + D);
+    const gp_Pnt Q1 = c.Translated((gp_Vec(xd) * std::cos(a0 + D / 2) + gp_Vec(yd) * std::sin(a0 + D / 2)) * (r / w));
+    const gp_Pnt A = corners[i], B = corners[(i + 1) % N];
+    // Degree-3 weights (W elevated) and homogeneous rows.
+    const double om[4] = {1, (1 + 2 * w) / 3, (2 * w + 1) / 3, 1};
+    const gp_XYZ h0[4] = {A.XYZ(), (A.XYZ() * (2 * w) + B.XYZ()) / 3, (A.XYZ() + B.XYZ() * (2 * w)) / 3, B.XYZ()};
+    const gp_XYZ h1[4] = {Q0.XYZ(), (Q0.XYZ() + Q1.XYZ() * (2 * w)) / 3, (Q1.XYZ() * (2 * w) + Q2.XYZ()) / 3, Q2.XYZ()};
+    TColgp_Array2OfPnt poles(1, 4, 1, 2);
+    TColStd_Array2OfReal weights(1, 4, 1, 2);
+    for (int k = 0; k < 4; ++k) {
+      poles(k + 1, 1) = gp_Pnt(h0[k] / om[k]);
+      poles(k + 1, 2) = gp_Pnt(h1[k] / om[k]);
+      weights(k + 1, 1) = weights(k + 1, 2) = om[k];
+    }
+    Handle(Geom_BezierSurface) patch = new Geom_BezierSurface(poles, weights);
+    BRepBuilderAPI_MakeFace side(patch, 1e-7);
+    if (!side.IsDone()) return {};
+    sew.Add(side.Face());
+    // The same arc as an edge of the top face.
+    TColgp_Array1OfPnt ap(1, 3);
+    TColStd_Array1OfReal aw(1, 3);
+    ap(1) = Q0, ap(2) = Q1, ap(3) = Q2;
+    aw(1) = 1, aw(2) = w, aw(3) = 1;
+    top.Add(BRepBuilderAPI_MakeEdge(Handle(Geom_BezierCurve)(new Geom_BezierCurve(ap, aw))).Edge());
+  }
+  if (!top.IsDone()) return {};
+  sew.Add(BRepBuilderAPI_MakeFace(poly, true).Face());
+  sew.Add(BRepBuilderAPI_MakeFace(top.Wire(), true).Face());
+  sew.Perform();
+  TopoDS_Shell shell;
+  for (TopExp_Explorer x(sew.SewedShape(), TopAbs_SHELL); x.More(); x.Next()) shell = TopoDS::Shell(x.Current());
+  if (shell.IsNull()) return {};
+  BRepBuilderAPI_MakeSolid ms(shell);
+  if (!ms.IsDone()) return {};
+  Handle(ShapeFix_Solid) fix = new ShapeFix_Solid(ms.Solid());
+  fix->Perform();
+  const TopoDS_Shape solid = fix->Solid();
+  if (!isValid(solid) || massProperties(solid).volume <= 0) return {};
+  return solid;
+}
+} // namespace
+
 TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
   if (sections.size() < 2) throw KernelError("Loft: pick at least two profiles");
+  // Two sections, a polygon and a circle: the exact construction.
+  if (sections.size() == 2) {
+    auto wireOf = [](const TopoDS_Shape& s) {
+      return s.ShapeType() == TopAbs_FACE ? BRepTools::OuterWire(TopoDS::Face(s)) : TopoDS::Wire(s);
+    };
+    const TopoDS_Wire w0 = wireOf(sections[0]), w1 = wireOf(sections[1]);
+    auto single = [](const TopoDS_Wire& w) {
+      TopoDS_Edge only;
+      int n = 0;
+      for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next(), ++n) only = TopoDS::Edge(x.Current());
+      return n == 1 ? only : TopoDS_Edge();
+    };
+    TopoDS_Shape exact;
+    try {
+      if (const TopoDS_Edge e = single(w1); !e.IsNull()) exact = polygonToCircleLoft(w0, e);
+      else if (const TopoDS_Edge e0 = single(w0); !e0.IsNull()) exact = polygonToCircleLoft(w1, e0);
+    } catch (const Standard_Failure&) {
+      exact.Nullify();
+    }
+    if (!exact.IsNull()) return exact;
+  }
   TopoDS_Shape r = guarded("Loft", [&]() -> TopoDS_Shape {
     BRepOffsetAPI_ThruSections ts(true, ruled, 1e-6);
     ts.CheckCompatibility(true);   // match up sections with different numbers of edges
@@ -1407,6 +1568,37 @@ BoundingBox boundingBox(const TopoDS_Shape& s) {
   b.min = {x0, y0, z0};
   b.max = {x1, y1, z1};
   return b;
+}
+
+int smoothPatchCount(const TopoDS_Shape& s) {
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(s, TopAbs_FACE, faces);
+  const int n = faces.Extent();
+  std::vector<int> parent(n + 1);
+  for (int i = 0; i <= n; ++i) parent[i] = i;
+  std::function<int(int)> root = [&](int i) { return parent[i] == i ? i : parent[i] = root(parent[i]); };
+  // Same surface: the same geometry object at the same placement.
+  auto sameSurface = [&](int a, int b) {
+    TopLoc_Location la, lb;
+    const Handle(Geom_Surface) sa = BRep_Tool::Surface(TopoDS::Face(faces(a)), la);
+    const Handle(Geom_Surface) sb = BRep_Tool::Surface(TopoDS::Face(faces(b)), lb);
+    return !sa.IsNull() && sa == sb && la.IsEqual(lb);
+  };
+  TopTools_IndexedDataMapOfShapeListOfShape edgeFaces;
+  TopExp::MapShapesAndAncestors(s, TopAbs_EDGE, TopAbs_FACE, edgeFaces);
+  for (int e = 1; e <= edgeFaces.Extent(); ++e) {
+    std::vector<int> fs;
+    for (const auto& f : edgeFaces(e)) {
+      const int k = faces.FindIndex(f);
+      if (k > 0 && std::find(fs.begin(), fs.end(), k) == fs.end()) fs.push_back(k);
+    }
+    for (size_t a = 0; a < fs.size(); ++a)
+      for (size_t b = a + 1; b < fs.size(); ++b)
+        if (sameSurface(fs[a], fs[b])) parent[root(fs[a])] = root(fs[b]);
+  }
+  int count = 0;
+  for (int i = 1; i <= n; ++i) count += root(i) == i;
+  return count;
 }
 
 TopologyCounts topologyCounts(const TopoDS_Shape& s) {
