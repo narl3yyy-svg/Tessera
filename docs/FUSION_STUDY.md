@@ -49,7 +49,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy; a sketch-mode ring; OK / Cancel inside a command.
 - [x] Pre-selection: selected items carried into the next command: click a profile (no command running), then E; select edges (Select Edges filter), then F; selected bodies go into body inputs. A click picks the face or edge under the cursor by default (near an edge of the front face the edge wins, on hover too); Select Bodies picks whole bodies.
 - [x] Hovering a body shows its name tooltip (its Browser name, renames included).
-- [ ] Double-click selects a tangent chain / loop.
+- [x] Double-click an edge selects the loop round the face the cursor is on (with no command running, or adding to Fillet / Chamfer picks).
+- [ ] Tangent Chain checkbox in Fillet (the kernel already follows tangent edges; the picks do not show the chain).
 - [x] Timeline: drag the rollback marker; drag features to reorder (blue drop bar; refused if it breaks a feature); right-click Edit Feature / Edit Profile Sketch / Suppress / Delete / Roll History Marker Here / Roll to End. Not yet: feature groups, playback buttons.
 
 ### Sketch

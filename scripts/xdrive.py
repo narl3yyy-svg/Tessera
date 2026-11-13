@@ -38,6 +38,7 @@ Script lines (blank lines and # comments ignored):
   shot FILE                  ask the app to save a screenshot to FILE
   expect NAME                fail unless widget NAME is visible
   expectnot NAME             fail if widget NAME is visible
+  wdclick X Y Z              double-click a world point (mm)
   wmove X Y Z                move the pointer to a world point (mm)
   expecttip TEXT             wait up to 4 s for the tooltip TEXT
 """
@@ -246,6 +247,8 @@ def main():
                 drag(x0, y0, x1, y1)
             else:
                 drag(x1, y0, x0, y1)
+        elif cmd == "wdclick":
+            click(*world_point(float(a[0]), float(a[1]), float(a[2])), times=2)
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
         elif cmd in ("bclick", "brclick", "bdclick"):

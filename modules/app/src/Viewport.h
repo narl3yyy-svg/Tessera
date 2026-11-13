@@ -389,6 +389,8 @@ private:
   // With no command running: the edge / vertex under the cursor and the ones
   // selected, drawn thick over everything (the view's own highlight is thin).
   void showIdleHover(const TopoDS_Shape& s);
+  // Double-click on an edge: the loop of edges round the face it bounds.
+  bool selectEdgeLoop(const QPointF& pos);
   void refreshSelectionOverlay();
   Handle(AIS_InteractiveObject) idleHover_;
   TopoDS_Shape idleHoverShape_;

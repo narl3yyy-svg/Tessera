@@ -228,15 +228,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.cpp": {
-    "mtime": 1794559740.5519872,
-    "seen": 1794559880.3677952,
-    "ast_hash": "79d031e4a2ca04edd7003cfc41680c23",
+    "mtime": 1794559985.1383233,
+    "seen": 1794560232.5846865,
+    "ast_hash": "ce10727a317478ad5a262782ca285a19",
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794559562.6954575,
-    "seen": 1794559880.3677964,
-    "ast_hash": "15a8aea902321f61283808e2fe8c3616",
+    "mtime": 1794559985.1383233,
+    "seen": 1794560232.5846877,
+    "ast_hash": "6ec21872434afc5e760e1f8e9d059b1f",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/ViewportSketch.cpp": {
-    "mtime": 1794559530.2499058,
-    "seen": 1794559880.367799,
-    "ast_hash": "4ce93c9bd4a3dd28699025eb55e1213e",
+    "mtime": 1794560181.5841322,
+    "seen": 1794560232.5846903,
+    "ast_hash": "5f145ffeaa7730eaf505846e7ede32ef",
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "scripts/xdrive.py": {
-    "mtime": 1794557219.7898269,
-    "seen": 1794557421.4794853,
-    "ast_hash": "3094d1f4cb68b4ec9b169d5062e8d315",
+    "mtime": 1794559985.1403275,
+    "seen": 1794560232.5847225,
+    "ast_hash": "934776f17dc2d389ff037988b37b0321",
     "semantic_hash": ""
   },
   "tests/TestFramework.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794558327.7849972,
-    "seen": 1794558333.005159,
-    "ast_hash": "766e0dcf8e4804d5c02c7336b9822624",
+    "mtime": 1794560227.2824736,
+    "seen": 1794560232.5849454,
+    "ast_hash": "a7527c6d47ba74d8ceb8e6cc82446180",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794556923.7076905,
-    "seen": 1794557178.3491142,
-    "ast_hash": "73f2daa26402a96e2631c86f45865a2a",
+    "mtime": 1794559985.1418316,
+    "seen": 1794560232.584955,
+    "ast_hash": "d69ef1bd650d647235602f4aed62f710",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2097,6 +2097,12 @@
     "mtime": 1794556923.5686696,
     "seen": 1794557178.3487992,
     "ast_hash": "534ca8e5c73a4e4277b8ccebe5fb6a41",
+    "semantic_hash": ""
+  },
+  "tests/live/edge_loop_check.py": {
+    "mtime": 1794560214.8036008,
+    "seen": 1794560232.5847542,
+    "ast_hash": "2a9ae52ab11266d9f2a5c0b69b6621cf",
     "semantic_hash": ""
   }
 }

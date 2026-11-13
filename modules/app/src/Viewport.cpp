@@ -495,6 +495,7 @@ void Viewport::mouseDoubleClickEvent(QMouseEvent* e) {
     interactor_->mouseDoubleClick(e);
     return;
   }
+  if (e->button() == Qt::LeftButton && !orbitTool_ && !panTool_ && selectEdgeLoop(e->position())) return;
   QOpenGLWidget::mouseDoubleClickEvent(e);
 }
 

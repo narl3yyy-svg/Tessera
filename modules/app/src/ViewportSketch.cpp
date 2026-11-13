@@ -13,6 +13,17 @@
 #include <AIS_Point.hxx>
 #include <AIS_TextLabel.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopExp_Explorer.hxx>
+#include <TopExp.hxx>
+#include <ShapeAnalysis_Surface.hxx>
+#include <SelectMgr_ViewerSelector.hxx>
+#include <SelectMgr_SensitiveEntity.hxx>
+#include <SelectMgr_Selection.hxx>
+#include <BRep_Tool.hxx>
+#include <BRepGProp_Face.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Prs3d_PointAspect.hxx>
@@ -325,6 +336,98 @@ void Viewport::showIdleHover(const TopoDS_Shape& s) {
   idleHoverShape_ = s;
   // Shown while the view is mid-frame: draw a full frame next.
   QTimer::singleShot(0, this, [this] { redrawAll(); });
+}
+
+bool Viewport::selectEdgeLoop(const QPointF& pos) {
+  if (context_.IsNull() || !glReady_ || planePicking_) return false;
+  const bool picking = std::find(pickTypes_.begin(), pickTypes_.end(), TopAbs_EDGE) != pickTypes_.end();
+  const bool idle = pickTypes_.empty() && std::find(selectFilter_.begin(), selectFilter_.end(), TopAbs_EDGE) != selectFilter_.end();
+  if (!picking && !idle) return false;
+  const Graphic3d_Vec2i px = toPixels(pos);
+  context_->MoveTo(px.x(), px.y(), view_, false);
+  const Handle(StdSelect_BRepOwner) eo = Handle(StdSelect_BRepOwner)::DownCast(frontEdgeOwner());
+  if (eo.IsNull() || !eo->HasShape() || eo->Shape().ShapeType() != TopAbs_EDGE) return false;
+  const TopoDS_Edge edge = TopoDS::Edge(eo->Shape());
+  Handle(AIS_Shape) obj;
+  std::string body;
+  for (const auto& [name, shape] : shapes_)
+    if (shape == eo->Selectable()) {
+      obj = shape;
+      body = name;
+    }
+  if (obj.IsNull()) return false;
+  TopTools_IndexedDataMapOfShapeListOfShape edgeFaces;
+  TopExp::MapShapesAndAncestors(obj->Shape(), TopAbs_EDGE, TopAbs_FACE, edgeFaces);
+  if (!edgeFaces.Contains(edge)) return false;
+  const TopTools_ListOfShape& adjacent = edgeFaces.FindFromKey(edge);
+  auto isAdjacent = [&](const TopoDS_Shape& f) {
+    for (const TopoDS_Shape& a : adjacent)
+      if (a.IsSame(f)) return true;
+    return false;
+  };
+  // The face: the one the cursor is on (a ray through its pixel), else one
+  // picked near the cursor, else the adjacent face turned most to the viewer.
+  TopoDS_Face face;
+  if (const TopoDS_Face under = faceAt(pos); !under.IsNull() && isAdjacent(under)) face = under;
+  const Handle(SelectMgr_ViewerSelector)& sel = context_->MainSelector();
+  for (int i = 1; i <= sel->NbPicked() && face.IsNull(); ++i) {
+    const Handle(StdSelect_BRepOwner) o = Handle(StdSelect_BRepOwner)::DownCast(sel->Picked(i));
+    if (!o.IsNull() && o->HasShape() && o->Shape().ShapeType() == TopAbs_FACE && isAdjacent(o->Shape()))
+      face = TopoDS::Face(o->Shape());
+  }
+  if (face.IsNull()) {
+    BRepAdaptor_Curve c(edge);
+    const gp_Pnt mid = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+    const gp_Dir toEye = view_->Camera()->Direction().Reversed();
+    double best = -2;
+    for (const TopoDS_Shape& f : adjacent) {
+      const TopoDS_Face ff = TopoDS::Face(f);
+      ShapeAnalysis_Surface sa(BRep_Tool::Surface(ff));
+      const gp_Pnt2d uv = sa.ValueOfUV(mid, 1e-7);
+      gp_Pnt p;
+      gp_Vec n;
+      BRepGProp_Face(ff).Normal(uv.X(), uv.Y(), p, n);
+      if (n.Magnitude() < 1e-12) continue;
+      const double d = gp_Dir(n).Dot(toEye);
+      if (d > best) {
+        best = d;
+        face = ff;
+      }
+    }
+  }
+  if (face.IsNull()) return false;
+  // The wire of that face through the edge.
+  std::vector<TopoDS_Shape> loop;
+  for (TopExp_Explorer w(face, TopAbs_WIRE); w.More() && loop.empty(); w.Next()) {
+    TopTools_IndexedMapOfShape edges;
+    TopExp::MapShapes(w.Current(), TopAbs_EDGE, edges);
+    if (!edges.Contains(edge)) continue;
+    for (int i = 1; i <= edges.Extent(); ++i)
+      if (!BRep_Tool::Degenerated(TopoDS::Edge(edges(i)))) loop.push_back(edges(i));
+  }
+  if (loop.empty()) return false;
+  if (picking) {
+    // A command picking edges: each one of the loop is added.
+    boxPicking_ = true;
+    for (const TopoDS_Shape& e : loop) emit subShapeClicked(QString::fromStdString(body), e);
+    boxPicking_ = false;
+  } else {
+    const Handle(SelectMgr_Selection)& edgeSel = obj->Selection(AIS_Shape::SelectionMode(TopAbs_EDGE));
+    if (edgeSel.IsNull()) return false;
+    std::vector<Handle(SelectMgr_EntityOwner)> owners;
+    for (const Handle(SelectMgr_SensitiveEntity)& ent : edgeSel->Entities()) {
+      const Handle(StdSelect_BRepOwner) o = Handle(StdSelect_BRepOwner)::DownCast(ent->BaseSensitive()->OwnerId());
+      if (o.IsNull() || !o->HasShape()) continue;
+      for (const TopoDS_Shape& e : loop)
+        if (o->Shape().IsSame(e) && std::find(owners.begin(), owners.end(), o) == owners.end()) owners.push_back(o);
+    }
+    for (const auto& o : owners)
+      if (!context_->IsSelected(o)) context_->AddOrRemoveSelected(o, false);
+    refreshSelectionOverlay();
+    emit selectionChanged();
+  }
+  updateView();
+  return true;
 }
 
 void Viewport::refreshSelectionOverlay() {

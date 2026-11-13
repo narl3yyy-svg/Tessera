@@ -1,0 +1,13 @@
+# Live: double-click an edge to select its loop, as in the familiar tool.
+# With no command running, a double-click on the top front edge (just on the
+# top face's side) takes the top face's four edges; F starts Fillet with them.
+waitfor tsr.feature.extrude
+wait 600
+wdclick 20 0.4 20
+wait 500
+shot /tmp/live_edge_loop.png
+key f
+waitfor panelOk
+wait 500
+click panelOk
+wait 1000
