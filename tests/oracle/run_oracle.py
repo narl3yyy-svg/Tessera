@@ -450,8 +450,13 @@ def world_axis(axis):
 
 
 def op_extrude(state, f):
-    if f.get("thin") or "profiles" not in f:
-        raise Unsupported("thin extrude")
+    if f.get("thin"):
+        th = f["thin"]
+        if th.get("side") == "two_sides" and th.get("thickness2") not in (None, th.get("thickness")):
+            raise Unsupported("thin wall with two different thicknesses (not in the familiar tool)")
+        raise Unsupported("thin extrude of open curves")
+    if "profiles" not in f:
+        raise Unsupported("extrude without profiles")
     sk, prof = profiles_arg(state.sketches, f["profiles"])
     ext = f["extent"]
     kw = dict(sketch=sk.name, profiles=prof, operation=OPS[f.get("operation", "new")])

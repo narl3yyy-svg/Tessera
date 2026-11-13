@@ -458,7 +458,15 @@ public:
          .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "direction=Two Sides"},
         {.id = "taper", .label = "Taper Angle", .tooltip = "One side only. Positive widens.", .type = InputType::Real,
          .defaultValue = 0.0, .unit = Unit::Degree, .min = -1.5, .max = 1.5, .visibleWhen = "direction=One Side"},
+        // Thin Extrude, as in the familiar tool: a wall along the profile's outline.
+        {.id = "thin", .label = "Thin Extrude", .tooltip = "A wall of the given thickness along the profile's outline.",
+         .type = InputType::Bool, .defaultValue = false},
+        choice("wallLocation", "Wall Location", {"Side 1", "Center", "Side 2"},
+               "Side 1: inside the profile. Side 2: outside it. Center: half each way."),
+        {.id = "wallThickness", .label = "Wall Thickness", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.1,
+         .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true, .visibleWhen = "thin=true"},
     };
+    def_.inputs[def_.inputs.size() - 2].visibleWhen = "thin=true";
     addOperationInputs(def_);
   }
   const CommandDef& def() const override { return def_; }
@@ -556,6 +564,19 @@ public:
       if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
       faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
       n = sp.frame.Direction();
+    }
+    if (in.count("thin") && getBool(in, "thin")) {
+      const std::string loc = getString(in, "wallLocation");
+      const auto side = loc == "Side 2" ? kernel::WallSide::Side2 : loc == "Center" ? kernel::WallSide::Center
+                                                                                   : kernel::WallSide::Side1;
+      std::vector<TopoDS_Shape> walls;
+      try {
+        for (const auto& f : faces)
+          for (const auto& w : kernel::wallBand(f, side, getReal(in, "wallThickness"))) walls.push_back(w);
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+      faces = std::move(walls);
     }
     auto real = [&](const char* id, double fallback) {
       auto it = in.find(id);

@@ -972,6 +972,125 @@ TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape
   return r;
 }
 
+namespace {
+// One loop (a face without holes) offset by d (outward if positive),
+// mitred; null if it vanishes.
+TopoDS_Shape offsetLoop(const TopoDS_Face& face, double d) {
+  if (std::abs(d) < 1e-12) return face;
+  // A loop of one closed edge: OCCT's offset crashes on it. A circle is
+  // offset exactly; any other closed curve is split in two first.
+  TopoDS_Face work = face;
+  {
+    std::vector<TopoDS_Edge> edges;
+    for (TopExp_Explorer e(BRepTools::OuterWire(face), TopAbs_EDGE); e.More(); e.Next()) edges.push_back(TopoDS::Edge(e.Current()));
+    if (edges.size() == 1) {
+      BRepAdaptor_Curve c(edges.front());
+      const gp_Pln pln = BRepAdaptor_Surface(face).Plane();
+      if (c.GetType() == GeomAbs_Circle) {
+        gp_Circ circ = c.Circle();
+        const double r = circ.Radius() + d;
+        if (r <= 1e-9) return {};
+        circ.SetRadius(r);
+        return BRepBuilderAPI_MakeFace(pln, BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circ).Edge()).Wire(), true).Face();
+      }
+      double a0 = 0, a1 = 0;
+      const Handle(Geom_Curve) g = BRep_Tool::Curve(edges.front(), a0, a1);
+      if (g.IsNull()) return {};
+      const double tm = (a0 + a1) / 2;
+      BRepBuilderAPI_MakeWire mw;
+      mw.Add(BRepBuilderAPI_MakeEdge(g, a0, tm).Edge());
+      mw.Add(BRepBuilderAPI_MakeEdge(g, tm, a1).Edge());
+      if (!mw.IsDone()) return {};
+      work = BRepBuilderAPI_MakeFace(pln, mw.Wire(), true).Face();
+    }
+  }
+  BRepOffsetAPI_MakeOffset off(work, GeomAbs_Intersection);
+  off.Perform(d);
+  if (!off.IsDone() || off.Shape().IsNull()) return {};
+  // Each loop as a filled face; a loop inside an odd number of others is a
+  // hole (loops from one offset never cross).
+  const gp_Pln pln = BRepAdaptor_Surface(face).Plane();
+  std::vector<TopoDS_Face> loops;
+  std::vector<gp_Pnt> onLoop;
+  for (TopExp_Explorer w(off.Shape(), TopAbs_WIRE); w.More(); w.Next()) {
+    const TopoDS_Wire wire = TopoDS::Wire(w.Current());
+    BRepBuilderAPI_MakeFace mf(pln, wire, true);
+    if (!mf.IsDone()) continue;
+    TopoDS_Face f = mf.Face();
+    BRepLib::BuildCurves3d(f);
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(f, g);
+    if (std::abs(g.Mass()) < 1e-12) continue;
+    if (g.Mass() < 0) f.Reverse();
+    TopExp_Explorer v(wire, TopAbs_VERTEX);
+    if (!v.More()) {   // a single closed curve (circle): a point on it
+      BRepAdaptor_Curve c(TopoDS::Edge(TopExp_Explorer(wire, TopAbs_EDGE).Current()));
+      onLoop.push_back(c.Value(c.FirstParameter()));
+    } else {
+      onLoop.push_back(BRep_Tool::Pnt(TopoDS::Vertex(v.Current())));
+    }
+    loops.push_back(f);
+  }
+  TopoDS_Shape region;
+  std::vector<TopoDS_Shape> holes;
+  for (size_t i = 0; i < loops.size(); ++i) {
+    int inside = 0;
+    for (size_t k = 0; k < loops.size(); ++k)
+      if (k != i && BRepClass_FaceClassifier(loops[k], onLoop[i], 1e-7).State() == TopAbs_IN) ++inside;
+    if (inside % 2 == 1) holes.push_back(loops[i]);
+    else region = region.IsNull() ? TopoDS_Shape(loops[i]) : BRepAlgoAPI_Fuse(region, loops[i]).Shape();
+  }
+  for (const auto& h : holes)
+    if (!region.IsNull()) region = BRepAlgoAPI_Cut(region, h).Shape();
+  return region;
+}
+
+// A region offset by d: its outer loop grows by d and each hole, taken as a
+// filled loop, shrinks by d. (OCCT's offset of a face with holes is not
+// reliable, so loops are offset one at a time.)
+TopoDS_Shape offsetRegion(const TopoDS_Face& face, double d) {
+  if (std::abs(d) < 1e-12) return face;
+  const gp_Pln pln = BRepAdaptor_Surface(face).Plane();
+  const TopoDS_Wire outerWire = BRepTools::OuterWire(face);
+  BRepBuilderAPI_MakeFace of(pln, outerWire, true);
+  if (!of.IsDone()) return {};
+  TopoDS_Shape region = offsetLoop(of.Face(), d);
+  if (region.IsNull()) return {};
+  for (TopExp_Explorer w(face, TopAbs_WIRE); w.More(); w.Next()) {
+    if (w.Current().IsSame(outerWire)) continue;
+    BRepBuilderAPI_MakeFace hf(pln, TopoDS::Wire(w.Current()), true);
+    if (!hf.IsDone()) continue;
+    TopoDS_Face holeFace = hf.Face();
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(holeFace, g);
+    if (g.Mass() < 0) holeFace.Reverse();
+    const TopoDS_Shape hole = offsetLoop(holeFace, -d);   // null: the hole closed up
+    if (!hole.IsNull() && TopExp_Explorer(hole, TopAbs_FACE).More()) region = BRepAlgoAPI_Cut(region, hole).Shape();
+  }
+  return region;
+}
+} // namespace
+
+std::vector<TopoDS_Shape> wallBand(const TopoDS_Shape& faceShape, WallSide side, double thickness) {
+  requirePositive(thickness, "wall thickness");
+  if (faceShape.IsNull() || faceShape.ShapeType() != TopAbs_FACE) throw KernelError("Thin Extrude: needs a flat profile");
+  const TopoDS_Face face = TopoDS::Face(faceShape);
+  if (BRepAdaptor_Surface(face).GetType() != GeomAbs_Plane) throw KernelError("Thin Extrude: needs a flat profile");
+  const double outer = side == WallSide::Side1 ? 0 : side == WallSide::Center ? thickness / 2 : thickness;
+  const double inner = side == WallSide::Side2 ? 0 : side == WallSide::Center ? thickness / 2 : thickness;
+  TopoDS_Shape band = guarded("Thin Extrude", [&]() -> TopoDS_Shape {
+    const TopoDS_Shape big = offsetRegion(face, outer);
+    if (big.IsNull()) return {};
+    const TopoDS_Shape small = offsetRegion(face, -inner);   // null: the wall fills the region
+    if (small.IsNull() || !TopExp_Explorer(small, TopAbs_FACE).More()) return big;
+    return BRepAlgoAPI_Cut(big, small).Shape();
+  });
+  std::vector<TopoDS_Shape> out;
+  for (TopExp_Explorer f(band, TopAbs_FACE); f.More(); f.Next()) out.push_back(f.Current());
+  if (out.empty()) throw KernelError("Thin Extrude: the wall thickness does not fit this profile");
+  return out;
+}
+
 TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
                        double startOffset) {
   if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");
@@ -999,12 +1118,9 @@ TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double 
         for (TopExp_Explorer w(face, TopAbs_WIRE); w.More(); w.Next()) ++wires;
         if (wires == 1) {
           const TopoDS_Wire outer = BRepTools::OuterWire(face);
-          BRepOffsetAPI_MakeOffset off(face, GeomAbs_Intersection);
-          off.Perform(std::abs(length) * std::tan(taper));
-          if (off.IsDone()) {
-            TopoDS_Wire top;
-            for (TopExp_Explorer w(off.Shape(), TopAbs_WIRE); w.More(); w.Next())
-              if (top.IsNull()) top = TopoDS::Wire(w.Current());
+          const TopoDS_Shape grown = offsetLoop(face, std::abs(length) * std::tan(taper));
+          if (!grown.IsNull() && TopExp_Explorer(grown, TopAbs_FACE).More()) {
+            TopoDS_Wire top = BRepTools::OuterWire(TopoDS::Face(TopExp_Explorer(grown, TopAbs_FACE).Current()));
             if (!top.IsNull()) {
               gp_Trsf up;
               up.SetTranslation(n * length);

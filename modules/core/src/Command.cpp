@@ -44,8 +44,10 @@ bool isInputVisible(const InputDef& d, const Inputs& in) {
   const auto eq = rule.find('=');
   if (rule.empty() || eq == std::string::npos) return true;
   std::string value;
-  if (auto it = in.find(rule.substr(0, eq)); it != in.end())
+  if (auto it = in.find(rule.substr(0, eq)); it != in.end()) {
     if (auto s = std::get_if<std::string>(&it->second)) value = *s;
+    else if (auto b = std::get_if<bool>(&it->second)) value = *b ? "true" : "false";
+  }
   size_t start = eq + 1;
   while (start <= rule.size()) {
     size_t end = rule.find('|', start);

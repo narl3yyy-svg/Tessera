@@ -1,0 +1,18 @@
+# Live: Extrude, tick Thin Extrude, Wall Location Center, type a 4 mm wall
+# and press Enter, which finishes the command (as in the familiar tool).
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 400
+check thin
+waitfor wallLocation
+choose wallLocation 1
+wait 300
+click wallThickness
+key ctrl+a
+type 4
+shot /tmp/live_thin.png
+key Return
+wait 800
+expectnot panelOk

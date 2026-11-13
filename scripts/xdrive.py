@@ -17,6 +17,7 @@ Script lines (blank lines and # comments ignored):
   sclick X Y                 click sketch coordinates (mm) of the open sketch
   wclick X Y Z               click a world point (mm), e.g. on a face of a body
   choose NAME INDEX          pick the INDEX-th entry (from 0) of combo box NAME
+  check NAME                 toggle checkbox NAME (clicks its box)
   smove X Y                  move the pointer there (hover)
   sdrag X1 Y1 X2 Y2          press at one sketch point, drag to another, release
   spress X Y / srelease      press (and hold) / release the left button at a sketch point
@@ -248,6 +249,12 @@ def main():
                     sys.exit("xdrive: line %d: no timeline item %s" % (n, a[0]))
                 time.sleep(0.1)
             click(*geometry()["timeline"][a[0]])
+            time.sleep(0.3)
+        elif cmd == "check":
+            r = geometry()["widgets"].get(a[0])
+            if not r:
+                sys.exit("xdrive: line %d: no widget %s" % (n, a[0]))
+            click(r[0] + 9, r[1] + r[3] / 2)   # the box itself, at the left
             time.sleep(0.3)
         elif cmd == "choose":
             click(*widget(a[0]))

@@ -47,6 +47,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/oracle/run_oracle.py)
   set_tests_properties(oracle PROPERTIES TIMEOUT 900 ENVIRONMENT
                        "TSR_ORACLE_CASES=${CMAKE_CURRENT_SOURCE_DIR}/oracle/cases;TSR_ORACLE_REQUIRE_FILE=${CMAKE_CURRENT_SOURCE_DIR}/oracle/required.txt")
+  add_test(NAME api_thin_extrude
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_thin_extrude.py)
   add_test(NAME api_chamfer_types
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_chamfer_types.py)
   add_test(NAME api_feature_pattern
@@ -143,7 +145,10 @@ if(TSR_WITH_QT)
     add_test(NAME live_fillet_picks
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/fillet_picks.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_face_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/fillet_picks_check.py)
-    set_tests_properties(live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
+    add_test(NAME live_thin_extrude
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/thin_extrude.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_sketch.py ${CMAKE_CURRENT_SOURCE_DIR}/live/thin_extrude_check.py)
+    set_tests_properties(live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()

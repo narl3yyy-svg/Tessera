@@ -83,6 +83,11 @@ TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>&
 // `first` along one face and the chamfer at `second` radians to that face.
 // `flip` swaps which face of each edge is the first.
 enum class ChamferType { TwoDistances, DistanceAngle };
+// Thin Extrude: the band of a flat region's outline that a wall of
+// `thickness` covers. Side 1 lies inside the region, Side 2 outside it,
+// Center half each way; corners are mitred. Returns flat faces.
+enum class WallSide { Side1, Center, Side2 };
+std::vector<TopoDS_Shape> wallBand(const TopoDS_Shape& face, WallSide side, double thickness);
 TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, ChamferType type,
                        double first, double second, bool flip);
 
