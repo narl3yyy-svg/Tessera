@@ -189,6 +189,12 @@ std::string validateOperation(const Inputs& in, const Document& doc) {
 }
 
 // Adds `tool` as a new body or combines it with the target body.
+std::string stringOr(const Inputs& in, const std::string& id, const std::string& fallback) {
+  if (auto it = in.find(id); it != in.end())
+    if (auto s = std::get_if<std::string>(&it->second)) return *s;
+  return fallback;   // documents made before the input existed
+}
+
 // A result that falls apart into separate solids becomes separate bodies, as
 // in the familiar tool (a cut through the middle leaves two bodies). The piece
 // first in x, then y, then z keeps `name`; the others get new names.
@@ -1249,6 +1255,12 @@ public:
         len("diameter", "Diameter", 0.5),
         choice("extent", "Extents", {"Distance", "All"}, "All: through the whole body."),
         len("depth", "Depth", 1.0, "extent=Distance"),
+        // As in the familiar tool: blind holes end in a 118 deg drill point by
+        // default; the depth is measured to the shoulder.
+        choice("drillPoint", "Drill Point", {"Angle", "Flat"}, "Angle: a cone at the bottom of a blind hole."),
+        InputDef{.id = "tipAngle", .label = "Drill Point Angle", .tooltip = {}, .type = InputType::Real,
+                 .defaultValue = 118.0 * 3.14159265358979323846 / 180.0, .unit = Unit::Degree, .min = 0.1, .max = 3.0,
+                 .visibleWhen = "drillPoint=Angle"},
         len("cboreDiameter", "Counterbore Diameter", 0.9, "holeType=Counterbore"),
         len("cboreDepth", "Counterbore Depth", 0.3, "holeType=Counterbore"),
         len("csinkDiameter", "Countersink Diameter", 1.0, "holeType=Countersink"),
@@ -1321,9 +1333,20 @@ public:
         } else if (type == "Countersink") {
           const double sr = getReal(in, "csinkDiameter") / 2;
           if (sr <= r) throw CommandError("Countersink Diameter must be larger than the hole");
-          const double h = (sr - r) / std::tan(getReal(in, "csinkAngle") / 2);
-          const TopoDS_Shape cone = BRepPrimAPI_MakeCone(gp_Ax2(start, into), sr + eps, r, h + eps).Shape();
+          const double half = getReal(in, "csinkAngle") / 2;
+          const double h = (sr - r) / std::tan(half);
+          // Starts eps outside the face: wider there by eps * tan(half).
+          const TopoDS_Shape cone =
+              BRepPrimAPI_MakeCone(gp_Ax2(start, into), sr + eps * std::tan(half), r, h + eps).Shape();
           tool = kernel::boolean(kernel::BooleanOp::Join, tool, cone);
+        }
+        // Drill point (documents made before it existed have flat bottoms).
+        const bool blind = getString(in, "extent") != "All";
+        if (blind && stringOr(in, "drillPoint", "Flat") == "Angle") {
+          const double half = getReal(in, "tipAngle") / 2;
+          const gp_Pnt bottom = c.Translated(gp_Vec(into) * depth);
+          const TopoDS_Shape tip = BRepPrimAPI_MakeCone(gp_Ax2(bottom, into), r, 0, r / std::tan(half)).Shape();
+          tool = kernel::boolean(kernel::BooleanOp::Join, tool, tip);
         }
         doc.noteTool(tool, "cut", target);
         body = kernel::boolean(kernel::BooleanOp::Cut, body, tool);
@@ -1355,12 +1378,6 @@ void placeCopies(Document& doc, const std::string& name, const std::vector<TopoD
 // Patterns: of features (what they added to or cut from a body, as the
 // familiar tool does) or of whole bodies.
 using CopyFn = std::function<TopoDS_Shape(const TopoDS_Shape&)>;
-
-std::string stringOr(const Inputs& in, const std::string& id, const std::string& fallback) {
-  if (auto it = in.find(id); it != in.end())
-    if (auto s = std::get_if<std::string>(&it->second)) return *s;
-  return fallback;   // documents made before the input existed
-}
 
 InputDef patternTypeInput() {
   return choice("patternType", "Pattern Type", {"Features", "Bodies"},
@@ -2439,6 +2456,10 @@ public:
         {.id = "offset", .label = "Offset", .tooltip = "Where the thread starts along the face.", .type = InputType::Real,
          .defaultValue = 0.0, .unit = Unit::Millimeter, .min = 0.0, .visibleWhen = "fullLength=No"},
         choice("hand", "Direction", {"Right hand", "Left hand"}, "Right hand: tightens clockwise."),
+        // As in the familiar tool, threads are cosmetic unless Modeled is on:
+        // recorded on the face, no geometry.
+        InputDef{.id = "modeled", .label = "Modeled", .tooltip = "Off: a cosmetic thread (no geometry). On: real thread geometry.",
+                 .type = InputType::Bool, .defaultValue = false},
     };
   }
   const CommandDef& def() const override { return def_; }
@@ -2465,6 +2486,13 @@ public:
     try {
       const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
       const bool full = getString(in, "fullLength") == "Yes";
+      // Threads made before Modeled existed were modeled.
+      const bool modeled = !in.count("modeled") || getBool(in, "modeled");
+      if (!modeled) {
+        if (BRepAdaptor_Surface(TopoDS::Face(faces.front()), true).GetType() != GeomAbs_Cylinder)
+          throw CommandError("Thread: select a cylindrical face (a shaft or a hole)");
+        return;   // cosmetic: the face is recorded, the body is unchanged
+      }
       doc.replaceBody(name, kernel::thread(shape, faces.front(), getReal(in, "pitch"), full ? 0.0 : getReal(in, "offset"),
                                            full ? 0.0 : getReal(in, "length"), getString(in, "hand") != "Left hand"));
     } catch (const kernel::KernelError& e) {

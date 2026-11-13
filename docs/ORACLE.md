@@ -16,11 +16,11 @@ ctest --test-dir build -R oracle --output-on-failure
 ```
 
 Results: *unsupported* means the recipe uses something Tessera does not have
-yet (sheet metal, variable-radius fillets, thin extrudes, drill-point tips,
-holes on curved faces); *fail* and
+yet (sheet metal, variable-radius fillets, thin extrudes, holes on curved
+faces); *fail* and
 *error* are differences to investigate.
 
-65 pass, 1 fail, 0 error, 24 unsupported of 90.
+67 pass, 1 fail, 0 error, 22 unsupported of 90.
 
 | Case | Result | Notes |
 |---|---|---|
@@ -41,7 +41,7 @@ holes on curved faces); *fail* and
 | 15-combine-intersect | pass |  |
 | 16-sweep | pass |  |
 | 17-loft | pass |  |
-| 18-hole-features | unsupported | drill-point tip on a blind hole |
+| 18-hole-features | pass |  |
 | 19-l-bracket-constrained | pass |  |
 | 20-slot-constrained | pass |  |
 | 21-draft | unsupported | operation 'draft' |
@@ -78,7 +78,7 @@ holes on curved faces); *fail* and
 | 52-circular-pattern-fillet | pass |  |
 | 53-path-pattern | pass |  |
 | 54-mirror-body-fillets | pass |  |
-| 55-tapped-hole-cosmetic | unsupported | drill-point tip on a blind hole |
+| 55-tapped-hole-cosmetic | pass |  |
 | 56-holes-on-curved-face | unsupported | hole on a cylinder face |
 | 57-hole-pattern-sketch-points | pass |  |
 | 58-phone-stand | pass |  |

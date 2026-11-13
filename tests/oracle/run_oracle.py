@@ -576,6 +576,14 @@ def op_mirror(state, f):
         raise Unsupported("mirror of %s" % f.get("mirror_of"))
 
 
+def op_thread(state, f):
+    face = f["face"]
+    body = body_at(cm(face["point"]))
+    kw = dict(body=body, faces=fmt(cm(face["point"])), modeled=bool(f.get("modeled", False)),
+              fullLength="Yes" if f.get("full_length", True) else "No")
+    do(state, f["name"], "tsr.feature.thread", **kw)
+
+
 def op_combine(state, f):
     do(state, f["name"], "tsr.feature.combine", target=state.bodies[f["target_body"]],
         tools=";".join(state.bodies[b] for b in f["tool_bodies"]), operation=OPS[f["operation"]],
@@ -613,8 +621,10 @@ def hole_kw(f):
         kw["extent"] = "All"
     else:
         kw.update(extent="Distance", depth=L(f["depth"]))
-    if f.get("tip_angle") and f.get("extent") != "through_all":
-        raise Unsupported("drill-point tip on a blind hole")
+    if f.get("tip_angle"):
+        kw.update(drillPoint="Angle", tipAngle=math.radians(f["tip_angle"]))
+    else:
+        kw["drillPoint"] = "Flat"
     if kw["holeType"] == "Counterbore":
         kw.update(cboreDiameter=L(f["counterbore_diameter"]), cboreDepth=L(f["counterbore_depth"]))
     if kw["holeType"] == "Countersink":
@@ -649,26 +659,15 @@ def op_hole(state, f):
     data = {"points": [[0, 0], [u * MM, v * MM]], "entities": []}
     tsr.run_command("tsr.sketch.create", plane="custom:" + fmt(cm(p) + list(n) + x), data=json.dumps(data))
     sketch = [s for s in tsr.features() if s["command"] == "tsr.sketch.create"][-1]["name"]
-    types = {"simple": "Simple", "counterbore": "Counterbore", "countersink": "Countersink"}
-    kw = dict(sketch=sketch, holeType=types[f.get("hole_type", "simple")], diameter=L(f["diameter"]),
-              target=body_at(cm(p)))
-    if f.get("extent") == "through_all":
-        kw["extent"] = "All"
-    else:
-        kw.update(extent="Distance", depth=L(f["depth"]))
-    if f.get("tip_angle") and f.get("extent") != "through_all":
-        raise Unsupported("drill-point tip on a blind hole")
-    if kw["holeType"] == "Counterbore":
-        kw.update(cboreDiameter=L(f["counterbore_diameter"]), cboreDepth=L(f["counterbore_depth"]))
-    if kw["holeType"] == "Countersink":
-        kw.update(csinkDiameter=L(f["countersink_diameter"]), csinkAngle=math.radians(f.get("countersink_angle", 90)))
+    kw = hole_kw(f)
+    kw.update(sketch=sketch, target=body_at(cm(p)))
     do(state, f["name"], "tsr.feature.hole", **kw)
 
 
 HANDLERS = {
     "extrude": op_extrude, "revolve": op_revolve, "fillet": op_fillet, "chamfer": op_chamfer, "shell": op_shell,
     "rectangular_pattern": op_rectangular_pattern, "circular_pattern": op_circular_pattern, "combine": op_combine,
-    "path_pattern": op_path_pattern, "mirror": op_mirror,
+    "path_pattern": op_path_pattern, "mirror": op_mirror, "thread": op_thread,
     "construction_plane": op_construction_plane, "loft": op_loft, "sweep": op_sweep, "hole": op_hole,
 }
 

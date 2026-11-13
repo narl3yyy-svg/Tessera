@@ -16,6 +16,7 @@
 15-combine-intersect
 16-sweep
 17-loft
+18-hole-features
 19-l-bracket-constrained
 20-slot-constrained
 23-bracket-multifeature
@@ -47,6 +48,7 @@
 52-circular-pattern-fillet
 53-path-pattern
 54-mirror-body-fillets
+55-tapped-hole-cosmetic
 57-hole-pattern-sketch-points
 58-phone-stand
 59-enclosure-base

@@ -50,7 +50,7 @@ tsr.edit_feature(feature("Extrude1")["id"], distance=0.5)
 # A feature that removes material (a hole), patterned the same way.
 pts = {"points": [[0, 0], [x0 + 3.5, y0 + 0.5]]}   # point 0 is the sketch origin
 cmd("tsr.sketch.create", plane="XY", offset=1.0, data=json.dumps(pts))
-cmd("tsr.feature.hole", diameter=0.5, depth=0.5)
+cmd("tsr.feature.hole", diameter=0.5, depth=0.5, drillPoint="Flat")
 hole = math.pi * 0.25 ** 2 * 0.5
 before = vol()
 cmd("tsr.feature.rectangularPattern", patternType="Features", features="Hole1", direction1="Y",
