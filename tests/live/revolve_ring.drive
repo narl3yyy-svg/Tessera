@@ -1,0 +1,16 @@
+# Live: Revolve's rotation ring, as in the familiar tool. The ring's angle
+# box opens with its value selected: typing 90 and Enter turns the square a
+# quarter turn about the sketch's Y axis; OK.
+waitfor tsr.feature.revolve
+wait 600
+click tsr.feature.revolve
+waitfor panelOk
+waitfor arrowValue
+wait 600
+shot /tmp/live_revolve_ring.png
+type 90
+key Return
+wait 600
+shot /tmp/live_revolve_ring90.png
+click panelOk
+wait 1000

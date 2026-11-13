@@ -753,6 +753,59 @@ std::unique_ptr<Command> makeCone() {
 
 // ---------------------------------------------------------------------------
 // Revolve: profiles of a sketch turned about an axis.
+} // namespace
+
+gp_Ax1 revolveAxis(const Document& doc, const std::string& sketchName, const std::string& axis,
+                   const std::string& constructionAxis) {
+  const auto rec = sketchFor(doc, sketchName);
+  if (!rec) throw CommandError("Sketch: '" + sketchName + "' does not exist");
+  gp_Ax3 frame;
+  sketch::Sketch sk;
+  try {
+    frame = doc.planeFrame(rec->plane, rec->offset);
+    sk = sketch::Sketch::fromJson(rec->data);
+  } catch (const std::exception& e) {
+    throw CommandError(e.what());
+  }
+  gp_Pnt o(0, 0, 0);
+  gp_Dir d(0, 0, 1);
+  if (axis == "Sketch Y axis") {
+    o = frame.Location();
+    d = frame.YDirection();
+  } else if (axis == "Sketch X axis") {
+    o = frame.Location();
+    d = frame.XDirection();
+  } else if (axis == "Construction line") {
+    bool found = false;
+    for (const auto& e : sk.entities)
+      if (e.construction && e.type == sketch::EntityType::Line) {
+        const gp_Pnt a = sketch::toWorld(frame, sk.points[e.a].x, sk.points[e.a].y);
+        const gp_Pnt b = sketch::toWorld(frame, sk.points[e.b].x, sk.points[e.b].y);
+        if (a.Distance(b) < 1e-9) continue;
+        o = a;
+        d = gp_Dir(gp_Vec(a, b));
+        found = true;
+        break;
+      }
+    if (!found) throw CommandError("Axis: " + rec->name + " has no construction line (press X while drawing a line)");
+  } else if (axis == "X") {
+    d = gp_Dir(1, 0, 0);
+  } else if (axis == "Y") {
+    d = gp_Dir(0, 1, 0);
+  } else if (axis == "Construction axis") {
+    try {
+      const gp_Ax1 a = doc.axisFrame(constructionAxis);
+      o = a.Location();
+      d = a.Direction();
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string("Construction axis: ") + e.what());
+    }
+  }
+  return gp_Ax1(o, d);
+}
+
+namespace {
+
 class Revolve final : public Command {
 public:
   Revolve() {
@@ -812,42 +865,10 @@ public:
     const auto faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
 
     // Axis in world coordinates.
-    gp_Pnt o(0, 0, 0);
-    gp_Dir d(0, 0, 1);
-    const std::string axis = getString(in, "axis");
-    if (axis == "Sketch Y axis") {
-      o = sp.frame.Location();
-      d = sp.frame.YDirection();
-    } else if (axis == "Sketch X axis") {
-      o = sp.frame.Location();
-      d = sp.frame.XDirection();
-    } else if (axis == "Construction line") {
-      bool found = false;
-      for (const auto& e : sk.entities)
-        if (e.construction && e.type == sketch::EntityType::Line) {
-          const gp_Pnt a = sketch::toWorld(sp.frame, sk.points[e.a].x, sk.points[e.a].y);
-          const gp_Pnt b = sketch::toWorld(sp.frame, sk.points[e.b].x, sk.points[e.b].y);
-          if (a.Distance(b) < 1e-9) continue;
-          o = a;
-          d = gp_Dir(gp_Vec(a, b));
-          found = true;
-          break;
-        }
-      if (!found) throw CommandError("Axis: " + rec->name + " has no construction line (press X while drawing a line)");
-    } else if (axis == "X") {
-      d = gp_Dir(1, 0, 0);
-    } else if (axis == "Y") {
-      d = gp_Dir(0, 1, 0);
-    } else if (axis == "Construction axis") {
-      const std::string name = in.count("constructionAxis") ? getString(in, "constructionAxis") : std::string();
-      try {
-        const gp_Ax1 a = doc.axisFrame(name);
-        o = a.Location();
-        d = a.Direction();
-      } catch (const DocumentError& e) {
-        throw CommandError(std::string("Construction axis: ") + e.what());
-      }
-    }
+    const gp_Ax1 ax = revolveAxis(doc, getString(in, "sketch"), getString(in, "axis"),
+                                  in.count("constructionAxis") ? getString(in, "constructionAxis") : std::string());
+    const gp_Pnt o = ax.Location();
+    const gp_Dir d = ax.Direction();
     TopoDS_Shape tool;
     try {
       tool = kernel::revolve(faces, {o.X(), o.Y(), o.Z()}, {d.X(), d.Y(), d.Z()}, getReal(in, "angle"),

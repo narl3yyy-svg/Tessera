@@ -201,6 +201,9 @@ public:
   // `which` 1 is a second, independent arrow (the other side of a Two Sides
   // extrude); it reports through secondArrowMoved / secondArrowTyped.
   void setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value, const QString& text, int which = 0);
+  // A rotation ring about `axis` (Revolve): the handle sits `radius` from it,
+  // `angle` round from `ref`. Dragging it turns the angle; its box takes values.
+  void setDragRing(const gp_Ax1& axis, const gp_Dir& ref, double radius, double angle, const QString& text);
   void clearDragArrow();     // both arrows
   void clearSecondArrow();   // arrow 1 only
   bool dragArrowActive(int which = 0) const { return which >= 0 && which < 2 && arrows_[which].has_value(); }
@@ -364,6 +367,13 @@ private:
     gp_Pnt base;
     gp_Dir dir;
     double value = 0;
+    // A rotation ring (Revolve): base = a point on the axis, dir = the axis,
+    // ref = where the angle starts (across the axis), radius = the ring's;
+    // value is the angle (rad).
+    bool ring = false;
+    gp_Dir ref = gp_Dir(1, 0, 0);
+    double radius = 0;
+    gp_Pnt handle() const;
   };
   std::optional<DragArrow> arrows_[2];   // 0: main arrow, 1: second side
   int arrowDragging_ = -1;                // index of the arrow being dragged

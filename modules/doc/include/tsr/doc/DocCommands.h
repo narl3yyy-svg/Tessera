@@ -1,7 +1,12 @@
 #pragma once
+#include <gp_Ax1.hxx>
 #include "tsr/core/CommandRegistry.h"
 
+#include <string>
+
 namespace tsr::doc {
+
+class Document;
 
 // Command ids registered by tsr-doc.
 inline constexpr const char* kCmdAddUserParameter = "tsr.parameters.addUser";
@@ -48,6 +53,11 @@ inline constexpr const char* kCmdCircPattern = "tsr.feature.circularPattern";
 inline constexpr const char* kCmdPathPattern = "tsr.feature.pathPattern";
 inline constexpr const char* kCmdCylinder = "tsr.primitive.cylinder";
 inline constexpr const char* kCmdSphere = "tsr.primitive.sphere";
+
+// The world axis Revolve turns about, from its inputs (sketch, axis choice,
+// construction axis). Throws CommandError when it cannot be found.
+gp_Ax1 revolveAxis(const Document& doc, const std::string& sketch, const std::string& axis,
+                   const std::string& constructionAxis);
 inline constexpr const char* kCmdTorus = "tsr.primitive.torus";
 inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 

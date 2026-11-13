@@ -164,6 +164,8 @@ void MainWindow::updateDragArrow() {
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to push or pull") : tr("Specify distance");
     else if (cid == QLatin1String(doc::kCmdThread))
       hint = active_->currentFaces().isEmpty() ? tr("Select a cylindrical face") : QString();
+    else if (cid == QLatin1String(doc::kCmdRevolve))
+      hint = tr("Drag the ring or type the angle");
     else if (cid == QLatin1String(doc::kCmdShell))
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to remove, or set the thickness") : tr("Specify thickness");
     else if (cid == QLatin1String(doc::kCmdOffsetFace))
@@ -267,6 +269,46 @@ void MainWindow::updateDragArrow() {
   } else if (id == QLatin1String(doc::kCmdPressPull) || id == QLatin1String(doc::kCmdOffsetFace)) {
     input = QStringLiteral("distance");
     place = facesPlacement(pickedFaces());
+  } else if (id == QLatin1String(doc::kCmdRevolve)) {
+    // A ring round the axis through the middle of the profiles; its ball
+    // sets the angle, as in the familiar tool.
+    QString sketchName = active_->currentSketch();
+    if (sketchName.isEmpty() && !doc.sketches().empty()) sketchName = QString::fromStdString(doc.sketches().back().name);
+    const auto rec = doc.sketch(sketchName.toStdString());
+    const auto angle = active_->realInput(QStringLiteral("angle"));
+    if (!rec || !angle) return off();
+    try {
+      const gp_Ax1 axis = doc::revolveAxis(doc, sketchName.toStdString(), active_->textInput(QStringLiteral("axis")).toStdString(),
+                                           active_->textInput(QStringLiteral("constructionAxis")).toStdString());
+      const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
+      const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+      GProp_GProps all;
+      for (const auto& pr : profiles) {
+        GProp_GProps g;
+        BRepGProp::SurfaceProperties(pr.face, g);
+        all.Add(g);
+      }
+      if (all.Mass() <= 0) return off();
+      const gp_Pnt c = all.CentreOfMass();
+      // The centre's foot on the axis, and the way out to it.
+      const gp_Vec w(axis.Location(), c);
+      const gp_Pnt foot = axis.Location().Translated(gp_Vec(axis.Direction()) * w.Dot(gp_Vec(axis.Direction())));
+      const gp_Vec out(foot, c);
+      if (out.Magnitude() < 1e-9) return off();
+      // The symmetric revolve turns half each way: the ring starts half back.
+      gp_Dir ref(out);
+      const bool symmetric = active_->textInput(QStringLiteral("direction")) == QLatin1String("Symmetric");
+      const double shown = symmetric ? *angle / 2 : *angle;
+      arrowInput_ = QStringLiteral("angle");
+      arrowInput2_.clear();
+      viewport_->clearSecondArrow();
+      viewport_->setDragRing(gp_Ax1(foot, axis.Direction()), ref, std::max(out.Magnitude() * 1.25, viewport_->modelPerPixel() * 60),
+                             shown, active_->displayText(arrowInput_));
+      attachArrowCompleters();
+      return;
+    } catch (const std::exception&) {
+      return off();
+    }
   } else if (id == QLatin1String(doc::kCmdShell)) {
     // Thickness: from the open face, into the body.
     input = QStringLiteral("thickness");
@@ -345,6 +387,11 @@ void MainWindow::onDragArrow(double value) {
     const QString op = active_->textInput(QStringLiteral("operation"));
     if (value < 0 && op == QLatin1String("Join")) active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Cut"));
     if (value > 0 && op == QLatin1String("Cut")) active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Join"));
+  }
+  if (id == QLatin1String(doc::kCmdRevolve)) {
+    // The ring's angle: within (0, 360 deg] (twice that shown when symmetric).
+    if (active_->textInput(QStringLiteral("direction")) == QLatin1String("Symmetric")) value *= 2;
+    value = std::clamp(value, 1e-3, 2 * M_PI);
   }
   if (std::abs(value) < 1e-9) return;   // zero is never valid for these inputs
   active_->setRealInput(arrowInput_, value);
