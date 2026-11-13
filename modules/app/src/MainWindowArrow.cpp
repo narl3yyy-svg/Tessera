@@ -164,6 +164,10 @@ void MainWindow::updateDragArrow() {
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to push or pull") : tr("Specify distance");
     else if (cid == QLatin1String(doc::kCmdThread))
       hint = active_->currentFaces().isEmpty() ? tr("Select a cylindrical face") : QString();
+    else if (cid == QLatin1String(doc::kCmdShell))
+      hint = active_->currentFaces().isEmpty() ? tr("Select faces to remove, or set the thickness") : tr("Specify thickness");
+    else if (cid == QLatin1String(doc::kCmdOffsetFace))
+      hint = active_->currentFaces().isEmpty() ? tr("Select faces to offset") : tr("Specify distance");
   }
   viewport_->setCursorHint(hint);
   if (!active_) return off();
@@ -260,9 +264,32 @@ void MainWindow::updateDragArrow() {
     viewport_->setDragArrow(end, z, *offset, active_->displayText(arrowInput2_), 1);
     attachArrowCompleters();
     return;
-  } else if (id == QLatin1String(doc::kCmdPressPull)) {
+  } else if (id == QLatin1String(doc::kCmdPressPull) || id == QLatin1String(doc::kCmdOffsetFace)) {
     input = QStringLiteral("distance");
     place = facesPlacement(pickedFaces());
+  } else if (id == QLatin1String(doc::kCmdShell)) {
+    // Thickness: from the open face, into the body.
+    input = QStringLiteral("thickness");
+    place = facesPlacement(pickedFaces());
+    if (place) {
+      place->dir.Reverse();
+      if (active_->textInput(QStringLiteral("direction")) == QLatin1String("Outside")) place->dir.Reverse();
+    }
+  } else if (id == QLatin1String(doc::kCmdHole)) {
+    // Depth: at the first position, along the hole into the face.
+    if (active_->textInput(QStringLiteral("placement")) != QLatin1String("On Face") ||
+        active_->textInput(QStringLiteral("extent")) == QLatin1String("All"))
+      return off();
+    const QStringList pts = active_->textInput(QStringLiteral("points")).split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    if (pts.isEmpty()) return off();
+    const QStringList xyz = pts.front().split(QLatin1Char(','));
+    if (xyz.size() != 3) return off();
+    const TopoDS_Shape body = viewport_->bodyShape(active_->currentBody());
+    const auto at = body.IsNull() ? std::nullopt
+                                  : kernel::pointOnBody(body, {xyz[0].toDouble(), xyz[1].toDouble(), xyz[2].toDouble()});
+    if (!at) return off();
+    input = QStringLiteral("depth");
+    place = ArrowPlacement{gp_Pnt(at->point.x, at->point.y, at->point.z), gp_Dir(-at->normal.x, -at->normal.y, -at->normal.z)};
   } else if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer)) {
     input = id == QLatin1String(doc::kCmdFillet) ? QStringLiteral("radius") : QStringLiteral("distance");
     for (const auto& e : pickedEdges_)
@@ -310,8 +337,9 @@ void MainWindow::onDragArrow(double value) {
   // Fillet and chamfer sizes, and pattern distances, stay positive.
   if (id == QLatin1String(doc::kCmdRectPattern) || id == QLatin1String(doc::kCmdThread))
     value = std::max(value, viewport_->modelPerPixel());
-  if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer))
-    value = std::max(value, viewport_->modelPerPixel());
+  if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer) ||
+      id == QLatin1String(doc::kCmdShell) || id == QLatin1String(doc::kCmdHole))
+    value = std::max(value, viewport_->modelPerPixel());   // sizes and depths stay positive
   // Extruding body faces: pulling out joins, pushing in cuts (as Fusion does).
   if (id == QLatin1String(doc::kCmdExtrude) && !active_->currentFaces().isEmpty()) {
     const QString op = active_->textInput(QStringLiteral("operation"));

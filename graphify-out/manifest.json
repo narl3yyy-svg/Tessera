@@ -138,9 +138,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowArrow.cpp": {
-    "mtime": 1794515020.7504897,
-    "seen": 1794532264.6008444,
-    "ast_hash": "bb1767773a6758716af779808031384b",
+    "mtime": 1794574935.7736838,
+    "seen": 1794575142.2750506,
+    "ast_hash": "64dfcf2e4236097ee051c98291769b71",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794574426.6205125,
-    "seen": 1794574432.0552957,
-    "ast_hash": "06575e614d32bf1a0d6efbf296c474b2",
+    "mtime": 1794575136.9156866,
+    "seen": 1794575142.2755558,
+    "ast_hash": "e36f635cfdf19731f916e5176b4caf95",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794572033.3183389,
-    "seen": 1794572323.3314474,
-    "ast_hash": "89257a4cfd9e00995a2cad2531833104",
+    "mtime": 1794574967.4090543,
+    "seen": 1794575142.275572,
+    "ast_hash": "1ab9fdf37f629d58ba9b5937f5993937",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2205,6 +2205,12 @@
     "mtime": 1794572053.6119354,
     "seen": 1794572323.3312585,
     "ast_hash": "1d14fb40c28bd65584fe57130c196cb9",
+    "semantic_hash": ""
+  },
+  "tests/live/shell_arrow_check.py": {
+    "mtime": 1794574967.3074327,
+    "seen": 1794575142.2752442,
+    "ast_hash": "9cf448db65d17b0b190200963d05cc89",
     "semantic_hash": ""
   }
 }

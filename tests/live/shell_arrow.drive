@@ -1,0 +1,17 @@
+# Live: Shell with its thickness arrow, as in the familiar tool. Click the
+# top face to leave it open; the arrow's value is selected, so typing 3 and
+# Enter sets a 3 mm wall; OK.
+waitfor tsr.feature.shell
+wait 600
+click tsr.feature.shell
+waitfor panelOk
+wait 400
+wclick 20 15 20               # the top face
+waitfor arrowValue
+wait 600
+shot /tmp/live_shell_arrow.png
+type 3
+key Return
+wait 600
+click panelOk
+wait 1000

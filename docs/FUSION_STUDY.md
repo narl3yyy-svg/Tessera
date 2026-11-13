@@ -77,7 +77,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ### Solid
 - [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: profiles and open curves); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).
-- [ ] Revolve, Sweep, Loft, Hole, Fillet, Chamfer, Shell, Press Pull: in-canvas manipulators everywhere (rotation ring for Revolve angle, Hole depth arrow, Shell thickness arrow).
+- [x] In-canvas arrows: Extrude, Press Pull, Offset Face, Fillet, Chamfer, Shell (thickness, into the body), Hole (depth, at the first position), Thread, Rectangular Pattern; each opens with its value ready to type over.
+- [ ] Rotation ring for Revolve / Circular Pattern angles; Sweep / Loft handles.
 - [ ] Hole: thread options (tapped holes); hole types table.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.
 - [ ] Combine with Keep Tools (done) and New Component output.
