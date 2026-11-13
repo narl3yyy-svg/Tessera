@@ -40,6 +40,7 @@ public:
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
+    TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -232,6 +233,12 @@ private:
   // (where the cursor is decides horizontal / vertical / aligned).
   std::optional<sketch::Constraint> dimensionCandidate(double x, double y) const;
   int dragLabel_ = -1;   // Select: a dimension's value being dragged
+  // 2- / 3-Tangent Circle: the lines picked so far (and where they were clicked).
+  std::vector<int> tangentLines_;
+  std::vector<std::pair<double, double>> tangentClicks_;
+  // The circle tangent to the picked lines, placed by the cursor (2) or
+  // nearest the clicks (3); false if there is none.
+  bool tangentCircle(double x, double y, double& cx, double& cy, double& r) const;
   // This sketch's named dimensions (d1, d2 ...) as expression names; `skip`
   // leaves one out (a dimension cannot use itself).
   std::map<std::string, Quantity> localDimensions(int skip = -1) const;

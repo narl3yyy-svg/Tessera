@@ -217,6 +217,10 @@ void SketchEditor::setTool(Tool t) {
     case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
     case Tool::ThreePointCircle: emit message(tr("3-Point Circle: click three points on the circle.")); break;
     case Tool::ThreePointArc: emit message(tr("3-Point Arc: click the start, the end, then a point the arc passes through.")); break;
+    case Tool::TwoTangentCircle: emit message(tr("2-Tangent Circle: click two lines, then place the circle.")); break;
+    case Tool::ThreeTangentCircle: emit message(tr("3-Tangent Circle: click three lines.")); break;
+    case Tool::OverallSlot: emit message(tr("Overall Slot: click both ends of the slot, then a point for the width.")); break;
+    case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
@@ -228,6 +232,8 @@ void SketchEditor::setTool(Tool t) {
 void SketchEditor::resetSteps() {
   clearHud();
   steps_.clear();
+  tangentLines_.clear();
+  tangentClicks_.clear();
   picks_.clear();
   chainStart_ = -1;
   filletLines_ = {-1, -1};
@@ -1511,6 +1517,116 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       const double am = std::atan2(y - cy, x - cx);
       if (ccwContains(as, ae, am)) sk_.addArc(pc, ps, pe, construction_);
       else sk_.addArc(pc, pe, ps, construction_);
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::TwoTangentCircle:
+    case Tool::ThreeTangentCircle: {
+      const size_t need = tool_ == Tool::TwoTangentCircle ? 2 : 3;
+      if (tangentLines_.size() < need) {
+        const Hit h = hitEntity(x, y);
+        if (h.kind != Hit::Entity || sk_.entities[h.index].type != EntityType::Line ||
+            std::find(tangentLines_.begin(), tangentLines_.end(), h.index) != tangentLines_.end()) {
+          emit message(tr("Click a line."));
+          return;
+        }
+        tangentLines_.push_back(h.index);
+        tangentClicks_.emplace_back(x, y);
+        if (tangentLines_.size() < need) {
+          emit message(tr("Click another line."));
+          rebuild();
+          return;
+        }
+        if (need == 2) {
+          emit message(tr("Place the circle (it stays tangent to both lines)."));
+          rebuild();
+          return;
+        }
+      }
+      double cx, cy, r;
+      if (!tangentCircle(x, y, cx, cy, r)) {
+        emit message(tr("No circle touches those lines there."));
+        if (need == 3) resetSteps();
+        rebuild();
+        return;
+      }
+      checkpoint();
+      const int circle = sk_.addCircleAt(sk_.addPoint(cx, cy), r, construction_);
+      for (int l : tangentLines_) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {l, circle}});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::OverallSlot: {
+      if (steps_.size() < 2) {
+        if (!steps_.empty() && std::hypot(x - steps_[0].x, y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick e1 = steps_[0], e2 = steps_[1];
+      const Pick wp = pickPoint(x, y);
+      const double len = std::hypot(e2.x - e1.x, e2.y - e1.y);
+      const double ux = (e2.x - e1.x) / len, uy = (e2.y - e1.y) / len, nx = -uy, ny = ux;
+      const double r = std::abs((wp.x - e1.x) * nx + (wp.y - e1.y) * ny);   // half the width
+      if (r < tolerance() / 4 || 2 * r >= len) {
+        emit message(tr("The width must be less than the slot's length."));
+        return;
+      }
+      checkpoint();
+      // The end centres sit half a width in from the overall ends.
+      const double x1 = e1.x + ux * r, y1 = e1.y + uy * r, x2 = e2.x - ux * r, y2 = e2.y - uy * r;
+      const int pc1 = sk_.addPoint(x1, y1), pc2 = sk_.addPoint(x2, y2);
+      const int a1 = sk_.addPoint(x1 + nx * r, y1 + ny * r), a2 = sk_.addPoint(x2 + nx * r, y2 + ny * r);
+      const int b1 = sk_.addPoint(x1 - nx * r, y1 - ny * r), b2 = sk_.addPoint(x2 - nx * r, y2 - ny * r);
+      const int la = sk_.addLine(a1, a2, construction_), lb = sk_.addLine(b2, b1, construction_);
+      const int arc2 = sk_.addArc(pc2, b2, a2, construction_), arc1 = sk_.addArc(pc1, a1, b1, construction_);
+      const int axis = sk_.addLine(pc1, pc2, true);
+      for (int l : {la, lb})
+        for (int arc : {arc1, arc2}) sk_.addConstraint({ConstraintType::Tangent, {}, {l, arc}});
+      sk_.addConstraint({ConstraintType::Equal, {}, {arc1, arc2}});
+      autoHorizontalVertical(axis);
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::ArcSlot: {
+      if (steps_.size() < 3) {
+        const Pick p = pickPoint(x, y);
+        if (!steps_.empty() && std::hypot(p.x - steps_[0].x, p.y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(p);
+        return;
+      }
+      const Pick c = steps_[0], s = steps_[1], e = steps_[2];
+      const Pick wp = pickPoint(x, y);
+      const double R = std::hypot(s.x - c.x, s.y - c.y);
+      const double w2 = std::abs(std::hypot(wp.x - c.x, wp.y - c.y) - R);   // half the width
+      if (w2 < tolerance() / 4 || w2 >= R) {
+        emit message(tr("The width must be less than twice the arc's radius."));
+        return;
+      }
+      const double as = std::atan2(s.y - c.y, s.x - c.x), ae = std::atan2(e.y - c.y, e.x - c.x);
+      if (std::abs(std::remainder(ae - as, 2 * std::numbers::pi)) < 1e-6) return;
+      checkpoint();
+      const int pc = materialize(c);
+      const double ox = sk_.points[pc].x, oy = sk_.points[pc].y;
+      auto at = [&](double rad, double ang) { return sk_.addPoint(ox + rad * std::cos(ang), oy + rad * std::sin(ang)); };
+      // The slot runs counter-clockwise from the start to the end, as arcs do.
+      const int ps = at(R, as), pe = at(R, ae);
+      const int os = at(R + w2, as), oe = at(R + w2, ae), is = at(R - w2, as), ie = at(R - w2, ae);
+      const int path = sk_.addArc(pc, ps, pe, true);
+      const int outer = sk_.addArc(pc, os, oe, construction_);
+      const int inner = sk_.addArc(pc, is, ie, construction_);
+      // End caps: half circles round the path's ends, bulging outwards.
+      const int capS = sk_.addArc(ps, is, os, construction_);
+      const int capE = sk_.addArc(pe, oe, ie, construction_);
+      (void)path;
+      for (int cap : {capS, capE})
+        for (int side : {outer, inner}) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Tangent, {}, {cap, side}});
+      (void)sketch::addConstraintChecked(sk_, {ConstraintType::Equal, {}, {capS, capE}});
       resetSteps();
       solveAndShow();
       if (!res_.ok) undo();
@@ -3055,6 +3171,83 @@ void SketchEditor::addDimensionGraphics(const Constraint& c, double lx, double l
   out.push_back(a);
 }
 
+bool SketchEditor::tangentCircle(double x, double y, double& cx, double& cy, double& r) const {
+  // Each line as n.p + d = 0 with n a unit normal.
+  struct L { double nx, ny, d; };
+  std::vector<L> ls;
+  for (int l : tangentLines_) {
+    const auto& e = sk_.entities[l];
+    const auto& a = sk_.points[e.a];
+    const auto& b = sk_.points[e.b];
+    const double len = std::hypot(b.x - a.x, b.y - a.y);
+    if (len < 1e-12) return false;
+    const double nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    ls.push_back({nx, ny, -(nx * a.x + ny * a.y)});
+  }
+  auto f = [](const L& l, double px, double py) { return l.nx * px + l.ny * py + l.d; };
+  if (ls.size() == 2) {
+    L a = ls[0], b = ls[1];
+    const double cross = a.nx * b.ny - a.ny * b.nx;
+    if (std::abs(cross) < 1e-9) {   // parallel: centred between them, the cursor slides it along
+      if (a.nx * b.nx + a.ny * b.ny < 0) b = {-b.nx, -b.ny, -b.d};
+      const double mid = (a.d + b.d) / 2;
+      const double t = a.nx * x + a.ny * y + mid;
+      cx = x - a.nx * t, cy = y - a.ny * t;
+      r = std::abs(a.d - b.d) / 2;
+      return r > 1e-9;
+    }
+    // In the corner the cursor is in: the centre is on that corner's
+    // bisector, where the cursor projects onto it.
+    const double s1 = f(a, x, y) >= 0 ? 1 : -1, s2 = f(b, x, y) >= 0 ? 1 : -1;
+    const double ox = (a.ny * b.d - b.ny * a.d) / cross, oy = (b.nx * a.d - a.nx * b.d) / cross;   // the crossing
+    double dx = -(s1 * a.ny - s2 * b.ny), dy = s1 * a.nx - s2 * b.nx;   // along s1 f1 = s2 f2
+    const double n = std::hypot(dx, dy);
+    if (n < 1e-12) return false;
+    dx /= n, dy /= n;
+    const double t = (x - ox) * dx + (y - oy) * dy;
+    cx = ox + dx * t, cy = oy + dy * t;
+    r = s1 * f(a, cx, cy);
+    return r > 1e-9;
+  }
+  if (ls.size() == 3) {
+    // n_i.c + d_i = s_i r for each choice of sides; the circle nearest the
+    // clicks (inside the triangle when its sides were clicked).
+    double tx = 0, ty = 0;
+    for (const auto& [px, py] : tangentClicks_) tx += px / 3, ty += py / 3;
+    bool found = false;
+    double best = 0;
+    for (int m = 0; m < 8; ++m) {
+      double A[3][3], B[3];
+      for (int i = 0; i < 3; ++i) {
+        const double s = (m >> i) & 1 ? -1 : 1;
+        A[i][0] = ls[i].nx, A[i][1] = ls[i].ny, A[i][2] = -s, B[i] = -ls[i].d;
+      }
+      auto det3 = [](double M[3][3]) {
+        return M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) +
+               M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+      };
+      const double D = det3(A);
+      if (std::abs(D) < 1e-12) continue;
+      double sol[3];
+      for (int k = 0; k < 3; ++k) {   // Cramer's rule
+        double M[3][3];
+        for (int i = 0; i < 3; ++i)
+          for (int j = 0; j < 3; ++j) M[i][j] = j == k ? B[i] : A[i][j];
+        sol[k] = det3(M) / D;
+      }
+      if (sol[2] <= 1e-9) continue;
+      const double dist = std::hypot(sol[0] - tx, sol[1] - ty);
+      if (!found || dist < best) {
+        found = true;
+        best = dist;
+        cx = sol[0], cy = sol[1], r = sol[2];
+      }
+    }
+    return found;
+  }
+  return false;
+}
+
 std::optional<Constraint> SketchEditor::dimensionCandidate(double x, double y) const {
   if (picks_.empty()) return std::nullopt;
   const auto& P = sk_.points;
@@ -3171,6 +3364,7 @@ void SketchEditor::rebuild() {
       if (s.kind == k && s.index == i) return true;
     for (const auto& p : picks_)
       if (p.hit.kind == k && p.hit.index == i) return true;
+    if (k == Hit::Entity && std::find(tangentLines_.begin(), tangentLines_.end(), i) != tangentLines_.end()) return true;
     return false;
   };
   auto hovered = [&](Hit::Kind k, int i) { return hover_.kind == k && hover_.index == i; };
@@ -3351,8 +3545,25 @@ void SketchEditor::updatePreview(double x, double y) {
   const bool drawing = tool_ == Tool::Line || tool_ == Tool::Rectangle || tool_ == Tool::CenterRectangle ||
                        tool_ == Tool::Circle || tool_ == Tool::Arc || tool_ == Tool::Point || tool_ == Tool::Polygon ||
                        tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
-                       tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc;
+                       tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc ||
+                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
+  if (view_ && tool_ == Tool::TwoTangentCircle && tangentLines_.size() == 2) {
+    double cx, cy, r;
+    if (tangentCircle(x, y, cx, cy, r)) {
+      sketch::Sketch t;
+      t.addCircle(cx, cy, r);
+      const TopoDS_Shape s = sketch::curves(t, frame_, false);
+      if (!s.IsNull() && !view_->aisContext().IsNull()) {
+        Handle(AIS_Shape) w = wire(s, kPreview, 1.5, Aspect_TOL_DASH);
+        view_->aisContext()->Display(w, AIS_WireFrame, -1, false);
+        view_->aisContext()->SetZLayer(w, Graphic3d_ZLayerId_Topmost);
+        preview_.push_back(w);
+      }
+    }
+    view_->redraw();
+    return;
+  }
   if (!view_ || steps_.empty()) {
     if (view_) view_->redraw();
     return;
@@ -3490,6 +3701,49 @@ void SketchEditor::updatePreview(double x, double y) {
       } else {
         tmp.addLine(a.x, a.y, steps_[1].x, steps_[1].y);
       }
+      break;
+    }
+    case Tool::OverallSlot: {
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+        break;
+      }
+      const auto& b = steps_[1];
+      const double len = std::hypot(b.x - a.x, b.y - a.y);
+      if (len < 1e-12) break;
+      const double ux = (b.x - a.x) / len, uy = (b.y - a.y) / len, nx = -uy, ny = ux;
+      const double r = std::abs((x - a.x) * nx + (y - a.y) * ny);
+      if (r < 1e-9 || 2 * r >= len) {
+        tmp.addLine(a.x, a.y, b.x, b.y);
+        break;
+      }
+      const double x1 = a.x + ux * r, y1 = a.y + uy * r, x2 = b.x - ux * r, y2 = b.y - uy * r;
+      tmp.addLine(x1 + nx * r, y1 + ny * r, x2 + nx * r, y2 + ny * r);
+      tmp.addLine(x1 - nx * r, y1 - ny * r, x2 - nx * r, y2 - ny * r);
+      const int c2 = tmp.addPoint(x2, y2), c1 = tmp.addPoint(x1, y1);
+      tmp.addArc(c2, tmp.addPoint(x2 - nx * r, y2 - ny * r), tmp.addPoint(x2 + nx * r, y2 + ny * r));
+      tmp.addArc(c1, tmp.addPoint(x1 + nx * r, y1 + ny * r), tmp.addPoint(x1 - nx * r, y1 - ny * r));
+      break;
+    }
+    case Tool::ArcSlot: {
+      const double R = steps_.size() >= 2 ? std::hypot(steps_[1].x - a.x, steps_[1].y - a.y) : std::hypot(x - a.x, y - a.y);
+      if (steps_.size() == 1) {
+        tmp.addLine(a.x, a.y, x, y);
+        break;
+      }
+      const double as = std::atan2(steps_[1].y - a.y, steps_[1].x - a.x);
+      const double ae = std::atan2((steps_.size() >= 3 ? steps_[2].y : y) - a.y, (steps_.size() >= 3 ? steps_[2].x : x) - a.x);
+      const double w2 = steps_.size() >= 3 ? std::abs(std::hypot(x - a.x, y - a.y) - R) : 0;
+      const int c = tmp.addPoint(a.x, a.y);
+      auto at = [&](double rad, double ang) { return tmp.addPoint(a.x + rad * std::cos(ang), a.y + rad * std::sin(ang)); };
+      if (w2 < 1e-9 || w2 >= R) {
+        tmp.addArc(c, at(R, as), at(R, ae));
+        break;
+      }
+      tmp.addArc(c, at(R + w2, as), at(R + w2, ae));
+      tmp.addArc(c, at(R - w2, as), at(R - w2, ae));
+      tmp.addArc(at(R, as), at(R - w2, as), at(R + w2, as));
+      tmp.addArc(at(R, ae), at(R + w2, ae), at(R - w2, ae));
       break;
     }
     case Tool::ThreePointRectangle: {

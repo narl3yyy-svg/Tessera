@@ -37,6 +37,9 @@ private:
   QWidget* sectionHeader(const QString& title, QWidget* body);
   QCheckBox* option(const QString& name, const QString& label, bool on);
   void applyDisplay();
+  // Shrinks (or grows) to what is shown: the layouts settle first, so hidden
+  // sections leave no empty space over the canvas.
+  void fit();
 
   QPointer<SketchEditor> editor_;
   QWidget* body_ = nullptr;

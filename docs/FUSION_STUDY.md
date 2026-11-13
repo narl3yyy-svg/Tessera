@@ -60,7 +60,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Driven (reference) dimensions, offered when a dimension would over-constrain the sketch: shown in brackets, following the geometry, ignored by the solver.
 - [ ] Dimension text drawn along sloped dimension lines (Tessera's text is always level).
 - [x] 3-Point Rectangle (square corners kept), 2-Point Circle, 3-Point Circle, 3-Point Arc; clicks on existing geometry stay on the new circle.
-- [ ] Sketch text, ellipse, conic, tangent circle, centre-point arc slot, overall slot.
+- [x] 2-Tangent Circle (placed in the corner by the cursor), 3-Tangent Circle (the one nearest the picks: a triangle's incircle), Overall Slot, Center Point Arc Slot.
+- [ ] Sketch text, ellipse, conic.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 

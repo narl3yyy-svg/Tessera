@@ -313,6 +313,29 @@ void arc3Icon(QPainter& p) {   // an arc through start, end and a point between
   dot(p, 32, 14);
 }
 
+void circleTanIcon(QPainter& p, bool three) {   // a circle in the corner of lines
+  stroke(p, 2, kLine);
+  p.drawLine(QPointF(6, 54), QPointF(58, 54));
+  p.drawLine(QPointF(6, 54), QPointF(40, 6));
+  if (three) p.drawLine(QPointF(58, 54), QPointF(40, 6));
+  stroke(p);
+  p.drawEllipse(QPointF(three ? 36 : 34, 38), 14, 14);
+}
+
+void slotOverallIcon(QPainter& p) {   // a slot measured end to end
+  stroke(p);
+  p.drawRoundedRect(QRectF(8, 22, 48, 20), 10, 10);
+  dot(p, 8, 32);
+  dot(p, 56, 32);
+}
+
+void slotArcIcon(QPainter& p) {   // a curved slot round a centre
+  stroke(p);
+  p.drawArc(QRectF(8, 8, 48, 48), 20 * 16, 140 * 16);
+  p.drawArc(QRectF(20, 20, 24, 24), 20 * 16, 140 * 16);
+  dot(p, 32, 32);
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -990,6 +1013,10 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("circle-2pt")) circle2Icon(p);
   else if (name == QLatin1String("circle-3pt")) circle3Icon(p);
   else if (name == QLatin1String("arc-3pt")) arc3Icon(p);
+  else if (name == QLatin1String("circle-2tan")) circleTanIcon(p, false);
+  else if (name == QLatin1String("circle-3tan")) circleTanIcon(p, true);
+  else if (name == QLatin1String("slot-overall")) slotOverallIcon(p);
+  else if (name == QLatin1String("slot-arc")) slotArcIcon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

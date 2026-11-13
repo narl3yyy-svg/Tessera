@@ -1,0 +1,44 @@
+# Live: 3-Tangent Circle (a triangle's incircle), 2-Tangent Circle (in a
+# corner, placed by the cursor), Overall Slot and Center Point Arc Slot.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 60 0
+sclick 0 60
+sclick 0 0                # a closed right triangle
+key Escape
+key Escape
+click sketch.line
+sclick -80 60
+sclick -80 0
+sclick -40 0              # a corner at (-80, 0), clear of the palette
+key Escape
+key Escape
+click sketch.circle-3tan
+sclick 30 0
+sclick 30 30
+sclick 0 30               # the three sides: the incircle
+key Escape
+click sketch.circle-2tan
+sclick -80 30
+sclick -55 0              # the corner's two lines
+sclick -65 20             # placed in the corner
+key Escape
+click sketch.slot-overall
+sclick 0 -40
+sclick 60 -40             # the overall ends
+sclick 30 -30             # 20 wide
+key Escape
+click sketch.slot-arc
+sclick 100 -60            # centre
+sclick 130 -60            # start (radius 30)
+sclick 100 -30            # end, a quarter turn on
+sclick 140 -60            # 20 wide
+key Escape
+shot /tmp/live_tangent_slots.png
+click palette.finish
+wait 600

@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794566868.4896736,
-    "seen": 1794567173.0627224,
-    "ast_hash": "3901b847f7504fc48fe48d7cbc2aaaff",
+    "mtime": 1794567859.4189692,
+    "seen": 1794568262.242015,
+    "ast_hash": "de0b5fbe4d2965079d53b2a32f7d8769",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794566868.4896736,
-    "seen": 1794567173.0627275,
-    "ast_hash": "b2db05623c2803d4d768798141095e10",
+    "mtime": 1794567859.4189692,
+    "seen": 1794568262.2420201,
+    "ast_hash": "edd5992d3fffe4f12d04cdbe4d257ca2",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -192,27 +192,27 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794567014.0242367,
-    "seen": 1794567173.0627344,
-    "ast_hash": "176bfd0144214d81c7877925cb35643b",
+    "mtime": 1794567859.4189692,
+    "seen": 1794568262.2420273,
+    "ast_hash": "2cc6587d092ca3741d2bec2c995b650a",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
-    "mtime": 1794566868.4853501,
-    "seen": 1794567173.062735,
-    "ast_hash": "542f68d69451c68a6d4d191a81ecb95f",
+    "mtime": 1794567859.4141152,
+    "seen": 1794568262.242028,
+    "ast_hash": "c645d2b128c746f9b9405016d0859760",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.cpp": {
-    "mtime": 1794466948.2777941,
-    "seen": 1794532264.6008515,
-    "ast_hash": "f78ef9cff66cd7a05ab6c2be9dbed80a",
+    "mtime": 1794568036.4270031,
+    "seen": 1794568262.2420287,
+    "ast_hash": "0102264bd6abb7637a8fa817dcbea79b",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.h": {
-    "mtime": 1794464803.4973226,
-    "seen": 1794532264.6008523,
-    "ast_hash": "26cab929ae43d9ee779c480d08ae239b",
+    "mtime": 1794568036.4258437,
+    "seen": 1794568262.2420297,
+    "ast_hash": "90cf572337cc7b3d531ba4bd51b384dc",
     "semantic_hash": ""
   },
   "modules/app/src/Theme.cpp": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794567167.5395672,
-    "seen": 1794567173.0629978,
-    "ast_hash": "1b9993d08a0d4a647c0eec49cb15faa7",
+    "mtime": 1794568256.6077027,
+    "seen": 1794568262.2422915,
+    "ast_hash": "82ae7f4b85ef62091196e13c70ae0223",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794566925.358554,
-    "seen": 1794567173.0630069,
-    "ast_hash": "e232ff30831b7d77ac5f4795032350d8",
+    "mtime": 1794567925.3745618,
+    "seen": 1794568262.2423005,
+    "ast_hash": "6beccde3488c48e1ba0844324596218d",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2151,6 +2151,12 @@
     "mtime": 1794567014.0252352,
     "seen": 1794567173.0628254,
     "ast_hash": "0032e8e4866dd767e6ce69ca600e3605",
+    "semantic_hash": ""
+  },
+  "tests/live/sketch_tangent_slots_check.py": {
+    "mtime": 1794568110.1896918,
+    "seen": 1794568262.2421212,
+    "ast_hash": "d0d0ab6f9afafaee324e286cdbe745a7",
     "semantic_hash": ""
   }
 }

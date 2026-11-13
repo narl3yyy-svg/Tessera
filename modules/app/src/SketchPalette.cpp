@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -45,7 +46,7 @@ SketchPalette::SketchPalette(SketchEditor* editor, QWidget* parent) : QDialog(pa
   layout->addWidget(body_);
   connect(fold, &QToolButton::clicked, this, [this] {
     body_->setVisible(!body_->isVisible());
-    adjustSize();
+    fit();
   });
 
   // Feature Options: the variants of the current tool.
@@ -174,7 +175,7 @@ QWidget* SketchPalette::sectionHeader(const QString& title, QWidget* body) {
     const bool show = !body->isVisible();
     body->setVisible(show);
     h->setArrowType(show ? Qt::DownArrow : Qt::RightArrow);
-    adjustSize();
+    fit();
   });
   return h;
 }
@@ -213,7 +214,18 @@ void SketchPalette::sync() {
   rectCenter_->setChecked(t == Tool::CenterRectangle);
   lineNormal_->setChecked(!editor_->construction());
   lineConstruction_->setChecked(editor_->construction());
+  fit();
+}
+
+void SketchPalette::fit() {
+  if (body_ && body_->layout()) body_->layout()->activate();
+  if (layout()) layout()->activate();
   adjustSize();
+  // Once Qt has laid out what was shown or hidden, fit again.
+  QTimer::singleShot(0, this, [this] {
+    if (layout()) layout()->activate();
+    adjustSize();
+  });
 }
 
 void SketchPalette::setGrid(bool on, bool snap) {

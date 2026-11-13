@@ -270,10 +270,14 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::Circle, QStringLiteral("circle"), tr("Center Diameter Circle"), QStringLiteral("C"));
   toolButton(create, T::TwoPointCircle, QStringLiteral("circle-2pt"), tr("2-Point Circle"), {});
   toolButton(create, T::ThreePointCircle, QStringLiteral("circle-3pt"), tr("3-Point Circle"), {});
+  toolButton(create, T::TwoTangentCircle, QStringLiteral("circle-2tan"), tr("2-Tangent Circle"), {});
+  toolButton(create, T::ThreeTangentCircle, QStringLiteral("circle-3tan"), tr("3-Tangent Circle"), {});
   toolButton(create, T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {});
   toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
   toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
+  toolButton(create, T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {});
+  toolButton(create, T::ArcSlot, QStringLiteral("slot-arc"), tr("Center Point Arc Slot"), {});
   toolButton(create, T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {});
   toolButton(create, T::Mirror, QStringLiteral("sketch-mirror"), tr("Mirror"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
