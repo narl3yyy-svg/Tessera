@@ -220,6 +220,18 @@ void projectIcon(QPainter& p) {
   p.drawLine(QPointF(14, 44), QPointF(44, 36));
 }
 
+// Pattern on Path: three blocks along a curve.
+void pathPatternIcon(QPainter& p) {
+  stroke(p, 3, kLine);
+  QPainterPath path(QPointF(6, 50));
+  path.cubicTo(QPointF(20, 10), QPointF(44, 10), QPointF(58, 50));
+  p.setBrush(Qt::NoBrush);
+  p.drawPath(path);
+  p.setPen(Qt::NoPen);
+  p.setBrush(kAccent);
+  for (const QPointF c : {QPointF(10, 42), QPointF(32, 20), QPointF(54, 42)}) p.drawRect(QRectF(c.x() - 6, c.y() - 6, 12, 12));
+}
+
 void extrudeIcon(QPainter& p) {
   face(p, {QPointF(8, 44), QPointF(32, 32), QPointF(56, 44), QPointF(32, 56)}, kTop);
   face(p, {QPointF(8, 44), QPointF(8, 22), QPointF(32, 10), QPointF(32, 32)}, kLeft);
@@ -959,6 +971,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("sketch-mirror")) sketchMirrorIcon(p);
   else if (name == QLatin1String("hole")) holeIcon(p);
   else if (name == QLatin1String("pattern-rect")) patternIcon(p, false);
+  else if (name == QLatin1String("pattern-path")) pathPatternIcon(p);
   else if (name == QLatin1String("pattern-circ")) patternIcon(p, true);
   else if (name == QLatin1String("combine")) combineIcon(p);
   else if (name == QLatin1String("split")) splitIcon(p);

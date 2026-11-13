@@ -45,6 +45,7 @@ inline constexpr const char* kCmdPointCenter = "tsr.construct.pointCenter";
 inline constexpr const char* kCmdPointEdgePlane = "tsr.construct.pointEdgePlane";
 inline constexpr const char* kCmdRectPattern = "tsr.feature.rectangularPattern";
 inline constexpr const char* kCmdCircPattern = "tsr.feature.circularPattern";
+inline constexpr const char* kCmdPathPattern = "tsr.feature.pathPattern";
 inline constexpr const char* kCmdCylinder = "tsr.primitive.cylinder";
 inline constexpr const char* kCmdSphere = "tsr.primitive.sphere";
 inline constexpr const char* kCmdTorus = "tsr.primitive.torus";

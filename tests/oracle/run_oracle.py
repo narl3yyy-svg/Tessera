@@ -52,6 +52,8 @@ class SketchInfo:
 
 def add_point(sk, spec):
     if isinstance(spec, dict):
+        if spec.get("ref") == "origin":
+            return 0
         if "ref" in spec and spec["ref"] in sk.refs:
             return sk.refs[spec["ref"]]
         at = spec["at"]
@@ -147,7 +149,7 @@ def build_sketch(f, sketches):
     spec = "custom:" + fmt(cm(o) + list(n) + list(x))
     tsr.run_command("tsr.sketch.create", plane=spec, data=json.dumps(data))
     # The solved sketch: profiles are found on it, not on the recipe's rough positions.
-    solved = json.loads([x for x in tsr.features() if x["command"] == "tsr.sketch.create"][-1]["inputs"]["data"])
+    solved = json.loads(tsr.sketch_data(name))
     sk.points = [[px / MM, py / MM] for px, py in solved["points"]]
     for eid, i in sk.ent_index.items():
         e = solved["entities"][i]
@@ -518,6 +520,17 @@ def op_circular_pattern(state, f):
         axis=axis, quantity=f["count"], angle=math.radians(f["total_angle"]) * (-1 if flipped else 1))
 
 
+def op_path_pattern(state, f):
+    if "identical" not in f.get("orientation", "identical"):
+        orient = "Path Direction"
+    else:
+        orient = "Identical"
+    dt = "Extent" if f.get("distance_type", "").startswith("extent") else "Spacing"
+    do(state, f["name"], "tsr.feature.pathPattern", patternType="Features", features=pattern_features(state, f),
+       path=state.sketches[f["path"]["sketch"]].name, quantity=f["count"], distanceType=dt,
+       distance=f["spacing"] * MM, orientation=orient)
+
+
 def op_combine(state, f):
     do(state, f["name"], "tsr.feature.combine", target=state.bodies[f["target_body"]],
         tools=";".join(state.bodies[b] for b in f["tool_bodies"]), operation=OPS[f["operation"]],
@@ -610,6 +623,7 @@ def op_hole(state, f):
 HANDLERS = {
     "extrude": op_extrude, "revolve": op_revolve, "fillet": op_fillet, "chamfer": op_chamfer, "shell": op_shell,
     "rectangular_pattern": op_rectangular_pattern, "circular_pattern": op_circular_pattern, "combine": op_combine,
+    "path_pattern": op_path_pattern,
     "construction_plane": op_construction_plane, "loft": op_loft, "sweep": op_sweep, "hole": op_hole,
 }
 

@@ -3,6 +3,12 @@
 
 #include "tsr/kernel/Io.h"
 #include "tsr/kernel/Kernel.h"
+#include <TopoDS_Wire.hxx>
+#include <TopTools_HSequenceOfShape.hxx>
+#include <ShapeAnalysis_FreeBounds.hxx>
+#include <GCPnts_AbscissaPoint.hxx>
+#include <BRepAdaptor_CompCurve.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <TopoDS_Compound.hxx>
 #include <BRep_Builder.hxx>
 
@@ -1612,6 +1618,137 @@ private:
   CommandDef def_;
 };
 
+// Pattern on Path: copies along the open curves of a sketch, by arc length.
+// The pattern runs from the path end nearest the patterned geometry.
+// Orientation Identical moves the copies only; Path Direction also turns them
+// with the path's tangent (in the path's plane).
+class PathPattern final : public Command {
+public:
+  PathPattern() {
+    commonDef(def_, kCmdPathPattern, "Pattern on Path",
+              "Copies features or a body along a sketch path (its open curves), measured along the path.",
+              "pattern-path", "Create");
+    InputDef body = bodyInput();
+    body.visibleWhen = "patternType=Bodies";
+    def_.inputs = {patternTypeInput(), featuresInput(), body,
+                   InputDef{.id = "path", .label = "Path", .tooltip = "A sketch whose open curves form the path.",
+                            .type = InputType::Sketch, .defaultValue = std::string{}},
+                   InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
+                            .type = InputType::Integer, .defaultValue = std::int64_t{3}, .unit = Unit::None,
+                            .min = 2.0, .max = 1000.0},
+                   choice("distanceType", "Distance Type", {"Spacing", "Extent"},
+                          "Spacing: along the path between neighbours. Extent: from the first copy to the last."),
+                   InputDef{.id = "distance", .label = "Distance", .tooltip = "Measured along the path.",
+                            .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter, .min = 0.0,
+                            .minExclusive = true},
+                   choice("orientation", "Orientation", {"Identical", "Path Direction"},
+                          "Identical: copies keep their direction. Path Direction: they turn with the path."),
+                   choice("result", "Result", {"Join", "New Bodies"}, {})};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (getString(in, "path").empty()) return "Path: choose the sketch with the path";
+    return checkPattern(in, docOf(ctx));
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = doc.sketch(getString(in, "path"));
+    if (!rec) throw CommandError("Path: no sketch named '" + getString(in, "path") + "'");
+    const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
+    const sketch::Sketch sk = sketch::Sketch::fromJson(rec->data);
+    // The open curves of the sketch, chained into wires; the longest is the path.
+    Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
+    for (int i = 0; i < static_cast<int>(sk.entities.size()); ++i) {
+      const auto& e = sk.entities[i];
+      if (e.construction || e.type == sketch::EntityType::Circle) continue;
+      if (e.type == sketch::EntityType::Spline && e.fit.size() > 2 && e.fit.front() == e.fit.back()) continue;
+      const TopoDS_Shape c = sketch::curve(sk, frame, i);
+      if (!c.IsNull()) edges->Append(c);
+    }
+    if (edges->IsEmpty()) throw CommandError("Path: the sketch has no open curve to follow");
+    Handle(TopTools_HSequenceOfShape) wires;
+    ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+    TopoDS_Wire path;
+    double length = -1;
+    for (int i = 1; i <= wires->Length(); ++i) {
+      const TopoDS_Wire w = TopoDS::Wire(wires->Value(i));
+      GProp_GProps g;
+      BRepGProp::LinearProperties(w, g);
+      if (g.Mass() > length) {
+        length = g.Mass();
+        path = w;
+      }
+    }
+    BRepAdaptor_CompCurve curve(path);
+    const double u0 = curve.FirstParameter(), u1 = curve.LastParameter();
+    // Run from the end nearest what is patterned.
+    const gp_Pnt ref = patternReference(doc, in);
+    const bool reversed = curve.Value(u1).Distance(ref) < curve.Value(u0).Distance(ref);
+    const auto n = getInt(in, "quantity");
+    double step = getReal(in, "distance");
+    if (getString(in, "distanceType") == "Extent") step = n > 1 ? step / static_cast<double>(n - 1) : 0;
+    // A last copy within a rounding error of the end sits on the end.
+    if (step * static_cast<double>(n - 1) > length * (1 + 1e-5) + 1e-7)
+      throw CommandError("Distance: the copies run past the end of the path");
+    auto at = [&](double s, gp_Pnt& p, gp_Vec& t) {
+      s = std::min(s, length);
+      const double along = reversed ? length - s : s;
+      GCPnts_AbscissaPoint ap(curve, along, u0);
+      if (!ap.IsDone()) throw CommandError("Path: could not measure along the path");
+      curve.D1(ap.Parameter(), p, t);
+      if (reversed) t.Reverse();
+    };
+    gp_Pnt p0;
+    gp_Vec t0;
+    at(0, p0, t0);
+    const bool turn = getString(in, "orientation") == "Path Direction";
+    std::vector<CopyFn> copies;
+    for (std::int64_t k = 1; k < n; ++k) {
+      gp_Pnt pk;
+      gp_Vec tk;
+      at(step * static_cast<double>(k), pk, tk);
+      gp_Trsf tr;
+      tr.SetTranslation(gp_Vec(p0, pk));
+      if (turn && t0.Magnitude() > 1e-12 && tk.Magnitude() > 1e-12) {
+        const gp_Dir nrm = frame.Direction();
+        const double ang = gp_Vec(t0).AngleWithRef(tk, gp_Vec(nrm));
+        gp_Trsf rot;
+        rot.SetRotation(gp_Ax1(pk, nrm), ang);
+        tr = rot * tr;
+      }
+      copies.push_back([tr](const TopoDS_Shape& s) { return BRepBuilderAPI_Transform(s, tr, true).Shape(); });
+    }
+    runPattern(doc, in, copies);
+  }
+
+private:
+  // Where the patterned geometry is: the centre of the first feature's tool
+  // (or of what it changed), else of the body.
+  static gp_Pnt patternReference(Document& doc, const Inputs& in) {
+    auto centre = [](const TopoDS_Shape& s) {
+      GProp_GProps g;
+      BRepGProp::VolumeProperties(s, g);
+      return g.CentreOfMass();
+    };
+    if (stringOr(in, "patternType", "Bodies") == "Features") {
+      const auto names = splitNames(getString(in, "features"));
+      if (!names.empty())
+        for (const auto& f : doc.features())
+          if (f.name == names.front())
+            if (const auto* e = doc.featureEffect(f.id)) {
+              if (!e->tools.empty()) return centre(e->tools.front().shape);
+              for (const auto& [b, change] : e->bodies)
+                if (!change.second.IsNull()) return centre(change.second);
+            }
+    }
+    const std::string name = bodyName(in, doc);
+    if (const auto b = doc.body(name)) return centre(b->shape);
+    return gp_Pnt(0, 0, 0);
+  }
+  CommandDef def_;
+};
+
 // ---------------------------------------------------------------------------
 // Construct: named construction planes.
 class ConstructPlane final : public Command {
@@ -2179,12 +2316,25 @@ public:
     Document& doc = docOf(ctx);
     std::vector<TopoDS_Shape> sections;
     try {
-      for (const auto& n : sectionNames(doc, in)) {
+      const auto names = sectionNames(doc, in);
+      for (size_t k = 0; k < names.size(); ++k) {
+        const std::string& n = names[k];
         const auto rec = doc.sketch(n);
         if (!rec) throw CommandError("Profiles: '" + n + "' is not a sketch");
         const SketchProfiles sp = profilesOf(doc, *rec);
-        if (sp.profiles.empty()) throw CommandError(n + " has no closed profile");
-        sections.push_back(sp.profiles.front().face);   // the largest region
+        if (!sp.profiles.empty()) {
+          sections.push_back(sp.profiles.front().face);   // the largest region
+          continue;
+        }
+        // A sketch with just a point: the loft ends in that point (first or
+        // last profile only), as in the familiar tool.
+        const auto sk = sketch::Sketch::fromJson(rec->data);
+        if ((k == 0 || k + 1 == names.size()) && !sk.points.empty()) {
+          const auto& p = sk.points.back();   // the last point drawn (the origin if nothing else)
+          sections.push_back(BRepBuilderAPI_MakeVertex(sketch::toWorld(doc.planeFrame(rec->plane, rec->offset), p.x, p.y)).Shape());
+          continue;
+        }
+        throw CommandError(n + " has no closed profile (a point can be only the first or last profile)");
       }
       applyOperation(doc, in, kernel::loft(sections, getString(in, "transition") == "Ruled"), "Loft");
     } catch (const kernel::KernelError& e) {
@@ -2602,6 +2752,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Hole>());
   registry.add(std::make_unique<RectangularPattern>());
   registry.add(std::make_unique<CircularPattern>());
+  registry.add(std::make_unique<PathPattern>());
   registry.add(std::make_unique<Mirror>());
   registry.add(std::make_unique<PressPull>());
   registry.add(std::make_unique<Pipe>());

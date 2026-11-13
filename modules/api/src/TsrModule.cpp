@@ -193,6 +193,11 @@ void bindTsr(py::module_& m) {
     const auto bb = kernel::boundingBox(b->shape);
     return py::make_tuple(py::make_tuple(bb.min.x, bb.min.y, bb.min.z), py::make_tuple(bb.max.x, bb.max.y, bb.max.z));
   }, py::arg("body"), "A body's bounding box ((xmin, ymin, zmin), (xmax, ymax, zmax)) in cm.");
+  m.def("sketch_data", [](const std::string& name) {
+    const auto rec = activeSession().document().sketch(name);
+    if (!rec) throw std::runtime_error("no sketch named '" + name + "'");
+    return rec->data;
+  }, py::arg("sketch"), "A sketch as solved (JSON: points in cm, entities, constraints).");
   m.def("mass_properties", [](const std::string& name) {
     const auto b = activeSession().document().body(name);
     if (!b) throw std::runtime_error("no body named '" + name + "'");

@@ -15,6 +15,8 @@
 #include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS_Vertex.hxx>
+#include <TopExp.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <gp_Circ.hxx>
@@ -176,6 +178,39 @@ std::vector<Profile> profiles(const Sketch& s, const gp_Ax3& f) {
       if (split.HasErrors()) return out;
       splitEdges = split.Shape();
     }
+    // Dangling pieces bound no region (a line ending inside a circle, the
+    // tail of a line past a corner): drop edges with a free end, again and
+    // again, so only closed loops remain.
+    std::vector<TopoDS_Edge> kept;
+    for (TopExp_Explorer it(splitEdges, TopAbs_EDGE); it.More(); it.Next()) kept.push_back(TopoDS::Edge(it.Current()));
+    for (bool changed = true; changed;) {
+      changed = false;
+      std::vector<TopoDS_Edge> next;
+      for (const auto& e : kept) {
+        TopoDS_Vertex v0, v1;
+        TopExp::Vertices(e, v0, v1);
+        auto degree = [&](const TopoDS_Vertex& v) {
+          int d = 0;
+          for (const auto& k : kept)
+            for (TopExp_Explorer vx(k, TopAbs_VERTEX); vx.More(); vx.Next())
+              if (vx.Current().IsSame(v)) ++d;
+          return d;
+        };
+        const bool closed = !v0.IsNull() && v0.IsSame(v1);
+        if (!closed && (v0.IsNull() || v1.IsNull() || degree(v0) < 2 || degree(v1) < 2)) {
+          changed = true;
+          continue;
+        }
+        next.push_back(e);
+      }
+      kept.swap(next);
+    }
+    if (kept.empty()) return out;
+    TopoDS_Compound loops;
+    BRep_Builder lb;
+    lb.MakeCompound(loops);
+    for (const auto& e : kept) lb.Add(loops, e);
+    splitEdges = loops;
     TopoDS_Shape wires, faces;
     BOPAlgo_Tools::EdgesToWires(splitEdges, wires, /*shared=*/true);
     if (!BOPAlgo_Tools::WiresToFaces(wires, faces)) return out;

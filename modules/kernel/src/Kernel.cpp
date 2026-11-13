@@ -1352,7 +1352,7 @@ TopoDS_Shape polygonToCircleLoft(const TopoDS_Wire& poly, const TopoDS_Edge& cir
 TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
   if (sections.size() < 2) throw KernelError("Loft: pick at least two profiles");
   // Two sections, a polygon and a circle: the exact construction.
-  if (sections.size() == 2) {
+  if (sections.size() == 2 && sections[0].ShapeType() != TopAbs_VERTEX && sections[1].ShapeType() != TopAbs_VERTEX) {
     auto wireOf = [](const TopoDS_Shape& s) {
       return s.ShapeType() == TopAbs_FACE ? BRepTools::OuterWire(TopoDS::Face(s)) : TopoDS::Wire(s);
     };
@@ -1375,9 +1375,14 @@ TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled) {
   TopoDS_Shape r = guarded("Loft", [&]() -> TopoDS_Shape {
     BRepOffsetAPI_ThruSections ts(true, ruled, 1e-6);
     ts.CheckCompatibility(true);   // match up sections with different numbers of edges
-    for (const auto& s : sections) {
-      const TopoDS_Wire w = s.ShapeType() == TopAbs_FACE ? BRepTools::OuterWire(TopoDS::Face(s)) : TopoDS::Wire(s);
-      ts.AddWire(w);
+    for (size_t i = 0; i < sections.size(); ++i) {
+      const TopoDS_Shape& s = sections[i];
+      if (s.ShapeType() == TopAbs_VERTEX) {   // loft to a point: first or last only
+        if (i != 0 && i + 1 != sections.size()) throw KernelError("Loft: a point can be only the first or last profile");
+        ts.AddVertex(TopoDS::Vertex(s));
+        continue;
+      }
+      ts.AddWire(s.ShapeType() == TopAbs_FACE ? BRepTools::OuterWire(TopoDS::Face(s)) : TopoDS::Wire(s));
     }
     ts.Build();
     return ts.IsDone() ? ts.Shape() : TopoDS_Shape();

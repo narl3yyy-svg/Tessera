@@ -29,6 +29,7 @@
 34-chamfer-then-fillet
 35-fillet-curved-curved
 36-corner-blend-two-radii
+37-pyramid-apex-blend
 38-coincident-cylinders
 39-tee-pipe
 40-box-sphere-torus
@@ -42,6 +43,7 @@
 50-sweep-tight-bend
 51-loft-rect-circle-offset
 52-circular-pattern-fillet
+53-path-pattern
 57-hole-pattern-sketch-points
 58-phone-stand
 59-enclosure-base
@@ -50,4 +52,5 @@
 62-heat-sink
 63-hinge-knuckle
 64-sketch-tangent-arc-chain
+65-sketch-gear-tooth
 66-sketch-linkage

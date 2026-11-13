@@ -17,10 +17,10 @@ ctest --test-dir build -R oracle --output-on-failure
 
 Results: *unsupported* means the recipe uses something Tessera does not have
 yet (sheet metal, variable-radius fillets, mirrored features, recipe
-parameters, path patterns, thin extrudes, drill-point tips); *fail* and
+parameters, thin extrudes, drill-point tips); *fail* and
 *error* are differences to investigate.
 
-47 pass, 6 fail, 3 error, 34 unsupported of 90.
+55 pass, 1 fail, 0 error, 34 unsupported of 90.
 
 | Case | Result | Notes |
 |---|---|---|
@@ -40,7 +40,7 @@ parameters, path patterns, thin extrudes, drill-point tips); *fail* and
 | 14-combine-cut | pass |  |
 | 15-combine-intersect | pass |  |
 | 16-sweep | pass |  |
-| 17-loft | fail | volume_mm3: got 3.513e+04, expected 3.508e+04; faces: got 7, expected 6 |
+| 17-loft | pass |  |
 | 18-hole-features | unsupported | drill-point tip on a blind hole |
 | 19-l-bracket-constrained | pass |  |
 | 20-slot-constrained | pass |  |
@@ -55,20 +55,20 @@ parameters, path patterns, thin extrudes, drill-point tips); *fail* and
 | 29-two-sided-and-partial-revolve | pass |  |
 | 30-fillet-after-shell | pass |  |
 | 31-fillet-l-all-edges | pass |  |
-| 32-boss-plate-fillets | error | Fillet: the radius is too large for the selected edges, or they cannot be rounded (Fillet: There are no suitable edges for chamfer or fillet) |
+| 32-boss-plate-fillets | pass |  |
 | 33-fillet-tangent-chain | pass |  |
 | 34-chamfer-then-fillet | pass |  |
 | 35-fillet-curved-curved | pass |  |
 | 36-corner-blend-two-radii | pass |  |
-| 37-pyramid-apex-blend | error | Sketch2 has no closed profile |
+| 37-pyramid-apex-blend | pass |  |
 | 38-coincident-cylinders | pass |  |
 | 39-tee-pipe | pass |  |
 | 40-box-sphere-torus | pass |  |
 | 41-tube-radial-holes | pass |  |
-| 42-overlapping-patterns | fail | volume_mm3: got 3.902e+04, expected 3.849e+04; area_mm2: got 2.19e+04, expected 2.169e+04; faces: got 62, expected 39 |
+| 42-overlapping-patterns | pass |  |
 | 43-cut-splits-body | pass |  |
-| 44-shell-l-bracket | fail | volume_mm3: got 8369, expected 8384; area_mm2: got 8769, expected 8784; faces: got 16, expected 15 |
-| 45-shell-boss-plate | fail | volume_mm3: got 1.362e+04, expected 1.368e+04; area_mm2: got 1.41e+04, expected 1.416e+04; faces: got 16, expected 15 |
+| 44-shell-l-bracket | pass |  |
+| 45-shell-boss-plate | pass |  |
 | 46-shell-two-open-faces | pass |  |
 | 47-draft-curved-pocket | unsupported | operation 'draft' |
 | 48-pulley | pass |  |
@@ -76,7 +76,7 @@ parameters, path patterns, thin extrudes, drill-point tips); *fail* and
 | 50-sweep-tight-bend | pass |  |
 | 51-loft-rect-circle-offset | pass |  |
 | 52-circular-pattern-fillet | pass |  |
-| 53-path-pattern | error | Extrude: Extrude: could not build a solid from this profile |
+| 53-path-pattern | pass |  |
 | 54-mirror-body-fillets | unsupported | operation 'mirror' |
 | 55-tapped-hole-cosmetic | unsupported | drill-point tip on a blind hole |
 | 56-holes-on-curved-face | unsupported | hole on a cylinder face |
@@ -88,7 +88,7 @@ parameters, path patterns, thin extrudes, drill-point tips); *fail* and
 | 62-heat-sink | pass |  |
 | 63-hinge-knuckle | pass |  |
 | 64-sketch-tangent-arc-chain | pass |  |
-| 65-sketch-gear-tooth | fail | volume_mm3: got 3764, expected 3988; area_mm2: got 1869, expected 1945; center_of_mass: got [0.01064, 29.69, 4], expected [-4.251e-15, 29.27, 4]; bbox: got {min: [-9.79, 0.8204, 0], max: [9.954, 50, 8]}, expected {min: [-10.35, 0, 0], max: [10.35, 50, 8]} |
+| 65-sketch-gear-tooth | pass |  |
 | 66-sketch-linkage | pass |  |
 | 67-sm-base-flange | unsupported | operation 'sm_flange' |
 | 68-sm-edge-flange | unsupported | operation 'sm_flange' |
