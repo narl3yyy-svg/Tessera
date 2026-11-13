@@ -7,6 +7,7 @@
 // undo history.
 #include "Viewport.h"
 
+#include <BRepAdaptor_Curve.hxx>
 #include <TopoDS_Edge.hxx>
 
 #include "tsr/doc/Session.h"
@@ -41,7 +42,7 @@ public:
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
-    RectPattern, CircPattern, MoveCopy, SketchScale,
+    RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -171,8 +172,14 @@ private:
     std::vector<std::pair<double, double>> vertices;
     std::vector<std::array<double, 4>> segments;          // x1, y1, x2, y2
     std::vector<std::array<double, 5>> arcs;              // cx, cy, r, a0, sweep (full circle: sweep 2*pi)
+    std::vector<std::vector<std::pair<double, double>>> curves;   // anything else: points along it
   } bodyEdges_;
+  // Adds projected (fixed, purple) geometry: lines, arcs and other curves (as
+  // splines through their points). Returns how many curves were added.
+  int addProjected(const PlaneEdges& g);
+  void intersectAt(const QPointF& widgetPos);
   bool projectEdgeShape(const TopoDS_Edge& edge, PlaneEdges& out) const;
+  bool projectCurvePoints(const BRepAdaptor_Curve& c, double t0, double t1, PlaneEdges& out) const;
   void collectBodyEdges();
   // Constraint labels that belong to projected geometry are not shown.
   bool onlyProjected(const sketch::Constraint& c) const;
@@ -287,7 +294,9 @@ private:
   std::pair<double, double> hudTarget(double x, double y) const;
   void updateHud(double x, double y);
   int polygonSides() const;
-  void trimAt(double x, double y);
+  // Trim: removes the clicked piece up to the nearest crossings. Break
+  // (breakOnly): splits the curve there and keeps every piece.
+  void trimAt(double x, double y, bool breakOnly = false);
 
   void snapToGrid(double& x, double& y) const;
   // Spline / Fillet / Offset

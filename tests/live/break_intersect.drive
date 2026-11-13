@@ -1,0 +1,32 @@
+# Live: Intersect (the sphere crossing the XY sketch: its 15 mm circle), then
+# Break: a line split where another crosses it, a circle at its two crossings
+# (left of the sphere, which the view zooms to).
+waitfor tsr.sketch.create
+wait 600
+bdclick Sketch1
+waitfor sketch.line
+wait 500
+menu sketch.group-project sketch.intersect
+sclick 0 0                # the sphere, seen through the sketch
+wait 400
+click sketch.line
+sclick -45 20
+sclick -25 20
+key Escape
+key Escape
+click sketch.line
+sclick -35 25
+sclick -35 -25
+key Escape
+key Escape
+menu sketch.group-circle sketch.circle
+sclick -35 -12
+sclick -30 -12
+key Escape
+click sketch.break
+sclick -42 20             # the level line, left of the crossing
+sclick -30 -12            # the circle, right side
+key Escape
+shot /tmp/live_break_intersect.png
+click palette.finish
+wait 600

@@ -393,6 +393,26 @@ void sketchScaleIcon(QPainter& p) {
   p.drawLine(QPointF(50, 8), QPointF(50, 16));
 }
 
+void breakIcon(QPainter& p) {   // a line split where another crosses it
+  stroke(p, 2, kLine);
+  p.drawLine(QPointF(32, 8), QPointF(32, 56));
+  stroke(p);
+  p.drawLine(QPointF(6, 32), QPointF(28, 32));
+  p.drawLine(QPointF(36, 32), QPointF(58, 32));
+  dot(p, 28, 32);
+  dot(p, 36, 32);
+}
+
+void intersectIcon(QPainter& p) {   // a plane cutting a cylinder
+  stroke(p, 2, kLine);
+  p.drawEllipse(QRectF(20, 8, 24, 10));
+  p.drawLine(QPointF(20, 13), QPointF(20, 51));
+  p.drawLine(QPointF(44, 13), QPointF(44, 51));
+  stroke(p);
+  p.drawEllipse(QRectF(20, 27, 24, 10));
+  p.drawLine(QPointF(6, 40), QPointF(58, 24));
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -1080,6 +1100,8 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("sketch-circular-pattern")) sketchCircPatternIcon(p);
   else if (name == QLatin1String("sketch-move")) sketchMoveIcon(p);
   else if (name == QLatin1String("sketch-scale")) sketchScaleIcon(p);
+  else if (name == QLatin1String("break")) breakIcon(p);
+  else if (name == QLatin1String("intersect")) intersectIcon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

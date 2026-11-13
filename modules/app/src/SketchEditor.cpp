@@ -10,6 +10,7 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRep_Tool.hxx>
+#include <BRepAlgoAPI_Section.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
@@ -230,6 +231,8 @@ void SketchEditor::setTool(Tool t) {
     case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
     case Tool::Ellipse: emit message(tr("Ellipse: click the centre, the end of one axis, then a point for the other.")); break;
     case Tool::Text: emit message(tr("Text: click where the text starts (bottom left). Double-click a text to change it.")); break;
+    case Tool::Break: emit message(tr("Break: click a curve to split it where it crosses others.")); break;
+    case Tool::Intersect: emit message(tr("Intersect: click a body; where it crosses the sketch plane becomes curves.")); break;
     case Tool::RectPattern:
     case Tool::CircPattern:
     case Tool::MoveCopy:
@@ -490,7 +493,80 @@ bool SketchEditor::projectEdgeShape(const TopoDS_Edge& edge, PlaneEdges& out) co
     out.arcs.push_back({cx, cy, circ.Radius(), a0, sweep});
     return true;
   }
-  return false;
+  // Anything else (a tilted circle seen as an ellipse, a spline ...): points
+  // along it, seen along the sketch normal.
+  return projectCurvePoints(c, t0, t1, out);
+}
+
+bool SketchEditor::projectCurvePoints(const BRepAdaptor_Curve& c, double t0, double t1, PlaneEdges& out) const {
+  const int n = 32;
+  std::vector<std::pair<double, double>> pts;
+  for (int k = 0; k <= n; ++k) {
+    double x, y;
+    sketch::toSketch(frame_, c.Value(t0 + (t1 - t0) * k / n), x, y);
+    if (!pts.empty() && std::hypot(x - pts.back().first, y - pts.back().second) < 1e-7) continue;
+    pts.emplace_back(x, y);
+  }
+  if (pts.size() < 2) return false;
+  out.curves.push_back(std::move(pts));
+  return true;
+}
+
+int SketchEditor::addProjected(const PlaneEdges& g) {
+  for (const auto& s : g.segments) (void)projectSegment(s);
+  for (const auto& a : g.arcs) (void)projectArc(a);
+  for (const auto& pts : g.curves) {
+    // A fixed spline through the points (closed when the curve is).
+    const bool closed = pts.size() > 3 && std::hypot(pts.front().first - pts.back().first,
+                                                     pts.front().second - pts.back().second) < 1e-7;
+    std::vector<int> fit;
+    for (size_t i = 0; i < pts.size() - (closed ? 1 : 0); ++i) {
+      const int p = sk_.addPoint(pts[i].first, pts[i].second);
+      sk_.addConstraint({ConstraintType::Fix, {p}, {}, pts[i].first, pts[i].second});
+      fit.push_back(p);
+    }
+    if (closed) fit.push_back(fit.front());
+    if (fit.size() < 2) continue;
+    const int e = sk_.addSpline(fit);
+    sk_.entities[e].projected = true;
+  }
+  for (const auto& [vx, vy] : g.vertices) {
+    const int p = sk_.addPoint(vx, vy);
+    sk_.addConstraint({ConstraintType::Fix, {p}, {}, vx, vy});
+  }
+  return static_cast<int>(g.segments.size() + g.arcs.size() + g.curves.size());
+}
+
+// Intersect: where a body crosses the sketch plane, as projected curves.
+void SketchEditor::intersectAt(const QPointF& widgetPos) {
+  if (!view_) return;
+  const TopoDS_Face f = view_->faceAt(widgetPos);
+  if (f.IsNull()) {
+    emit message(tr("Intersect: click a body that crosses the sketch plane."));
+    return;
+  }
+  TopoDS_Shape body;
+  for (const auto& b : session_.document().bodies())
+    for (TopExp_Explorer x(b.shape, TopAbs_FACE); x.More() && body.IsNull(); x.Next())
+      if (x.Current().IsSame(f)) body = b.shape;
+  if (body.IsNull()) return;
+  PlaneEdges g;
+  try {
+    BRepAlgoAPI_Section section(body, gp_Pln(frame_), false);
+    section.Approximation(true);
+    section.Build();
+    if (section.IsDone())
+      for (TopExp_Explorer x(section.Shape(), TopAbs_EDGE); x.More(); x.Next()) (void)projectEdgeShape(TopoDS::Edge(x.Current()), g);
+  } catch (const Standard_Failure&) {
+  }
+  if (g.segments.empty() && g.arcs.empty() && g.curves.empty()) {
+    emit message(tr("Intersect: that body does not cross the sketch plane."));
+    return;
+  }
+  checkpoint();
+  const int n = addProjected(g);
+  solveAndShow();
+  emit message(tr("Intersect: %n curve(s) where the body crosses the sketch.", nullptr, n));
 }
 
 // Project (P): click a body edge to copy it into the sketch, seen along the
@@ -540,19 +616,14 @@ void SketchEditor::projectAt(const QPointF& widgetPos) {
   }
   PlaneEdges g;
   for (const auto& e : picked) (void)projectEdgeShape(e, g);
-  if (g.segments.empty() && g.arcs.empty() && g.vertices.empty()) {
-    emit message(tr("That edge cannot be projected yet (only straight edges and circles facing the sketch)."));
+  if (g.segments.empty() && g.arcs.empty() && g.curves.empty() && g.vertices.empty()) {
+    emit message(tr("That edge cannot be projected."));
     return;
   }
   checkpoint();
-  for (const auto& s : g.segments) (void)projectSegment(s);
-  for (const auto& a : g.arcs) (void)projectArc(a);
-  for (const auto& [vx, vy] : g.vertices) {
-    const int p = sk_.addPoint(vx, vy);
-    sk_.addConstraint({ConstraintType::Fix, {p}, {}, vx, vy});
-  }
+  const int n = addProjected(g);
   solveAndShow();
-  emit message(tr("Projected %n curve(s).", nullptr, static_cast<int>(g.segments.size() + g.arcs.size())));
+  emit message(tr("Projected %n curve(s).", nullptr, n));
 }
 
 int SketchEditor::materialize(const Pick& p) {
@@ -1710,6 +1781,12 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::MoveCopy:
     case Tool::SketchScale:
       transformPick(x, y);
+      return;
+    case Tool::Break:
+      trimAt(x, y, true);
+      return;
+    case Tool::Intersect:
+      intersectAt(widgetPos);
       return;
     case Tool::Project:
       projectAt(widgetPos);
@@ -2965,15 +3042,15 @@ bool SketchEditor::typeValue(const QString& text) {
 // ---------------------------------------------------------------------------
 // Trim
 
-void SketchEditor::trimAt(double x, double y) {
+void SketchEditor::trimAt(double x, double y, bool breakOnly) {
   const Hit h = hitEntity(x, y);
   if (h.kind != Hit::Entity) return;
   const int ei = h.index;
   const auto& P = sk_.points;
   const Entity target = sk_.entities[ei];
   if (target.type == EntityType::Spline || target.type == EntityType::Ellipse) {
-    emit message(target.type == EntityType::Spline ? tr("Trim does not work on splines yet.")
-                                                   : tr("Trim does not work on ellipses yet."));
+    emit message(target.type == EntityType::Spline ? tr("Trim and Break do not work on splines yet.")
+                                                   : tr("Trim and Break do not work on ellipses yet."));
     return;
   }
 
@@ -3060,6 +3137,95 @@ void SketchEditor::trimAt(double x, double y) {
       if (refs && !keep) sk_.removeConstraint(k);
     }
   };
+
+  if (breakOnly) {
+    // Break: split at the nearest crossings either side of the click; the
+    // pieces stay one curve (collinear lines, arcs of one circle).
+    auto norm = [](double v) {
+      while (v < 0) v += 2 * kPi;
+      while (v >= 2 * kPi) v -= 2 * kPi;
+      return v;
+    };
+    bool split = false;
+    if (target.type == EntityType::Line) {
+      const auto a = P[target.a], b = P[target.b];
+      const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+      const double t0 = l2 > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / l2 : 0;
+      double lo = -1, hi = 2;
+      for (double t : cuts) {
+        if (t > 1e-6 && t < t0 && t > lo) lo = t;
+        if (t < 1 - 1e-6 && t > t0 && t < hi) hi = t;
+      }
+      int last = ei;
+      for (double t : {lo, hi}) {
+        if (t <= 0 || t >= 1) continue;
+        if (!split) dropDimensions(ei);
+        const int p = sk_.addPoint(a.x + dx * t, a.y + dy * t);
+        const int end = sk_.entities[last].b;
+        sk_.entities[last].b = p;
+        const int piece = sk_.addLine(p, end, target.construction);
+        sk_.addConstraint({ConstraintType::Collinear, {}, {last, piece}});
+        last = piece;
+        split = true;
+      }
+    } else if (target.type == EntityType::Circle) {
+      const auto c = P[target.center];
+      const double clickAng = std::atan2(y - c.y, x - c.x);
+      double after = 1e9, before = 1e9, angAfter = 0, angBefore = 0;
+      for (double ang : cuts) {
+        const double da = norm(ang - clickAng), db = norm(clickAng - ang);
+        if (da > 1e-9 && da < after) after = da, angAfter = ang;
+        if (db > 1e-9 && db < before) before = db, angBefore = ang;
+      }
+      if (cuts.size() >= 2 && norm(angAfter - angBefore) > 1e-9) {
+        dropDimensions(ei);
+        const double r = target.radius;
+        const int pa = sk_.addPoint(c.x + r * std::cos(angAfter), c.y + r * std::sin(angAfter));
+        const int pb = sk_.addPoint(c.x + r * std::cos(angBefore), c.y + r * std::sin(angBefore));
+        Entity& e = sk_.entities[ei];
+        e.type = EntityType::Arc;   // the clicked piece: from the crossing before the click round to the one after
+        e.a = pb;
+        e.b = pa;
+        const int rest = sk_.addArc(target.center, pa, pb, target.construction);
+        sk_.addConstraint({ConstraintType::Equal, {}, {ei, rest}});
+        split = true;
+      }
+    } else {
+      const auto c = P[target.center];
+      const double r = target.radius;
+      const double start = std::atan2(P[target.a].y - c.y, P[target.a].x - c.x);
+      const double span = norm(std::atan2(P[target.b].y - c.y, P[target.b].x - c.x) - start);
+      const double u0 = norm(std::atan2(y - c.y, x - c.x) - start);
+      double lo = -1, hi = 1e9;
+      for (double ang : cuts) {
+        const double u = norm(ang - start);
+        if (u <= 1e-6 || u >= span - 1e-6) continue;
+        if (u < u0 && u > lo) lo = u;
+        if (u > u0 && u < hi) hi = u;
+      }
+      int last = ei;
+      for (double u : {lo, hi}) {
+        if (u <= 0 || u >= 1e8) continue;
+        if (!split) dropDimensions(ei);
+        const int p = sk_.addPoint(c.x + r * std::cos(start + u), c.y + r * std::sin(start + u));
+        const int end = sk_.entities[last].b;
+        sk_.entities[last].b = p;
+        const int piece = sk_.addArc(target.center, p, end, target.construction);
+        sk_.addConstraint({ConstraintType::Equal, {}, {last, piece}});
+        last = piece;
+        split = true;
+      }
+    }
+    if (!split) {
+      undo_.pop_back();
+      emit message(tr("Break: nothing crosses that curve there."));
+      return;
+    }
+    selection_.clear();
+    solveAndShow();
+    emit message(tr("Broken where it crosses. Click another curve to break it."));
+    return;
+  }
 
   if (target.type == EntityType::Line) {
     const auto a = P[target.a], b = P[target.b];

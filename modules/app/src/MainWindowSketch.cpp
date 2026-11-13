@@ -330,7 +330,9 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
   toolButton(create, T::Text, QStringLiteral("text"), tr("Text"), {});
-  toolButton(create, T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P"));
+  toolGroup(create, QStringLiteral("project"),
+            {{T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P")},
+             {T::Intersect, QStringLiteral("intersect"), tr("Intersect"), {}}});
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
   setIcon(construction, QStringLiteral("construction"));
@@ -348,6 +350,7 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(modify, T::Fillet, QStringLiteral("sketch-fillet"), tr("Fillet"), {});
   toolButton(modify, T::Chamfer, QStringLiteral("sketch-chamfer"), tr("Chamfer"), {});
   toolButton(modify, T::Trim, QStringLiteral("trim"), tr("Trim"), QStringLiteral("T"));
+  toolButton(modify, T::Break, QStringLiteral("break"), tr("Break"), {});
   toolButton(modify, T::Extend, QStringLiteral("extend"), tr("Extend"), {});
   toolButton(modify, T::Offset, QStringLiteral("offset"), tr("Offset"), QStringLiteral("O"));
   toolButton(modify, T::MoveCopy, QStringLiteral("sketch-move"), tr("Move/Copy"), QStringLiteral("M"));

@@ -67,7 +67,9 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [ ] Text along a path, text box (multi-line, alignment); trim and offset of ellipses; conic curve.
 - [x] Rectangular and Circular sketch patterns, Move/Copy (M; turn about the picked curves' middle, Create Copy) and Sketch Scale: pick curves (or start with them selected), Enter, then the values; constraints that still hold come along.
 - [x] CREATE panel as split buttons (Rectangle, Circle, Arc, Slot): the button runs the tool it shows, its arrow lists the others.
-- [ ] Patterns kept parametric (edit count / spacing later); Project / Include and Intersect; Break.
+- [x] Intersect (Project ▾): where a clicked body crosses the sketch plane becomes fixed curves (lines, circles, others as splines). Break: a curve split at the crossings either side of the click, every piece kept (collinear lines / arcs of one circle).
+- [x] Project: any curve now (tilted circles, splines ... as fixed splines through points along them).
+- [ ] Patterns kept parametric (edit count / spacing later); Include (live link to the body).
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 
 ### Solid
@@ -98,9 +100,10 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] The grid adapts to the zoom and snapping follows it (Snap is on by default).
 - [x] Double-click ends a line chain but keeps the Line tool (Day 14).
 - [x] P is Project: click a body edge to copy it into the sketch (seen along the sketch normal), or inside a face for all its edges (Days 6, 7, 10, 15, 20). Point has no key, as in the familiar tool.
-- [ ] Project: other curve types (splines, tilted circles); Projection Link that follows body changes; points.
+- [x] Project: other curve types (splines, tilted circles).
+- [ ] Projection Link that follows body changes; points.
 - [ ] A is Appearance (Tessera: Arc in the sketch).
-- [ ] Intersect (Project / Include menu) puts body edges that cross the sketch plane into it (Days 4, 7).
+- [x] Intersect (Project / Include menu) puts body edges that cross the sketch plane into it (Days 4, 7).
 - [ ] Dragging a circle centre onto a line midpoint (triangle glyph) adds the midpoint constraint on release (Day 14).
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
