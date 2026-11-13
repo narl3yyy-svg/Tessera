@@ -50,7 +50,7 @@ tsr.edit_feature(feature("Extrude1")["id"], distance=0.5)
 # A feature that removes material (a hole), patterned the same way.
 pts = {"points": [[0, 0], [x0 + 3.5, y0 + 0.5]]}   # point 0 is the sketch origin
 cmd("tsr.sketch.create", plane="XY", offset=1.0, data=json.dumps(pts))
-cmd("tsr.feature.hole", diameter=0.5, depth=0.5, drillPoint="Flat")
+cmd("tsr.feature.hole", placement="Sketch Points", diameter=0.5, depth=0.5, drillPoint="Flat")
 hole = math.pi * 0.25 ** 2 * 0.5
 before = vol()
 cmd("tsr.feature.rectangularPattern", patternType="Features", features="Hole1", direction1="Y",
@@ -93,7 +93,7 @@ cmd("tsr.primitive.box", length=10.0, width=4.0, height=1.0)          # 100 x 40
 hole = math.pi * 0.25 ** 2 * 1.0
 pts = {"points": [[0, 0], [1, 2]]}                                     # one hole centre at (10, 20) mm
 cmd("tsr.sketch.create", plane="XY", offset=1.0, data=json.dumps(pts))
-cmd("tsr.feature.hole", diameter=0.5, extent="All")
+cmd("tsr.feature.hole", placement="Sketch Points", diameter=0.5, extent="All")
 path = {"points": [[0, 0], [1, 2], [9, 2]], "entities": [{"type": "line", "p": [1, 2]}]}   # 80 mm line from the hole
 cmd("tsr.sketch.create", plane="XY", data=json.dumps(path))
 cmd("tsr.feature.pathPattern", patternType="Features", features="Hole1", path="Sketch2", quantity=5,
@@ -104,7 +104,7 @@ tsr.undo()
 tsr.new_document()
 cmd("tsr.primitive.box", length=10.0, width=4.0, height=1.0, y=-1.0)   # y from -10 to 30 mm
 cmd("tsr.sketch.create", plane="XY", offset=1.0, data=json.dumps({"points": [[0, 0], [2, 0]]}))
-cmd("tsr.feature.hole", diameter=0.5, extent="All")
+cmd("tsr.feature.hole", placement="Sketch Points", diameter=0.5, extent="All")
 arc = {"points": [[0, 0], [5, 0], [8, 0], [2, 0]], "entities": [{"type": "arc", "c": 1, "p": [2, 3], "r": 3.0}]}
 cmd("tsr.sketch.create", plane="XY", data=json.dumps(arc))
 cmd("tsr.feature.pathPattern", patternType="Features", features="Hole1", path="Sketch2", quantity=3,

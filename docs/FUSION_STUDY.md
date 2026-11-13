@@ -60,7 +60,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 ### Solid
 - [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: closed profiles; open curves next); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).
 - [ ] Revolve, Sweep, Loft, Hole, Fillet, Chamfer, Shell, Press Pull: in-canvas manipulators everywhere (rotation ring for Revolve angle, Hole depth arrow, Shell thickness arrow).
-- [ ] Hole: place on a face by clicking points; thread options; hole types table.
+- [ ] Hole: thread options (tapped holes); hole types table.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.
 - [ ] Combine with Keep Tools (done) and New Component output.
 - [ ] Appearance (drag materials onto faces) and Physical Material (affects mass in Properties).
@@ -104,7 +104,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Right-click an origin or construction plane in the Browser > Create Sketch (Days 2, 3, 6).
 - [x] Thread: Full Length off gives a length arrow and an offset arrow on the cylinder (Days 4, 9).
 - [ ] Thread: Modeled checkbox (cosmetic threads), more thread types.
-- [ ] Hole: click a face, then drag the hole centre; it snaps to circle centres (Day 6).
+- [x] Hole: click a face (flat or curved) to place it; the hole follows the face normal (Day 6).
+- [ ] Hole: drag the placed centre; snap it to circle centres; dimension it to edges.
 - [x] Chamfer types: Equal Distance, Two Distances, Distance and Angle, with Flip (Day 8).
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).
 - [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).

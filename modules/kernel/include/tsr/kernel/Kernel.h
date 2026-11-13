@@ -5,6 +5,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <optional>
 #include <vector>
 
 namespace tsr::kernel {
@@ -200,5 +201,10 @@ TopologyCounts topologyCounts(const TopoDS_Shape& s);
 // surface (split by a seam or by a line where the body touches itself) count
 // once, as a person would count them.
 int smoothPatchCount(const TopoDS_Shape& s);
+// The point of a body's surface nearest p, and the outward normal there.
+struct SurfacePoint {
+  Vec3 point, normal;
+};
+std::optional<SurfacePoint> pointOnBody(const TopoDS_Shape& body, Vec3 p);
 
 } // namespace tsr::kernel

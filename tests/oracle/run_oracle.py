@@ -679,30 +679,15 @@ def op_hole(state, f):
     if src.startswith("sketch "):
         # Holes at the points of a sketch: Tessera's Hole works this way.
         sk = state.sketches[src.split()[1]]
-        do(state, f["name"], "tsr.feature.hole", sketch=sk.name, **hole_kw(f))
+        do(state, f["name"], "tsr.feature.hole", placement="Sketch Points", sketch=sk.name, **hole_kw(f))
         return
-    face = f["face"]
-    if face.get("type") != "plane":
-        raise Unsupported("hole on a %s face" % face.get("type"))
-    n = face["plane_normal_outward"]
-    p = face["point"]
     pos = f.get("position")
     if not isinstance(pos, list) or len(pos) != 3:
         raise Unsupported("hole positions given as '%s'" % f.get("positions_from", "?"))
-    # A sketch on the face holding the hole centre.
-    x = [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0]
-    dot = sum(a * b for a, b in zip(x, n))
-    x = [a - dot * b for a, b in zip(x, n)]
-    l = math.sqrt(sum(a * a for a in x))
-    x = [a / l for a in x]
-    y = [n[1] * x[2] - n[2] * x[1], n[2] * x[0] - n[0] * x[2], n[0] * x[1] - n[1] * x[0]]
-    rel = [a - b for a, b in zip(pos, p)]
-    u, v = sum(a * b for a, b in zip(rel, x)), sum(a * b for a, b in zip(rel, y))
-    data = {"points": [[0, 0], [u * MM, v * MM]], "entities": []}
-    tsr.run_command("tsr.sketch.create", plane="custom:" + fmt(cm(p) + list(n) + x), data=json.dumps(data))
-    sketch = [s for s in tsr.features() if s["command"] == "tsr.sketch.create"][-1]["name"]
+    # On Face, as a click on the body: Tessera snaps the point to the nearest
+    # face and drills along the inward normal there (flat or curved).
     kw = hole_kw(f)
-    kw.update(sketch=sketch, target=body_at(cm(p)))
+    kw.update(placement="On Face", points=fmt(cm(pos)), target=body_at(cm(pos)))
     do(state, f["name"], "tsr.feature.hole", **kw)
 
 

@@ -52,6 +52,7 @@
 53-path-pattern
 54-mirror-body-fillets
 55-tapped-hole-cosmetic
+56-holes-on-curved-face
 57-hole-pattern-sketch-points
 58-phone-stand
 59-enclosure-base

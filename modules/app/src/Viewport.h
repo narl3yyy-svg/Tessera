@@ -204,6 +204,9 @@ public:
   // the sketch plane spec of a flat one there (empty if none or curved).
   TopoDS_Face faceAt(const QPointF& pos) const;
   QString sketchPlaneAt(const QPointF& pos) const;
+  // The point of a shown body under a widget position (ray cast), if any.
+  std::optional<gp_Pnt> pointAt(const QPointF& pos) const;
+  QPointF lastPressPos() const { return pressPos_; }
   static QString faceSketchSpec(const TopoDS_Face& face);
 
 signals:

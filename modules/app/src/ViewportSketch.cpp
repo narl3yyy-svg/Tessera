@@ -552,6 +552,29 @@ TopoDS_Face Viewport::faceAt(const QPointF& pos) const {
   return best;
 }
 
+std::optional<gp_Pnt> Viewport::pointAt(const QPointF& pos) const {
+  if (view_.IsNull()) return std::nullopt;
+  const Graphic3d_Vec2i px = toPixels(pos);
+  Standard_Real x, y, z, vx, vy, vz;
+  view_->ConvertWithProj(px.x(), px.y(), x, y, z, vx, vy, vz);
+  const gp_Lin ray(gp_Pnt(x, y, z), gp_Dir(vx, vy, vz));
+  std::optional<gp_Pnt> best;
+  double bestW = std::numeric_limits<double>::max();
+  for (const auto& b : bodies_) {
+    if (auto h = hidden_.find(b.name); h != hidden_.end() && h->second) continue;
+    IntCurvesFace_ShapeIntersector hit;
+    hit.Load(b.shape, 1e-6);
+    hit.Perform(ray, -1e9, 1e9);
+    if (!hit.IsDone()) continue;
+    for (int i = 1; i <= hit.NbPnt(); ++i)
+      if (hit.WParameter(i) < bestW) {
+        bestW = hit.WParameter(i);
+        best = hit.Pnt(i);
+      }
+  }
+  return best;
+}
+
 QString Viewport::sketchPlaneAt(const QPointF& pos) const {
   const TopoDS_Face f = faceAt(pos);
   return f.IsNull() ? QString() : faceSketchSpec(f);

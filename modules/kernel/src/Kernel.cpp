@@ -65,6 +65,8 @@
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopExp.hxx>
+#include <optional>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <ShapeFix_Solid.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array1OfPnt.hxx>
@@ -1689,6 +1691,31 @@ BoundingBox boundingBox(const TopoDS_Shape& s) {
   b.min = {x0, y0, z0};
   b.max = {x1, y1, z1};
   return b;
+}
+
+std::optional<SurfacePoint> pointOnBody(const TopoDS_Shape& body, Vec3 p) {
+  const TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(pnt(p)).Vertex();
+  TopoDS_Face best;
+  double bestD = 1e300;
+  for (TopExp_Explorer f(body, TopAbs_FACE); f.More(); f.Next()) {
+    BRepExtrema_DistShapeShape d(v, f.Current());
+    if (d.IsDone() && d.NbSolution() > 0 && d.Value() < bestD) {
+      bestD = d.Value();
+      best = TopoDS::Face(f.Current());
+    }
+  }
+  if (best.IsNull()) return std::nullopt;
+  BRepAdaptor_Surface s(best, true);
+  GeomAPI_ProjectPointOnSurf proj(pnt(p), BRep_Tool::Surface(best));
+  if (proj.NbPoints() == 0) return std::nullopt;
+  double u = 0, w = 0;
+  proj.LowerDistanceParameters(u, w);
+  BRepLProp_SLProps props(s, u, w, 1, 1e-7);
+  if (!props.IsNormalDefined()) return std::nullopt;
+  gp_Dir n = props.Normal();
+  if (best.Orientation() == TopAbs_REVERSED) n.Reverse();
+  const gp_Pnt q = props.Value();
+  return SurfacePoint{{q.X(), q.Y(), q.Z()}, {n.X(), n.Y(), n.Z()}};
 }
 
 int smoothPatchCount(const TopoDS_Shape& s) {

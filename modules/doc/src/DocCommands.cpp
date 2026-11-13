@@ -40,6 +40,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <optional>
 #include <tuple>
 
@@ -1270,8 +1271,14 @@ public:
                       .visibleWhen = when};
     };
     def_.inputs = {
+        // As in the familiar tool: click places on any face (flat or curved);
+        // the hole goes in along the face's normal there. Or a sketch's points.
+        choice("placement", "Placement", {"On Face", "Sketch Points"},
+               "On Face: click the body where each hole goes. Sketch Points: the points of a sketch."),
+        {.id = "points", .label = "Positions", .tooltip = "Click the body where each hole goes.",
+         .type = InputType::String, .defaultValue = std::string{}, .optional = true, .visibleWhen = "placement=On Face"},
         {.id = "sketch", .label = "Sketch (points)", .tooltip = "Holes go at this sketch's points. Empty: latest sketch.",
-         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true, .visibleWhen = "placement=Sketch Points"},
         choice("holeType", "Hole Type", {"Simple", "Counterbore", "Countersink"}, {}),
         len("diameter", "Diameter", 0.5),
         choice("extent", "Extents", {"Distance", "All"}, "All: through the whole body."),
@@ -1291,56 +1298,78 @@ public:
         choice("flip", "Direction", {"Into material", "Flipped"}, "Holes go opposite the sketch plane's normal; Flipped reverses."),
         bodyInput("target", "Body"),
     };
+    for (auto& d : def_.inputs)
+      if (d.id == "flip") d.visibleWhen = "placement=Sketch Points";   // on a face: along its normal
   }
   const CommandDef& def() const override { return def_; }
+  // Documents made before Placement existed placed holes at sketch points.
+  static bool onFace(const Inputs& in) { return stringOr(in, "placement", "Sketch Points") == "On Face"; }
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
     const Document& doc = docOf(ctx);
-    if (!sketchFor(doc, getString(in, "sketch"))) return "Sketch: there is no sketch with hole points";
+    if (onFace(in)) {
+      if (stringOr(in, "points", "").empty()) return "Positions: click the body where the hole goes";
+    } else if (!sketchFor(doc, getString(in, "sketch"))) {
+      return "Sketch: there is no sketch with hole points";
+    }
     return checkBody(in, doc, "target");
   }
   void prepare(Inputs& in, CommandContext& ctx) const override {
     const Document& doc = docOf(ctx);
-    if (getString(in, "sketch").empty())
+    if (!onFace(in) && getString(in, "sketch").empty())
       if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
     defaultBody(in, doc, "target");
   }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
-    const auto rec = sketchFor(doc, getString(in, "sketch"));
-    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
     const std::string target = bodyName(in, doc, "target");
-    sketch::Sketch sk;
-    gp_Ax3 frame;
-    try {
-      sk = sketch::Sketch::fromJson(rec->data);
-      frame = doc.planeFrame(rec->plane, rec->offset);
-    } catch (const sketch::SketchError& e) {
-      throw CommandError(e.what());
-    } catch (const DocumentError& e) {
-      throw CommandError(e.what());
-    }
-    std::vector<bool> used(sk.points.size(), false);
-    used[0] = true;
-    for (const auto& e : sk.entities)
-      for (int p : {e.a, e.b, e.center})
-        if (p >= 0) used[p] = true;
-    std::vector<gp_Pnt> centres;
-    for (size_t i = 0; i < sk.points.size(); ++i)
-      if (!used[i]) centres.push_back(sketch::toWorld(frame, sk.points[i].x, sk.points[i].y));
-    if (centres.empty()) throw CommandError(rec->name + " has no points: add points (P) where the holes go");
-
     TopoDS_Shape body = doc.body(target)->shape;
+    // Each hole: where it starts and the way it goes in.
+    std::vector<std::pair<gp_Pnt, gp_Dir>> holes;
+    if (onFace(in)) {
+      for (const std::string& item : splitNames(getString(in, "points"))) {
+        double x = 0, y = 0, z = 0;
+        if (std::sscanf(item.c_str(), "%lf,%lf,%lf", &x, &y, &z) != 3)
+          throw CommandError("Positions: '" + item + "' is not x,y,z");
+        const auto at = kernel::pointOnBody(body, {x, y, z});
+        if (!at) throw CommandError("Positions: no face of the body near " + item);
+        holes.push_back({gp_Pnt(at->point.x, at->point.y, at->point.z),
+                         gp_Dir(-at->normal.x, -at->normal.y, -at->normal.z)});
+      }
+      if (holes.empty()) throw CommandError("Positions: click the body where the hole goes");
+    } else {
+      const auto rec = sketchFor(doc, getString(in, "sketch"));
+      if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+      sketch::Sketch sk;
+      gp_Ax3 frame;
+      try {
+        sk = sketch::Sketch::fromJson(rec->data);
+        frame = doc.planeFrame(rec->plane, rec->offset);
+      } catch (const sketch::SketchError& e) {
+        throw CommandError(e.what());
+      } catch (const DocumentError& e) {
+        throw CommandError(e.what());
+      }
+      std::vector<bool> used(sk.points.size(), false);
+      used[0] = true;
+      for (const auto& e : sk.entities)
+        for (int p : {e.a, e.b, e.center})
+          if (p >= 0) used[p] = true;
+      gp_Dir into = frame.Direction().Reversed();
+      if (getString(in, "flip") == "Flipped") into.Reverse();
+      for (size_t i = 0; i < sk.points.size(); ++i)
+        if (!used[i]) holes.push_back({sketch::toWorld(frame, sk.points[i].x, sk.points[i].y), into});
+      if (holes.empty()) throw CommandError(rec->name + " has no points: add points (P) where the holes go");
+    }
+
     const auto bb = kernel::boundingBox(body);
     const double size = std::hypot(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z) +
                         std::hypot(bb.max.x, bb.max.y, bb.max.z) + std::hypot(bb.min.x, bb.min.y, bb.min.z) + 1;
-    gp_Dir into = frame.Direction().Reversed();
-    if (getString(in, "flip") == "Flipped") into.Reverse();
     const double depth = getString(in, "extent") == "All" ? size : getReal(in, "depth");
     const double r = getReal(in, "diameter") / 2;
     const std::string type = getString(in, "holeType");
     const double eps = 1e-3;   // start just outside the face so the cut is clean
     try {
-      for (const gp_Pnt& c : centres) {
+      for (const auto& [c, into] : holes) {
         const gp_Pnt start = c.Translated(-gp_Vec(into) * eps);
         auto cyl = [&](double radius, double length) {
           const gp_Ax2 ax(start, into);

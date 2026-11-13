@@ -462,6 +462,9 @@ void MainWindow::updateEdgePicking() {
   if (active_ && active_->hasFacesInput()) types.push_back(TopAbs_FACE);
   if (active_ && active_->hasVerticesInput()) types.push_back(TopAbs_VERTEX);
   if (active_ && active_->hasJointOriginInput()) types = {TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX};
+  if (active_ && active_->commandId() == QLatin1String(doc::kCmdHole) &&
+      active_->textInput(QStringLiteral("placement")) == QLatin1String("On Face"))
+    types = {TopAbs_FACE};   // a click on the body places a hole
   viewport_->setSubShapePicking(types);
   if (!types.empty()) viewport_->setPickedShapes(pickedEdges_);
 }
@@ -487,6 +490,17 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
     } catch (const std::exception& e) {
       statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
     }
+    return;
+  }
+  // Hole, On Face: the clicked spot (on any face) is a hole position.
+  if (active_->commandId() == QLatin1String(doc::kCmdHole) &&
+      active_->textInput(QStringLiteral("placement")) == QLatin1String("On Face") && edge.ShapeType() == TopAbs_FACE) {
+    const auto p = viewport_->pointAt(viewport_->lastPressPos());
+    if (!p) return;
+    QStringList pts = active_->textInput(QStringLiteral("points")).split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    pts << QStringLiteral("%1,%2,%3").arg(p->X(), 0, 'g', 12).arg(p->Y(), 0, 'g', 12).arg(p->Z(), 0, 'g', 12);
+    active_->pickBody(body);
+    active_->setInputForTest(QStringLiteral("points"), pts.join(QLatin1Char(';')));
     return;
   }
   if (edge.ShapeType() == TopAbs_VERTEX) {

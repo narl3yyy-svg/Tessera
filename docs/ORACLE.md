@@ -16,11 +16,10 @@ ctest --test-dir build -R oracle --output-on-failure
 ```
 
 Results: *unsupported* means the recipe uses something Tessera does not have
-yet (sheet metal, variable-radius fillets, thin extrudes, holes on curved
-faces); *fail* and
+yet (sheet metal, variable-radius fillets, a thin wall of two thicknesses); *fail* and
 *error* are differences to investigate.
 
-70 pass, 1 fail, 0 error, 19 unsupported of 90.
+71 pass, 1 fail, 0 error, 18 unsupported of 90.
 
 | Case | Result | Notes |
 |---|---|---|
@@ -79,7 +78,7 @@ faces); *fail* and
 | 53-path-pattern | pass |  |
 | 54-mirror-body-fillets | pass |  |
 | 55-tapped-hole-cosmetic | pass |  |
-| 56-holes-on-curved-face | unsupported | hole on a cylinder face |
+| 56-holes-on-curved-face | pass |  |
 | 57-hole-pattern-sketch-points | pass |  |
 | 58-phone-stand | pass |  |
 | 59-enclosure-base | pass |  |
@@ -105,7 +104,7 @@ faces); *fail* and
 | 79-fillet-chord-length | unsupported | fillet type 'chord_length' |
 | 80-fillet-taper-to-fit | fail | area_mm2: got 2412, expected 2415 |
 | 81-fillet-spline-radius | unsupported | fillet type 'spline_radius' |
-| 82-thin-extrude-frame | unsupported | thin extrude |
+| 82-thin-extrude-frame | unsupported | thin wall with two different thicknesses (not in the familiar tool) |
 | 83-boundary-loop-thicken | unsupported | operation 'boundary_surface' |
 | 84-plate-two-bores | pass |  |
 | 85-plate-width-100 | pass |  |

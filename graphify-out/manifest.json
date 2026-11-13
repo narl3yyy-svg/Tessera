@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794528892.682706,
-    "seen": 1794532264.600845,
-    "ast_hash": "ab4f10bff1a716b1c87d6009b6ba6139",
+    "mtime": 1794533075.1728535,
+    "seen": 1794533517.3766303,
+    "ast_hash": "4f0d4d46e1b7ef1c05e44d853e0ab91b",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -234,9 +234,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794528808.4609308,
-    "seen": 1794532264.6008549,
-    "ast_hash": "f30527195a90ff570b49756a7a4541f9",
+    "mtime": 1794533075.1718903,
+    "seen": 1794533517.3766437,
+    "ast_hash": "8bf43306a1d8366ba567d016ea8081a6",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/ViewportSketch.cpp": {
-    "mtime": 1794512895.6714294,
-    "seen": 1794532264.6008565,
-    "ast_hash": "58691ce7c5dadbbd79f865f32d2d9acb",
+    "mtime": 1794533075.1718903,
+    "seen": 1794533517.3766465,
+    "ast_hash": "d865501b4580e1c44f1da65f550e4220",
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
@@ -306,9 +306,9 @@
     "semantic_hash": ""
   },
   "modules/core/src/Command.cpp": {
-    "mtime": 1794529032.9840302,
-    "seen": 1794532264.6008627,
-    "ast_hash": "6f61240559d0f913a35850c6d6db767a",
+    "mtime": 1794532333.924194,
+    "seen": 1794533517.376654,
+    "ast_hash": "bde269c4bf2e0a0a40286e300a222ba0",
     "semantic_hash": ""
   },
   "modules/core/src/CommandRegistry.cpp": {
@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794531737.6788564,
-    "seen": 1794532264.6008692,
-    "ast_hash": "3e7da744c66f10544b99a56a440aba56",
+    "mtime": 1794533157.9918573,
+    "seen": 1794533517.3766615,
+    "ast_hash": "24b449e548e98824b17b3ade6e51f317",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794529967.6595683,
-    "seen": 1794532264.6008728,
-    "ast_hash": "1714bc914565335fb520594343255393",
+    "mtime": 1794532926.379049,
+    "seen": 1794533517.3766663,
+    "ast_hash": "3c97d23ed99bd516f103b6653036f787",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794530507.7609594,
-    "seen": 1794532264.600874,
-    "ast_hash": "711a83bd5f89fc06c2b6c1b2b11d18b6",
+    "mtime": 1794532926.379049,
+    "seen": 1794533517.3766682,
+    "ast_hash": "1b3b8452f3dc31c445653c55378d8ff6",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "scripts/xdrive.py": {
-    "mtime": 1794513715.7689762,
-    "seen": 1794532264.6008804,
-    "ast_hash": "fd0b6577ad2bf897cb649b6c047c949e",
+    "mtime": 1794532630.498927,
+    "seen": 1794533517.3766766,
+    "ast_hash": "acabb4c638c9f83e69608b8d64fa9c81",
     "semantic_hash": ""
   },
   "tests/TestFramework.h": {
@@ -534,9 +534,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_feature_pattern.py": {
-    "mtime": 1794531564.0708587,
-    "seen": 1794532264.6008883,
-    "ast_hash": "ad32ac7df5ed4133ce4984c695bc7d03",
+    "mtime": 1794532983.7633793,
+    "seen": 1794533517.3766863,
+    "ast_hash": "e309fd3a27d72fe119f2f59afefa8db9",
     "semantic_hash": ""
   },
   "tests/api/test_features.py": {
@@ -552,9 +552,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_hole_pattern.py": {
-    "mtime": 1794531465.1204298,
-    "seen": 1794532264.6008904,
-    "ast_hash": "761c55474f309587e1a145c1123a6ece",
+    "mtime": 1794533057.3216035,
+    "seen": 1794533517.376689,
+    "ast_hash": "66e22fda2030177ff1b49cc35c7e803f",
     "semantic_hash": ""
   },
   "tests/api/test_io_units.py": {
@@ -1860,9 +1860,9 @@
     "semantic_hash": ""
   },
   "tests/oracle/run_oracle.py": {
-    "mtime": 1794531863.008621,
-    "seen": 1794532264.6010394,
-    "ast_hash": "5a35e328886814bb8344ca348fe667d9",
+    "mtime": 1794532983.9063332,
+    "seen": 1794533517.3768902,
+    "ast_hash": "4f3fa9d91d85326a322fab74bd7ce63d",
     "semantic_hash": ""
   },
   "tests/sketch/test_sketch.cpp": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794531822.7426882,
-    "seen": 1794532264.6010451,
-    "ast_hash": "c28603e2e52208ad78e4495222d05801",
+    "mtime": 1794533157.9928577,
+    "seen": 1794533517.376898,
+    "ast_hash": "1087834b132707bfc7ad0e560ed1db5f",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794515286.0701578,
-    "seen": 1794532264.6010473,
-    "ast_hash": "c23347deab6da122ece567df738dbccc",
+    "mtime": 1794533157.9928577,
+    "seen": 1794533517.3769007,
+    "ast_hash": "ae7b644d7409bf3483d3fd387c6195c9",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794531909.695925,
-    "seen": 1794532264.601048,
-    "ast_hash": "a309a1486455ae4c274297c7decf4883",
+    "mtime": 1794533157.9938588,
+    "seen": 1794533517.3769014,
+    "ast_hash": "4cddd25d734aee98f5ceeca557c390cb",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1950,15 +1950,15 @@
     "semantic_hash": ""
   },
   "docs/ORACLE.md": {
-    "mtime": 1794531909.695925,
-    "seen": 1794532264.6010494,
-    "ast_hash": "f8bda6768c166e6a4768535438cdff96",
+    "mtime": 1794533512.324717,
+    "seen": 1794533517.376903,
+    "ast_hash": "0fbf5712ca4cedc05976970f9c7ddb53",
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794531822.741689,
-    "seen": 1794532264.6010501,
-    "ast_hash": "89bfe0a0404fa3e52ce1d9d384b1a26d",
+    "mtime": 1794533157.9928577,
+    "seen": 1794533517.376904,
+    "ast_hash": "b5af777db7bbe5dda746cdea01276d23",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,15 +1998,15 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794528913.4698708,
-    "seen": 1794532264.6010547,
-    "ast_hash": "8aa9acdaa9ef5defbcc52c1a3582b8e7",
+    "mtime": 1794533090.3689637,
+    "seen": 1794533517.3769097,
+    "ast_hash": "b05777044c55cf54ff8554c4e727cf13",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
-    "mtime": 1794531909.6038935,
-    "seen": 1794532264.6010554,
-    "ast_hash": "c75589eb682efbafc873af04c527a071",
+    "mtime": 1794533512.2292554,
+    "seen": 1794533517.3769107,
+    "ast_hash": "f20834681c13782d6e65c727fd25e78d",
     "semantic_hash": ""
   },
   "docs/images/extrude-panel.png": {
@@ -2031,6 +2031,24 @@
     "mtime": 1794435422.3917694,
     "seen": 1794532264.601058,
     "ast_hash": "1e3e16ffa69c688c87fbc5079b225ad5",
+    "semantic_hash": ""
+  },
+  "tests/api/test_thin_extrude.py": {
+    "mtime": 1794532578.951983,
+    "seen": 1794533517.3766978,
+    "ast_hash": "1448cf1de3856577ef166283ae0c0565",
+    "semantic_hash": ""
+  },
+  "tests/live/hole_on_face_check.py": {
+    "mtime": 1794533090.2776947,
+    "seen": 1794533517.3767066,
+    "ast_hash": "c3e20480a6761af08fc18bf0eed27291",
+    "semantic_hash": ""
+  },
+  "tests/live/thin_extrude_check.py": {
+    "mtime": 1794532611.6493454,
+    "seen": 1794533517.3767197,
+    "ast_hash": "3dec450a0eea354341179231d4a62fee",
     "semantic_hash": ""
   }
 }
