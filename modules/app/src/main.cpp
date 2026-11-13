@@ -13,6 +13,7 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QMenu>
+#include <QToolTip>
 #include <QAbstractSlider>
 #include <QAbstractSpinBox>
 #include <QComboBox>
@@ -642,6 +643,7 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
         widgets[a->objectName()] = QJsonArray{p.x(), p.y(), r.width(), r.height()};
       }
   o[QStringLiteral("widgets")] = widgets;
+  o[QStringLiteral("tooltip")] = QToolTip::isVisible() ? QToolTip::text() : QString();
   {
     // Timeline items by feature name (centre, global coordinates).
     QJsonObject items;

@@ -1,5 +1,5 @@
 # Live: rename a body in the Browser as in the familiar tool: click its name,
-# click it again, type the new name, Enter.
+# click it again, type the new name, Enter. Resting on the body shows it.
 waitfor tsr.feature.extrude
 wait 600
 bclick Body1
@@ -10,3 +10,5 @@ key ctrl+a
 type Lid
 key Return
 wait 600
+wmove 20 15 20            # rest on the top face: the tooltip shows the new name
+expecttip Lid

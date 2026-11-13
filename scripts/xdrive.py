@@ -38,6 +38,8 @@ Script lines (blank lines and # comments ignored):
   shot FILE                  ask the app to save a screenshot to FILE
   expect NAME                fail unless widget NAME is visible
   expectnot NAME             fail if widget NAME is visible
+  wmove X Y Z                move the pointer to a world point (mm)
+  expecttip TEXT             wait up to 4 s for the tooltip TEXT
 """
 import ctypes
 import json
@@ -344,6 +346,15 @@ def main():
         elif cmd == "expect":
             if a[0] not in geometry()["widgets"]:
                 sys.exit("xdrive: line %d: expected '%s' to be visible" % (n, a[0]))
+        elif cmd == "expecttip":
+            text = " ".join(a)
+            end = time.time() + 4
+            while geometry().get("tooltip", "") != text:
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: tooltip %r, expected %r" % (n, geometry().get("tooltip", ""), text))
+                time.sleep(0.1)
+        elif cmd == "wmove":
+            move(*world_point(float(a[0]), float(a[1]), float(a[2])))
         elif cmd == "expectnot":
             if a[0] in geometry()["widgets"]:
                 sys.exit("xdrive: line %d: expected '%s' not to be visible" % (n, a[0]))

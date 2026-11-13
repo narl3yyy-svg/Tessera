@@ -25,6 +25,7 @@
 #include <QSurfaceFormat>
 #include <QLabel>
 #include <QTimer>
+#include <QToolTip>
 #include <QWheelEvent>
 
 #include <cmath>
@@ -178,6 +179,16 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     return;
   }
 
+  // Resting the pointer on a body shows its name, as in the familiar tool.
+  hoverTimer_ = new QTimer(this);
+  hoverTimer_->setSingleShot(true);
+  hoverTimer_->setInterval(600);
+  connect(hoverTimer_, &QTimer::timeout, this, [this] {
+    if (interactor_ || !pickTypes_.empty() || planePicking_ || leftDown_ || !underMouse()) return;
+    const QString name = bodyNameAt(hoverPos_);
+    if (name.isEmpty()) QToolTip::hideText();
+    else QToolTip::showText(mapToGlobal(hoverPos_.toPoint() + QPoint(14, 18)), name, this);
+  });
   pickHint_ = new QLabel(tr("Select a plane or planar face"), this);
   pickHint_->setObjectName(QStringLiteral("pickHint"));
   pickHint_->setStyleSheet(QStringLiteral("QLabel { background: rgba(40,44,52,225); color: #e8eaee; border: 1px solid #5b6472;"
@@ -444,6 +455,8 @@ Aspect_VKeyMouse Viewport::aisButtons(Qt::MouseButtons b) const {
 
 void Viewport::mousePressEvent(QMouseEvent* e) {
   QOpenGLWidget::mousePressEvent(e);
+  hoverTimer_->stop();
+  QToolTip::hideText();
   pressPos_ = e->position();
   if (arrowMousePress(e)) return;
   if (interactor_ && e->button() == Qt::LeftButton) {
@@ -484,6 +497,7 @@ bool Viewport::focusNextPrevChild(bool next) {
 }
 
 void Viewport::leaveEvent(QEvent* e) {
+  hoverTimer_->stop();
   if (pickHint_) pickHint_->hide();
   clearHoverHighlight();
   QOpenGLWidget::leaveEvent(e);
@@ -524,6 +538,11 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
   if (arrowMouseMove(e)) return;
+  if (e->buttons() == Qt::NoButton && !interactor_ && pickTypes_.empty()) {
+    if ((e->position() - hoverPos_).manhattanLength() > 4) QToolTip::hideText();
+    hoverPos_ = e->position();
+    hoverTimer_->start();
+  }
   if (leftDown_ && (e->buttons() & Qt::LeftButton) && ownsLeftButton() &&
       (boxDrag_ || (e->position() - pressPos_).manhattanLength() >= 5)) {
     boxDrag_ = true;
@@ -663,6 +682,21 @@ void Viewport::boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardMod
     emit selectionChanged();
   }
   updateView();
+}
+
+QString Viewport::bodyNameAt(const QPointF& pos) {
+  if (!glReady_ || context_.IsNull()) return {};
+  const Graphic3d_Vec2i p = toPixels(pos);
+  context_->MoveTo(p.x(), p.y(), view_, true);
+  if (!context_->HasDetected()) return {};
+  const Handle(AIS_InteractiveObject) obj = context_->DetectedInteractive();
+  for (const auto& [name, shape] : shapes_)
+    if (shape == obj) {
+      for (const auto& b : bodies_)
+        if (b.name == name) return QString::fromStdString(b.display.empty() ? b.name : b.display);
+      return QString::fromStdString(name);
+    }
+  return {};
 }
 
 std::vector<std::pair<QString, TopoDS_Shape>> Viewport::selectedSubShapes() const {

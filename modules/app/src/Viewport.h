@@ -35,6 +35,7 @@ class QKeyEvent;
 class QLabel;
 class QLineEdit;
 class QMouseEvent;
+class QTimer;
 
 namespace tsr::app {
 
@@ -126,6 +127,8 @@ public:
   void setPanTool(bool on);     // left-drag pans
 
   QStringList selectedBodies() const;
+  // The body under a canvas point (its shown name), empty if none.
+  QString bodyNameAt(const QPointF& pos);
   // Faces, edges and vertices selected (with a selection filter), by body.
   std::vector<std::pair<QString, TopoDS_Shape>> selectedSubShapes() const;
   void clearSelection();
@@ -335,6 +338,8 @@ private:
   void clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods);
   void boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardModifiers mods);
   QWidget* selectionBox_ = nullptr;
+  QTimer* hoverTimer_ = nullptr;   // a short rest over a body shows its name
+  QPointF hoverPos_;
   bool leftDown_ = false;
   bool boxDrag_ = false;
   bool boxPicking_ = false;

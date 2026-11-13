@@ -228,15 +228,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.cpp": {
-    "mtime": 1794556900.853492,
-    "seen": 1794557178.3486547,
-    "ast_hash": "447d855a6460029d0d5c03d4b9a19546",
+    "mtime": 1794557219.787797,
+    "seen": 1794557421.4794502,
+    "ast_hash": "a7fb006fbdc5ea380e2dc73d5618266a",
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794556900.731415,
-    "seen": 1794557178.3486562,
-    "ast_hash": "9dd627b42ba5ded008f9848c88f6da6c",
+    "mtime": 1794557219.7866518,
+    "seen": 1794557421.4794512,
+    "ast_hash": "9cd624da7ba02b42e40e4db7dbec398a",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
-    "mtime": 1794557038.874562,
-    "seen": 1794557178.3486624,
-    "ast_hash": "fe90c5b63796289bcb9d150fe8f50bb4",
+    "mtime": 1794557219.788827,
+    "seen": 1794557421.4794548,
+    "ast_hash": "3f4913f8d4448837fe3856119fd325a2",
     "semantic_hash": ""
   },
   "modules/core/include/tsr/core/Command.h": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "scripts/xdrive.py": {
-    "mtime": 1794553306.05231,
-    "seen": 1794553508.3605669,
-    "ast_hash": "fe00a0aa4eb44df6c027aab7cdaf211d",
+    "mtime": 1794557219.7898269,
+    "seen": 1794557421.4794853,
+    "ast_hash": "3094d1f4cb68b4ec9b169d5062e8d315",
     "semantic_hash": ""
   },
   "tests/TestFramework.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794557079.0653646,
-    "seen": 1794557178.3490987,
-    "ast_hash": "8a1553b80406c56caebcf691100c4387",
+    "mtime": 1794557416.2736351,
+    "seen": 1794557421.4797041,
+    "ast_hash": "dd6d2feaa58e1d222ff0cca9fd4318ea",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
