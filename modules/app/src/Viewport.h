@@ -374,6 +374,8 @@ private:
   void rebuildArrow(int which);
   void rebuildArrows();
   void placeArrowBoxes();
+  // Focus the first arrow's value box with its text selected.
+  void selectArrowValue();
   void clearArrow(int which);
   void emitArrow(int which, double value, bool released);
   int arrowAt(const QPointF& pos) const;   // the arrow under the cursor, or -1

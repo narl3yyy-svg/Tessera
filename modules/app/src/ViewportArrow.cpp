@@ -16,6 +16,7 @@
 #include <gp_Ax2.hxx>
 
 #include <QLabel>
+#include <QApplication>
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QTimer>
@@ -58,18 +59,36 @@ void Viewport::setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value,
     box->setAlignment(Qt::AlignCenter);
     box->setFixedWidth(120);
     box->setToolTip(tr("Type a value or an expression and press Enter, or drag the arrow"));
+    // White with dark text, the value selected in blue: the familiar look.
     box->setStyleSheet(QStringLiteral(
-        "QLineEdit { background: rgba(30,34,40,225); color: #f0f2f5; border: 1px solid #5b6472; border-radius: 2px;"
-        " padding: 2px; } QLineEdit:focus { border-bottom: 2px solid #3d8ee8; }"));
+        "QLineEdit { background: #ffffff; color: #1d1f22; border: 1px solid #9aa3ad; border-radius: 2px;"
+        " padding: 2px 4px; selection-background-color: #2f8fe8; selection-color: #ffffff; }"
+        " QLineEdit:focus { border: 1px solid #2f8fe8; }"));
     connect(box, &QLineEdit::returnPressed, this, [this, which] {
       const QString t = arrowBoxes_[which]->text().trimmed();
       if (which == 0) emit dragArrowTyped(t);
       else emit secondArrowTyped(t);
     });
   }
+  const bool appearing = !box->isVisible();
   if (!box->hasFocus()) box->setText(text);
   box->show();
   rebuildArrow(which);
+  // As in the familiar tool, the value is ready to type over the moment the
+  // command shows it (the first arrow's box).
+  // ... and again after each pick in the canvas (not while a panel field or
+  // the box itself is being typed in, nor during a drag).
+  if (which == 0 && arrowDragging_ < 0 && (appearing || QApplication::focusWidget() == this)) selectArrowValue();
+}
+
+void Viewport::selectArrowValue() {
+  QLineEdit* box = arrowBoxes_[0];
+  if (!box || !box->isVisible()) return;
+  QTimer::singleShot(0, box, [box] {
+    if (!box->isVisible()) return;
+    box->setFocus(Qt::OtherFocusReason);
+    box->selectAll();
+  });
 }
 
 void Viewport::clearArrow(int which) {
@@ -105,7 +124,10 @@ void Viewport::dragArrowForTest(double value, int which) {
 void Viewport::emitArrow(int which, double value, bool released) {
   if (which == 0) {
     emit dragArrowMoved(value);
-    if (released) emit dragArrowReleased(value);
+    if (released) {
+      emit dragArrowReleased(value);
+      selectArrowValue();   // dragged: the new value is ready to type over
+    }
   } else {
     emit secondArrowMoved(value);
   }

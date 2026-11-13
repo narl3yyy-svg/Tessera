@@ -114,21 +114,21 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794571964.468937,
-    "seen": 1794572323.3311534,
-    "ast_hash": "5cc6a61302471a1a144a6dabc68676e1",
+    "mtime": 1794573928.5214555,
+    "seen": 1794574120.7526972,
+    "ast_hash": "135aed103b1a6d55ff3c40156ecb8300",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
-    "mtime": 1794441291.0422716,
-    "seen": 1794532264.600842,
-    "ast_hash": "b80f4f07a72c9a00d9d654ac50eccf5d",
+    "mtime": 1794573835.3869412,
+    "seen": 1794574120.7526996,
+    "ast_hash": "a35c039bd2146267121f0d6bfa408772",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794557837.62015,
-    "seen": 1794558333.0048132,
-    "ast_hash": "b6bac459856cc305705bea0e32d31169",
+    "mtime": 1794573504.454367,
+    "seen": 1794574120.7527013,
+    "ast_hash": "eb4b815daa792321853d2e7bfd88fa9f",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -144,8 +144,8 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794571964.468937,
-    "seen": 1794572323.3311589,
+    "mtime": 1794573504.3116443,
+    "seen": 1794574120.752706,
     "ast_hash": "c2e29188ef88414b9c47062175958abc",
     "semantic_hash": ""
   },
@@ -216,9 +216,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Theme.cpp": {
-    "mtime": 1794466948.2767909,
-    "seen": 1794532264.600853,
-    "ast_hash": "5945d17b7e3d9dd67e7b6e062b577d98",
+    "mtime": 1794573902.2500596,
+    "seen": 1794574120.7527237,
+    "ast_hash": "f516d7e468fc446231f303af738f1eee",
     "semantic_hash": ""
   },
   "modules/app/src/Theme.h": {
@@ -234,9 +234,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794560319.4488223,
-    "seen": 1794560567.0130935,
-    "ast_hash": "382f42fccfcafa9f4cc080df8a41c8f5",
+    "mtime": 1794573557.2733355,
+    "seen": 1794574120.7527277,
+    "ast_hash": "186db24a955c1254d5994f95275de5f7",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/ViewportArrow.cpp": {
-    "mtime": 1794511576.2634904,
-    "seen": 1794532264.600856,
-    "ast_hash": "8fc4546537204c3a09f4418254adf071",
+    "mtime": 1794573779.364592,
+    "seen": 1794574120.7527306,
+    "ast_hash": "00e2ba8a38549a54c5475b4aca4ce683",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportSketch.cpp": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
-    "mtime": 1794562126.97219,
-    "seen": 1794562637.9151971,
-    "ast_hash": "8151069e41f67fe662feb10716481672",
+    "mtime": 1794573835.3869412,
+    "seen": 1794574120.7527335,
+    "ast_hash": "1b53806f010f51789b99c2182454d26d",
     "semantic_hash": ""
   },
   "modules/core/include/tsr/core/Command.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794572317.9279616,
-    "seen": 1794572323.331438,
-    "ast_hash": "224ec0eb4ea69d224c2ef5cf2e2ec865",
+    "mtime": 1794574115.0912235,
+    "seen": 1794574120.7531946,
+    "ast_hash": "a37c4823ea79079f90d1ca3dd7901af8",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {

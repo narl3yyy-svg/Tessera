@@ -3,6 +3,7 @@
 
 #include <QIcon>
 #include <QString>
+#include <QStringList>
 
 class QAbstractButton;
 class QAction;
@@ -24,5 +25,6 @@ void setIcon(QAction* action, const QString& name);
 void retintIcons(QObject* root);
 
 void setIconTheme(const Theme::Colors& colors);   // called by Theme::apply
+QStringList iconNames();   // every painted icon (for the --icon-sheet review)
 
 } // namespace tsr::app

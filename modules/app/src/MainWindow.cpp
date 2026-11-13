@@ -831,7 +831,11 @@ void MainWindow::focusSearch() {
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
-  if (watched == qApp) return ctrlFilter(e);
+  // Ctrl held while a command picks edges or faces: the plain bodies show (no
+  // preview). Key events reach this application-wide filter addressed to
+  // whichever widget has the focus, so look at every one.
+  if (e->type() == QEvent::KeyPress || e->type() == QEvent::KeyRelease) (void)ctrlFilter(e);
+  if (watched == qApp) return false;
   if (timeline_ && watched == timeline_->viewport() && timelineDrag(e)) return true;
   if (watched == viewport_ && (e->type() == QEvent::Resize || e->type() == QEvent::Show) && navBar_) {
     navBar_->adjustSize();

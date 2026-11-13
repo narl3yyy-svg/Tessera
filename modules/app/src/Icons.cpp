@@ -21,6 +21,10 @@ QColor kTop(170, 205, 240);
 QColor kLeft(110, 160, 215);
 QColor kRight(70, 125, 190);
 QColor kAccent(246, 116, 0);
+// Filled shapes get a dark outline in either theme, as the familiar icons
+// have; open strokes (sketch curves) use the theme's line colour, bold.
+QColor kOutline(28, 38, 50);
+QColor kPoint(34, 128, 238);
 bool gDark = false;
 QHash<QString, QIcon>& cache() {
   static QHash<QString, QIcon> c;
@@ -173,14 +177,16 @@ void document(QPainter& p) {
 }
 
 // Sketch-style icons: dark strokes, blue accents, on a transparent tile.
-void stroke(QPainter& p, double w = 4, const QColor& c = kLine) {
+void stroke(QPainter& p, double w = 5, const QColor& c = kLine) {
   p.setBrush(Qt::NoBrush);
-  p.setPen(QPen(c, w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  // Never hairline: at 30 px a 64-unit icon line under 3.5 units vanishes.
+  p.setPen(QPen(c, std::max(w, 3.5), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 }
-void dot(QPainter& p, double x, double y, const QColor& c = kRight) {
-  p.setPen(Qt::NoPen);
-  p.setBrush(c);
-  p.drawEllipse(QPointF(x, y), 5, 5);
+void dot(QPainter& p, double x, double y, const QColor& c = kPoint) {
+  // Sketch points: a bright filled dot with a dark rim, readable on any panel.
+  p.setPen(QPen(kOutline, 1.5));
+  p.setBrush(c == kRight ? kPoint : c);
+  p.drawEllipse(QPointF(x, y), 6, 6);
 }
 
 void sketchIcon(QPainter& p) {
@@ -1004,17 +1010,21 @@ void holeIcon(QPainter& p) {
 }
 
 void patternIcon(QPainter& p, bool circular) {
+  // Few, large copies with a fine outline: they stay solid at ribbon size.
+  p.setPen(QPen(kOutline, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
   if (circular) {
-    for (int i = 0; i < 6; ++i) {
-      const double a = i * M_PI / 3;
-      cube(p, 26 + 20 * std::cos(a), 24 + 20 * std::sin(a), 12, kTop, kLeft, kRight);
-    }
-    p.setPen(QPen(kAccent, 2, Qt::DashLine));
+    p.save();
+    p.setPen(QPen(kAccent, 3, Qt::DashLine));
     p.setBrush(Qt::NoBrush);
-    p.drawEllipse(QPointF(32, 32), 20, 20);
+    p.drawEllipse(QPointF(32, 32), 21, 21);
+    p.restore();
+    for (int i = 0; i < 5; ++i) {
+      const double a = -M_PI / 2 + i * 2 * M_PI / 5;
+      cube(p, 32 + 21 * std::cos(a) - 9, 32 + 21 * std::sin(a) - 9, 18, kTop, kLeft, kRight);
+    }
   } else {
-    for (int i = 0; i < 3; ++i)
-      for (int j = 0; j < 2; ++j) cube(p, 4 + i * 20, 8 + j * 26, 16, kTop, kLeft, kRight);
+    for (int i = 0; i < 2; ++i)
+      for (int j = 0; j < 2; ++j) cube(p, 6 + i * 28, 6 + j * 28, 24, kTop, kLeft, kRight);
   }
 }
 
@@ -1066,7 +1076,7 @@ QPixmap render(const QString& name, int size) {
   QPainter p(&pm);
   p.setRenderHint(QPainter::Antialiasing);
   p.scale(size / 64.0, size / 64.0);
-  p.setPen(QPen(kLine, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+  p.setPen(QPen(kOutline, 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
   if (name == QLatin1String("box")) box(p);
   else if (name == QLatin1String("cylinder")) cylinder(p);
   else if (name == QLatin1String("cone")) cone(p);
@@ -1199,6 +1209,10 @@ QIcon icon(const QString& name) {
   return ic;
 }
 
+QStringList iconNames() {
+  return {QStringLiteral("box"), QStringLiteral("cylinder"), QStringLiteral("cone"), QStringLiteral("sphere"), QStringLiteral("torus"), QStringLiteral("parameters"), QStringLiteral("orbit"), QStringLiteral("pan"), QStringLiteral("home"), QStringLiteral("fit"), QStringLiteral("sketch"), QStringLiteral("sketch-locked"), QStringLiteral("project"), QStringLiteral("history-marker"), QStringLiteral("extrude"), QStringLiteral("line"), QStringLiteral("rectangle"), QStringLiteral("circle"), QStringLiteral("arc"), QStringLiteral("rectangle-3pt"), QStringLiteral("circle-2pt"), QStringLiteral("circle-3pt"), QStringLiteral("arc-3pt"), QStringLiteral("circle-2tan"), QStringLiteral("circle-3tan"), QStringLiteral("slot-overall"), QStringLiteral("slot-arc"), QStringLiteral("ellipse"), QStringLiteral("text"), QStringLiteral("sketch-rect-pattern"), QStringLiteral("sketch-circular-pattern"), QStringLiteral("sketch-move"), QStringLiteral("sketch-scale"), QStringLiteral("break"), QStringLiteral("intersect"), QStringLiteral("point"), QStringLiteral("dimension"), QStringLiteral("finish"), QStringLiteral("fillet"), QStringLiteral("chamfer"), QStringLiteral("revolve"), QStringLiteral("select"), QStringLiteral("construction"), QStringLiteral("shell"), QStringLiteral("sweep"), QStringLiteral("loft"), QStringLiteral("presspull"), QStringLiteral("center-rectangle"), QStringLiteral("polygon"), QStringLiteral("slot"), QStringLiteral("trim"), QStringLiteral("spline"), QStringLiteral("pipe"), QStringLiteral("coil"), QStringLiteral("thread"), QStringLiteral("offset-face"), QStringLiteral("sketch-fillet"), QStringLiteral("offset"), QStringLiteral("sketch-chamfer"), QStringLiteral("extend"), QStringLiteral("sketch-mirror"), QStringLiteral("hole"), QStringLiteral("pattern-rect"), QStringLiteral("pattern-path"), QStringLiteral("pattern-circ"), QStringLiteral("combine"), QStringLiteral("split"), QStringLiteral("move"), QStringLiteral("scale"), QStringLiteral("remove"), QStringLiteral("mirror"), QStringLiteral("measure"), QStringLiteral("interference"), QStringLiteral("section"), QStringLiteral("com"), QStringLiteral("insert"), QStringLiteral("insert-2d"), QStringLiteral("export"), QStringLiteral("print"), QStringLiteral("image"), QStringLiteral("preferences"), QStringLiteral("units"), QStringLiteral("grid"), QStringLiteral("body"), QStringLiteral("face"), QStringLiteral("edge"), QStringLiteral("vertex"), QStringLiteral("component"), QStringLiteral("joint"), QStringLiteral("joint-origin"), QStringLiteral("rigid"), QStringLiteral("motion"), QStringLiteral("configure"), QStringLiteral("plane"), QStringLiteral("look-at"), QStringLiteral("plane-angle"), QStringLiteral("plane-mid"), QStringLiteral("axis"), QStringLiteral("curvature"), QStringLiteral("zebra"), QStringLiteral("draft"), QStringLiteral("undo"), QStringLiteral("redo"), QStringLiteral("save"), QStringLiteral("file"), QStringLiteral("c-coincident"), QStringLiteral("c-horizontal-vertical"), QStringLiteral("c-parallel"), QStringLiteral("c-perpendicular"), QStringLiteral("c-equal"), QStringLiteral("c-tangent"), QStringLiteral("c-fix")};
+}
+
 void setIconTheme(const Theme::Colors& c) {
   kLine = c.iconLine;
   kTop = c.iconTop;
@@ -1206,6 +1220,8 @@ void setIconTheme(const Theme::Colors& c) {
   kRight = c.iconRight;
   kAccent = c.iconAccent;
   gDark = c.window.lightness() < 128;
+  kOutline = gDark ? QColor(22, 28, 36) : QColor(36, 46, 60);
+  kPoint = gDark ? QColor(64, 160, 255) : QColor(30, 120, 230);
   cache().clear();
 }
 

@@ -12,6 +12,8 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include "Icons.h"
+#include <QImage>
 #include <QMenu>
 #include <QToolTip>
 #include <QAbstractSlider>
@@ -761,6 +763,9 @@ int main(int argc, char** argv) {
   parser.addOption(smokeOpt);
   parser.addOption(scriptOpt);
   parser.addOption(shotOpt);
+  QCommandLineOption iconSheetOpt(QStringLiteral("icon-sheet"), QStringLiteral("Save every icon, ribbon size, to FILE and exit."),
+                                  QStringLiteral("file"));
+  parser.addOption(iconSheetOpt);
   parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("Design to open (.tsr)."), QStringLiteral("[file]"));
   parser.process(app);
 
@@ -776,6 +781,27 @@ int main(int argc, char** argv) {
     }
   }
 
+  if (parser.isSet(iconSheetOpt)) {
+    // Every icon at ribbon size (and 16 px) on the window's own background.
+    const QStringList names = tsr::app::iconNames();
+    const int cols = 10, cw = 120, ch = 78;
+    QImage sheet(cols * cw, ((static_cast<int>(names.size()) + cols - 1) / cols) * ch, QImage::Format_ARGB32);
+    sheet.fill(window.palette().color(QPalette::Window));
+    QPainter p(&sheet);
+    p.setPen(window.palette().color(QPalette::WindowText));
+    QFont f = p.font();
+    f.setPointSizeF(7.5);
+    p.setFont(f);
+    for (int i = 0; i < static_cast<int>(names.size()); ++i) {
+      const int x = (i % cols) * cw, y = (i / cols) * ch;
+      const QIcon ic = tsr::app::icon(names[i]);
+      p.drawPixmap(x + 30, y + 6, ic.pixmap(30, 30));
+      p.drawPixmap(x + 72, y + 13, ic.pixmap(16, 16));
+      p.drawText(QRect(x, y + 44, cw, 30), Qt::AlignHCenter | Qt::AlignTop, names[i]);
+    }
+    p.end();
+    return sheet.save(parser.value(iconSheetOpt)) ? 0 : 1;
+  }
   if (parser.isSet(smokeOpt)) {
     window.show();
     return smoke(window, session);

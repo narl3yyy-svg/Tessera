@@ -44,6 +44,9 @@ behaviours found there that Tessera does not match yet. Each finding moves to `d
 Behaviour already known to differ, before the videos; findings from the videos are added below it.
 
 ### Selection and the canvas
+- [x] The in-canvas value box (Fillet, Chamfer, Extrude ...) opens with its number selected (white box, blue selection) and is selected again after each pick or drag, so typing replaces it.
+- [x] Hold Ctrl while a command picks edges / faces: the preview hides and the plain body shows with the picks (it never reached the handler before).
+- [x] Ribbon icons: bold strokes, dark outlines on filled shapes, bright sketch points, readable on the dark ribbon (review sheet: tessera --icon-sheet FILE).
 - [x] Window selection left-to-right (fully inside, solid blue box) vs right-to-left (crossing, dashed green box), in the canvas, in sketches and while a command picks edges / faces / profiles; Shift adds, Ctrl removes.
 - [x] Selection priority (SELECT menu: No Selection Priority, Select Body / Face / Edge / Vertex Priority) and the click-and-hold Select Other list (everything under the cursor, front to back; hovering an entry highlights it).
 - [ ] Freeform and paint selection; Selection Filters as check items (sketches, construction, components).
