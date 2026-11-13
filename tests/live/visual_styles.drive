@@ -1,0 +1,37 @@
+# Live: Display Settings > Visual Style, the familiar tool's six styles, on
+# a block with a stud. Each style draws the canvas differently: hidden edges
+# show through dashed; the wireframe styles leave the faces unshaded.
+waitfor view.display
+wait 800
+shot /tmp/live_style_default.png
+menu view.display view.visual-style
+waitfor view.style-shaded-hidden
+click view.style-shaded-hidden
+wait 800
+shot /tmp/live_style_shaded_hidden.png
+menu view.display view.visual-style
+waitfor view.style-shaded
+click view.style-shaded
+wait 800
+shot /tmp/live_style_shaded.png
+menu view.display view.visual-style
+waitfor view.style-wireframe
+click view.style-wireframe
+wait 800
+shot /tmp/live_style_wireframe.png
+menu view.display view.visual-style
+waitfor view.style-wireframe-hidden
+click view.style-wireframe-hidden
+wait 800
+shot /tmp/live_style_wireframe_hidden.png
+menu view.display view.visual-style
+waitfor view.style-wireframe-visible
+click view.style-wireframe-visible
+wait 800
+shot /tmp/live_style_wireframe_visible.png
+differ /tmp/live_style_default.png /tmp/live_style_shaded_hidden.png 150
+differ /tmp/live_style_default.png /tmp/live_style_shaded.png 150
+differ /tmp/live_style_default.png /tmp/live_style_wireframe.png 2000
+differ /tmp/live_style_wireframe.png /tmp/live_style_wireframe_hidden.png 150
+differ /tmp/live_style_wireframe_hidden.png /tmp/live_style_wireframe_visible.png 150
+differ /tmp/live_style_wireframe_visible.png /tmp/live_style_default.png 2000

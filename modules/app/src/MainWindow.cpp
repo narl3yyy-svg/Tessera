@@ -663,17 +663,27 @@ void MainWindow::buildNavBar() {
   views->setMenu(viewMenu);
 
   auto* display = flatButton(QString(), tr("Display settings"));
+  display->setObjectName(QStringLiteral("view.display"));
   display->setText(tr("Display"));
   display->setToolButtonStyle(Qt::ToolButtonTextOnly);
   display->setPopupMode(QToolButton::InstantPopup);
   auto* displayMenu = new QMenu(display);
   auto* styles = new QActionGroup(displayMenu);
-  const std::pair<QString, Viewport::Style> styleList[] = {{tr("Shaded"), Viewport::Style::Shaded},
-                                                          {tr("Shaded with visible edges"), Viewport::Style::ShadedEdges},
-                                                          {tr("Wireframe"), Viewport::Style::Wireframe}};
-  for (const auto& [name, st] : styleList) {
+  // Visual Style, with the familiar tool's names and order.
+  using St = Viewport::Style;
+  const std::tuple<QString, St, QString> styleList[] = {
+      {tr("Shaded"), St::Shaded, QStringLiteral("view.style-shaded")},
+      {tr("Shaded with Hidden Edges"), St::ShadedHidden, QStringLiteral("view.style-shaded-hidden")},
+      {tr("Shaded with Visible Edges Only"), St::ShadedEdges, QStringLiteral("view.style-shaded-edges")},
+      {tr("Wireframe"), St::Wireframe, QStringLiteral("view.style-wireframe")},
+      {tr("Wireframe with Hidden Edges"), St::WireframeHidden, QStringLiteral("view.style-wireframe-hidden")},
+      {tr("Wireframe with Visible Edges Only"), St::WireframeVisible, QStringLiteral("view.style-wireframe-visible")}};
+  QMenu* styleMenu = displayMenu->addMenu(tr("Visual Style"));
+  styleMenu->menuAction()->setObjectName(QStringLiteral("view.visual-style"));
+  for (const auto& [name, st, id] : styleList) {
     const auto s = st;
-    QAction* a = displayMenu->addAction(name, this, [this, s] { viewport_->setStyle(s); });
+    QAction* a = styleMenu->addAction(name, this, [this, s] { viewport_->setStyle(s); });
+    a->setObjectName(id);
     a->setCheckable(true);
     a->setChecked(s == viewport_->style());
     styles->addAction(a);

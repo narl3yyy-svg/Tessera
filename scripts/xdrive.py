@@ -381,6 +381,19 @@ def main():
                 time.sleep(0.1)
         elif cmd == "wmove":
             move(*world_point(float(a[0]), float(a[1]), float(a[2])))
+        elif cmd == "differ":
+            # Two screenshots of the canvas differ in at least N pixels.
+            from PIL import Image, ImageChops
+            g = geometry()
+            vx, vy, vw, vh = g["viewport"]
+            wx, wy = g["window"][0], g["window"][1]
+            box = (vx - wx, vy - wy, vx - wx + vw, vy - wy + vh)
+            im1 = Image.open(a[0]).convert("RGB").crop(box)
+            im2 = Image.open(a[1]).convert("RGB").crop(box)
+            diff = ImageChops.difference(im1, im2).convert("L").point(lambda v: 255 if v > 24 else 0)
+            count = diff.histogram()[255]
+            if count < int(a[2]):
+                sys.exit("xdrive: line %d: %s and %s differ in %d pixels, expected %s or more" % (n, a[0], a[1], count, a[2]))
         elif cmd == "expectnot":
             if a[0] in geometry()["widgets"]:
                 sys.exit("xdrive: line %d: expected '%s' not to be visible" % (n, a[0]))

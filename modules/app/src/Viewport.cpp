@@ -13,6 +13,25 @@
 #include <OpenGl_FrameBuffer.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_LineAspect.hxx>
+#include <gp_Ax3.hxx>
+#include <HLRAlgo_Projector.hxx>
+#include <HLRBRep_PolyHLRToShape.hxx>
+#include <HLRBRep_PolyAlgo.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <TopLoc_Location.hxx>
+#include <Bnd_Box.hxx>
+#include <BRepBndLib.hxx>
+#include <Prs3d_IsoAspect.hxx>
+#include <V3d_Viewer.hxx>
+#include <Graphic3d_ZLayerSettings.hxx>
+#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopoDS_Edge.hxx>
+#include <TopoDS_Face.hxx>
+#include <TopoDS.hxx>
+#include <TopExp.hxx>
+#include <BRep_Tool.hxx>
+#include <BRep_Builder.hxx>
 #include <Prs3d_PointAspect.hxx>
 #include <Prs3d_ShadingAspect.hxx>
 #include <Standard_Failure.hxx>
@@ -465,6 +484,7 @@ void Viewport::paintEvent(QPaintEvent* e) {
 }
 
 void Viewport::handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) {
+  updateHlr();   // the view may have turned
   AIS_ViewController::handleViewRedraw(ctx, view);
   if (adaptiveGrid_) updateGridStep();   // the zoom may have changed
   if (toAskNextFrame()) updateView(); // animation (ViewCube) in progress
@@ -801,12 +821,198 @@ void Viewport::setBodies(const std::vector<doc::Body>& bodies) {
   if (glReady_) rebuild();
 }
 
+void Viewport::ensureEdgeLayers() {
+  if (hiddenLayer_ != Graphic3d_ZLayerId_UNKNOWN || viewer_.IsNull()) return;
+  // Hidden: no depth test, so edges behind faces still draw (dashed).
+  Graphic3d_ZLayerSettings hidden;
+  hidden.SetName("hidden edges");
+  hidden.SetEnableDepthTest(false);
+  hidden.SetEnableDepthWrite(false);
+  hidden.SetClearDepth(false);
+  viewer_->InsertLayerAfter(hiddenLayer_, hidden, Graphic3d_ZLayerId_Default);
+  // Visible: tested against the bodies' depth, drawn over the dashes.
+  Graphic3d_ZLayerSettings edges;
+  edges.SetName("visible edges");
+  edges.SetClearDepth(false);
+  viewer_->InsertLayerAfter(edgeLayer_, edges, hiddenLayer_);
+  // Hidden-line results: flat lines already sorted, drawn over everything else.
+  Graphic3d_ZLayerSettings lines = hidden;
+  lines.SetName("hidden-line view");
+  viewer_->InsertLayerAfter(lineLayer_, lines, edgeLayer_);
+}
+
+// The model edges a person reads as edges: no seams of round faces, no
+// degenerate poles, each edge once.
+static TopoDS_Shape sharpEdges(const TopoDS_Shape& shape) {
+  TopTools_IndexedDataMapOfShapeListOfShape map;
+  TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, map);
+  BRep_Builder b;
+  TopoDS_Compound c;
+  b.MakeCompound(c);
+  for (int i = 1; i <= map.Extent(); ++i) {
+    const TopoDS_Edge& e = TopoDS::Edge(map.FindKey(i));
+    if (BRep_Tool::Degenerated(e)) continue;
+    const auto& faces = map.FindFromIndex(i);
+    bool seam = false;
+    for (const auto& f : faces) seam = seam || BRep_Tool::IsClosed(e, TopoDS::Face(f));
+    if (seam) continue;
+    // Smooth (tangent) joins are not drawn, as with the face boundaries.
+    if (faces.Extent() == 2 &&
+        BRep_Tool::Continuity(e, TopoDS::Face(faces.First()), TopoDS::Face(faces.Last())) >= GeomAbs_G1)
+      continue;
+    b.Add(c, e);
+  }
+  return c;
+}
+
+// Edge colours that read on the canvas: the model edge colour on shaded
+// faces; on the bare background of the wireframe styles, a colour that
+// stands out from it. Hidden edges sit halfway to the background.
+static QColor wireColour(Viewport::Style style) {
+  const Theme::Colors& c = themeColors();
+  if (style == Viewport::Style::Shaded || style == Viewport::Style::ShadedHidden ||
+      style == Viewport::Style::ShadedEdges)
+    return c.edges;
+  return c.viewTop.lightnessF() < 0.5 ? QColor(214, 220, 228) : c.edges;
+}
+
+static QColor hiddenColour(Viewport::Style style) {
+  const QColor e = style == Viewport::Style::ShadedHidden ? QColor(150, 156, 166) : wireColour(style);
+  const QColor b = style == Viewport::Style::ShadedHidden ? QColor(150, 156, 166) : themeColors().viewTop;
+  return QColor::fromRgbF((e.redF() * 0.6 + b.redF() * 0.4), (e.greenF() * 0.6 + b.greenF() * 0.4),
+                          (e.blueF() * 0.6 + b.blueF() * 0.4));
+}
+
+void Viewport::clearHlr() {
+  for (auto& o : hlrObjects_) context_->Remove(o, false);
+  hlrObjects_.clear();
+  hlrValid_ = false;
+}
+
+void Viewport::updateHlr() {
+  if (context_.IsNull() || view_.IsNull()) return;
+  const Handle(Graphic3d_Camera)& cam = view_->Camera();
+  // Perspective views keep the depth-tested overlays (addEdgeOverlays).
+  if (!hlrStyle() || !cam->IsOrthographic()) {
+    if (!hlrObjects_.empty()) clearHlr();
+    return;
+  }
+  const gp_Dir d = cam->Direction(), up = cam->Up();
+  if (hlrValid_ && d.IsEqual(hlrDir_, 1e-9) && up.IsEqual(hlrUp_, 1e-9)) return;
+  clearHlr();
+  hlrValid_ = true;
+  hlrDir_ = d;
+  hlrUp_ = up;
+  ensureEdgeLayers();
+  // The projector looks along the camera; its plane passes through the
+  // models, so the flat result lies where the edges are on screen.
+  Bnd_Box box;
+  std::vector<TopoDS_Shape> shapes;
+  for (const auto& b : bodies_) {
+    if (hidden_[b.name]) continue;
+    const auto ov = overrides_.find(b.name);
+    shapes.push_back(ov != overrides_.end() ? ov->second : b.shape);
+    BRepBndLib::Add(shapes.back(), box);
+  }
+  if (shapes.empty() || box.IsVoid()) return;
+  double x0, y0, z0, x1, y1, z1;
+  box.Get(x0, y0, z0, x1, y1, z1);
+  const gp_Pnt centre((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  // HLR gives the lines in the projector's axes, measured from the world
+  // origin; they go back onto the plane through the models' centre.
+  const gp_Dir toEye = d.Reversed();
+  const gp_Ax2 ax(gp::Origin(), toEye, d.Crossed(up));
+  const gp_Pnt onPlane = gp::Origin().Translated(gp_Vec(toEye) * gp_Vec(toEye).Dot(gp_Vec(centre.XYZ())));
+  gp_Trsf toWorld;
+  toWorld.SetTransformation(gp_Ax3(onPlane, toEye, ax.XDirection()));
+  toWorld.Invert();
+  const bool hidden = style_ == Style::WireframeHidden;
+  auto show = [&](const TopoDS_Shape& lines, const QColor& col, Aspect_TypeOfLine type, double width,
+                  Graphic3d_ZLayerId layer) {
+    if (lines.IsNull()) return;
+    // Moved, not copied: the HLR edges are polygons, which a copy drops.
+    Handle(AIS_Shape) a = new AIS_Shape(lines.Moved(TopLoc_Location(toWorld)));
+    const Handle(Prs3d_Drawer)& dr = a->Attributes();
+    dr->SetWireAspect(new Prs3d_LineAspect(qc(col), type, width));
+    dr->SetFreeBoundaryAspect(new Prs3d_LineAspect(qc(col), type, width));
+    dr->SetUnFreeBoundaryAspect(new Prs3d_LineAspect(qc(col), type, width));
+    context_->Display(a, AIS_WireFrame, -1, false);   // never picked: the bodies are
+    context_->SetZLayer(a, layer);
+    hlrObjects_.push_back(a);
+  };
+  for (const TopoDS_Shape& shape : shapes) {
+    try {
+      BRepMesh_IncrementalMesh(shape, 0.01, false, 0.35);
+      Handle(HLRBRep_PolyAlgo) algo = new HLRBRep_PolyAlgo(shape);
+      algo->Projector(HLRAlgo_Projector(ax));
+      algo->Update();
+      HLRBRep_PolyHLRToShape out;
+      out.Update(algo);
+      if (hidden) {
+        show(out.HCompound(), hiddenColour(style_), Aspect_TOL_DASH, 1.0, hiddenLayer_);
+        show(out.OutLineHCompound(), hiddenColour(style_), Aspect_TOL_DASH, 1.0, hiddenLayer_);
+      }
+      // Visible lines over the dashes: both layers ignore depth.
+      show(out.VCompound(), wireColour(style_), Aspect_TOL_SOLID, 1.2, lineLayer_);
+      show(out.OutLineVCompound(), wireColour(style_), Aspect_TOL_SOLID, 1.2, lineLayer_);
+    } catch (const Standard_Failure&) {
+      // A body HLR cannot take keeps its plain display.
+    }
+  }
+}
+
+void Viewport::addEdgeOverlays(const TopoDS_Shape& shape) {
+  const bool hidden = style_ == Style::ShadedHidden || style_ == Style::WireframeHidden;
+  const bool edgesOnTop = hidden || style_ == Style::WireframeVisible;
+  if (!edgesOnTop) return;
+  if (hlrStyle() && view_->Camera()->IsOrthographic()) return;   // updateHlr draws these
+  ensureEdgeLayers();
+  const TopoDS_Shape edges = sharpEdges(shape);
+  auto overlay = [&](const QColor& col, double width, Aspect_TypeOfLine type, Graphic3d_ZLayerId layer) {
+    Handle(AIS_Shape) a = new AIS_Shape(edges);
+    // Barely transparent: OCCT draws transparent things after all opaque
+    // ones (the faces' depth is only complete then), layer by layer.
+    Quantity_ColorRGBA rgba(qc(col));
+    rgba.SetAlpha(0.99f);
+    const Handle(Prs3d_Drawer)& d = a->Attributes();
+    auto make = [&] {
+      Handle(Prs3d_LineAspect) la = new Prs3d_LineAspect(qc(col), type, width);
+      la->Aspect()->SetInteriorColor(rgba);
+      return la;
+    };
+    d->SetWireAspect(make());
+    d->SetFreeBoundaryAspect(make());
+    d->SetUnFreeBoundaryAspect(make());
+    d->SetLineAspect(make());
+    if (sectionOn_ && !clip_.IsNull()) a->AddClipPlane(clip_);
+    context_->Display(a, AIS_WireFrame, -1, false);   // -1: never picked, the body is
+    context_->SetZLayer(a, layer);
+    edgeOverlays_.push_back(a);
+  };
+  if (hidden) overlay(hiddenColour(style_), 1.0, Aspect_TOL_DASH, hiddenLayer_);
+  overlay(wireColour(style_), style_ == Style::ShadedHidden ? 1.0 : 1.2, Aspect_TOL_SOLID, edgeLayer_);
+}
+
 void Viewport::applyStyle(const Handle(AIS_Shape)& s) {
   const Handle(Prs3d_Drawer)& d = s->Attributes();
+  // Visible edges come from the faces' boundaries, or from the overlay
+  // layer when hidden edges must be drawn first.
   d->SetFaceBoundaryDraw(style_ == Style::ShadedEdges);
+  if (style_ == Style::WireframeHidden || style_ == Style::WireframeVisible) {
+    // The faces only hide what lies behind them: drawn but not seen.
+    s->SetTransparency(0.995);
+  }
+  if (style_ == Style::Wireframe) {
+    // Every edge in the wire colour, no isolines on the faces.
+    d->SetUIsoAspect(new Prs3d_IsoAspect(qc(wireColour(style_)), Aspect_TOL_SOLID, 1.0, 0));
+    d->SetVIsoAspect(new Prs3d_IsoAspect(qc(wireColour(style_)), Aspect_TOL_SOLID, 1.0, 0));
+    d->SetWireAspect(new Prs3d_LineAspect(qc(wireColour(style_)), Aspect_TOL_SOLID, 1.2));
+    d->SetFreeBoundaryAspect(new Prs3d_LineAspect(qc(wireColour(style_)), Aspect_TOL_SOLID, 1.2));
+    d->SetUnFreeBoundaryAspect(new Prs3d_LineAspect(qc(wireColour(style_)), Aspect_TOL_SOLID, 1.2));
+  }
   d->SetFaceBoundaryUpperContinuity(GeomAbs_C0); // sharp edges only, no seams on round faces
   d->SetFaceBoundaryAspect(new Prs3d_LineAspect(qc(themeColors().edges), Aspect_TOL_SOLID, 1.0));
-  context_->SetDisplayMode(s, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, false);
+  context_->SetDisplayMode(s, isWireframe(style_) ? AIS_WireFrame : AIS_Shaded, false);
 }
 
 void Viewport::setBodyOverrides(const std::map<std::string, TopoDS_Shape>& shapes) {
@@ -819,6 +1025,9 @@ void Viewport::rebuild() {
   const QStringList selected = selectedBodies();
   for (auto& [name, shape] : shapes_) context_->Remove(shape, false);
   shapes_.clear();
+  for (auto& o : edgeOverlays_) context_->Remove(o, false);
+  edgeOverlays_.clear();
+  clearHlr();
 
   for (const auto& b : bodies_) {
     const auto ov = overrides_.find(b.name);
@@ -830,10 +1039,12 @@ void Viewport::rebuild() {
     shapes_[b.name] = s;
     // Under a surface analysis the coloured meshes stand in for the bodies.
     if (!hidden_[b.name] && analysis_.kind == AnalysisKind::None) {
-      context_->Display(s, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, 0, false);
+      context_->Display(s, isWireframe(style_) ? AIS_WireFrame : AIS_Shaded, 0, false);
       if (selected.contains(QString::fromStdString(b.name))) context_->AddOrRemoveSelected(s, false);
+      addEdgeOverlays(ov != overrides_.end() ? ov->second : b.shape);
     }
   }
+  updateHlr();
   buildAnalysis();
   applyPickModes();
   if (!fittedOnce_ && !bodies_.empty()) {
@@ -848,9 +1059,9 @@ void Viewport::setBodyVisible(const QString& name, bool visible) {
   hidden_[n] = !visible;
   auto it = shapes_.find(n);
   if (it == shapes_.end() || context_.IsNull()) return;
-  if (visible) context_->Display(it->second, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, 0, false);
-  else context_->Erase(it->second, false);
-  redrawAll();
+  // The edge overlays belong to all bodies: rebuild to keep them in step.
+  (void)it;
+  rebuild();
 }
 
 bool Viewport::isBodyVisible(const QString& name) const {

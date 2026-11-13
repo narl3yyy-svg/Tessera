@@ -89,7 +89,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ### Navigation and display
 - [ ] Orbit around a picked point (Shift + middle on a point); continuous orbit; free orbit vs constrained.
-- [ ] Display settings: Visual style (shaded, shaded with hidden edges, wireframe), environment, ground shadow, layout grid.
+- [x] Display settings > Visual Style: the six styles (Shaded; Shaded with Hidden Edges; Shaded with Visible Edges Only, the default; Wireframe; Wireframe with Hidden Edges; Wireframe with Visible Edges Only). The wireframe hidden-line styles run hidden-line removal for each view direction.
+- [ ] Display settings: environment, ground shadow, layout grid.
 - [ ] Named views; Home view; Fit (F6) (done); ViewCube corners and edges, drag to orbit.
 
 ### Data and files

@@ -66,3 +66,8 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P7-4 | Change Parameters has no favourites, filter or search, and parameters cannot be renamed | P7 scope | P8 |
 | P11-1 | Reference parts not yet matching (docs/ORACLE.md): loft of a rectangle into a circle gives 7 faces instead of 6 (volume 0.14% high); shells of an L-bracket and a boss plate keep one extra face; overlapping feature patterns leave unmerged faces (62 vs 39) and slightly more volume; a fillet on a boss plate's base edges fails; a gear-tooth sketch solves to a slightly different shape; a fillet whose radius must shrink to fit differs in area by 0.1% | Kernel face merging and solver | P11 |
 | P11-2 | Recipe features Tessera lacks: sheet metal, variable / chord / spline-radius fillets, mirror of features, path pattern, thin extrude, boundary surface and thicken, drill-point tips on blind holes, loft to a point, plane at an angle about an edge | Not built yet | later |
+
+## Visual styles
+
+- Wireframe with Hidden Edges / Visible Edges Only compute exact hidden lines in orthographic views only. In a perspective view they draw every edge, hidden ones dashed through the see-through faces only where the depth allows, so the result is approximate.
+- Hidden lines are recomputed as the view turns; very large models may orbit slowly in these two styles.

@@ -65,6 +65,7 @@ never needs the network.
 |---|---|
 | Orbit / pan / zoom | **Shift + middle drag** / **middle drag** / **wheel** (other schemes in *File → Preferences*) |
 | Standard views | Click the ViewCube, or *Views* on the navigation bar; **F6** fits, **Home** resets |
+| Visual style | *Display > Visual Style* on the navigation bar: Shaded, Shaded with Hidden Edges, Shaded with Visible Edges Only (default), Wireframe, Wireframe with Hidden Edges, Wireframe with Visible Edges Only |
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
 | Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it |

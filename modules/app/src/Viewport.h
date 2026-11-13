@@ -76,7 +76,10 @@ struct AnalysisSettings {
 class Viewport : public QOpenGLWidget, public AIS_ViewController {
   Q_OBJECT
 public:
-  enum class Style { Shaded, ShadedEdges, Wireframe };
+  // The six visual styles of the familiar tool's Display Settings.
+  // ShadedEdges is "Shaded with Visible Edges Only", the default.
+  enum class Style { Shaded, ShadedHidden, ShadedEdges, Wireframe, WireframeHidden, WireframeVisible };
+  static bool isWireframe(Style s) { return s == Style::Wireframe; }
 
   explicit Viewport(QWidget* parent = nullptr);
   ~Viewport() override;
@@ -292,6 +295,21 @@ private:
   std::map<std::string, TopoDS_Shape> overrides_;
 
   Style style_ = Style::ShadedEdges;
+  // Edge overlays for the hidden-edge styles: dashed hidden edges drawn
+  // through the bodies, then the visible edges again on top of them.
+  std::vector<Handle(AIS_Shape)> edgeOverlays_;
+  Graphic3d_ZLayerId hiddenLayer_ = Graphic3d_ZLayerId_UNKNOWN, edgeLayer_ = Graphic3d_ZLayerId_UNKNOWN,
+                     lineLayer_ = Graphic3d_ZLayerId_UNKNOWN;
+  void ensureEdgeLayers();
+  void addEdgeOverlays(const TopoDS_Shape& shape);
+  // Wireframe with Hidden / Visible Edges Only: hidden-line removal for the
+  // current view direction, redone when the view turns.
+  std::vector<Handle(AIS_Shape)> hlrObjects_;
+  bool hlrValid_ = false;
+  gp_Dir hlrDir_, hlrUp_;
+  bool hlrStyle() const { return style_ == Style::WireframeHidden || style_ == Style::WireframeVisible; }
+  void clearHlr();
+  void updateHlr();
   bool grid_ = true;
   struct ProfileObject {
     Handle(AIS_Shape) shape;
