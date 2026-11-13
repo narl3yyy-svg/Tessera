@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794556900.853492,
-    "seen": 1794557178.3486333,
-    "ast_hash": "5e99808f0c41caebaf54cea23b0672cd",
+    "mtime": 1794560660.425361,
+    "seen": 1794560876.7763882,
+    "ast_hash": "eb3e3554571db87dce2060e7d28e827c",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794533603.4434743,
-    "seen": 1794533917.233478,
-    "ast_hash": "bfe94842bc743333cdf18b14c787b518",
+    "mtime": 1794560634.4966404,
+    "seen": 1794560876.7764528,
+    "ast_hash": "06a11c107168c3e044cc0973c7562ebb",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794533702.9752464,
-    "seen": 1794533917.23348,
-    "ast_hash": "97a7bf35a4050730aff1ef46cba71420",
+    "mtime": 1794560634.4966404,
+    "seen": 1794560876.776456,
+    "ast_hash": "b4a449f3654a2e2119c2d3685ee5618b",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -624,9 +624,9 @@
     "semantic_hash": ""
   },
   "tests/integration/test_document.cpp": {
-    "mtime": 1794440667.3499644,
-    "seen": 1794532264.600898,
-    "ast_hash": "af081fa4c3a94217808f42e1946e9105",
+    "mtime": 1794560634.497645,
+    "seen": 1794560876.7765176,
+    "ast_hash": "8526faa0057c888cc77e877c752a57c1",
     "semantic_hash": ""
   },
   "tests/live/assembly_check.py": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794560561.702375,
-    "seen": 1794560567.0135834,
-    "ast_hash": "588ae539366634709f58cdfe26cb6796",
+    "mtime": 1794560871.386142,
+    "seen": 1794560876.7768624,
+    "ast_hash": "d98ece29700de7476d5a9550c27578fd",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794560319.4518237,
-    "seen": 1794560567.0135958,
-    "ast_hash": "50260e96d698c8019e61c05c1b31c39e",
+    "mtime": 1794560746.236906,
+    "seen": 1794560876.7768795,
+    "ast_hash": "56ff6d42e300d4ac8d33b39e3a88f667",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2109,6 +2109,18 @@
     "mtime": 1794560442.40063,
     "seen": 1794560567.013219,
     "ast_hash": "7eea1303f43247f0cd1c5c157ea3ac17",
+    "semantic_hash": ""
+  },
+  "tests/live/setup_rounded_box.py": {
+    "mtime": 1794560746.0803087,
+    "seen": 1794560876.7765536,
+    "ast_hash": "2ffbc98a7bfb308b4e95bb823cc059da",
+    "semantic_hash": ""
+  },
+  "tests/live/tangent_chain_check.py": {
+    "mtime": 1794560746.124294,
+    "seen": 1794560876.7765656,
+    "ast_hash": "32a135b047fb32a7879cf2ebf7dcf2a4",
     "semantic_hash": ""
   }
 }

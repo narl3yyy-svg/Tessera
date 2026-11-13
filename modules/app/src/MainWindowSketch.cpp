@@ -544,25 +544,53 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
     pickedEdges_.clear();
   }
   active_->pickBody(body);
-  // Clicking a picked edge again removes it (the picks resolved on the
-  // original body are compared with the clicked one).
+  // Fillet and Chamfer take the whole tangent chain of an edge (the kernel
+  // rounds all of it anyway), as with the familiar Tangent Chain option.
+  std::vector<TopoDS_Shape> group{picked};
+  if (!isFace && (active_->commandId() == QLatin1String(doc::kCmdFillet) ||
+                  active_->commandId() == QLatin1String(doc::kCmdChamfer)))
+    group = kernel::tangentChain(shape, picked);
+  auto inGroup = [&](const TopoDS_Shape& s) {
+    return std::any_of(group.begin(), group.end(), [&](const TopoDS_Shape& g) { return g.IsSame(s); });
+  };
+  // Clicking a picked edge again removes it, with its chain (the picks
+  // resolved on the original body are compared with the clicked one).
+  std::vector<bool> resolvedInGroup(refs.size(), false);
+  bool hit = false;
   for (int i = 0; i < static_cast<int>(refs.size()); ++i) {
     try {
       const auto r = isFace ? kernel::resolveFaces(shape, refs[i].toStdString())
                             : kernel::resolveEdges(shape, refs[i].toStdString());
-      if (!r.empty() && r.front().IsSame(picked)) {
-        if (viewport_->boxPicking()) return;   // a box adds, never removes
-        refs.removeAt(i);
-        store(refs.join(QLatin1Char(';')));
-        syncPickedShapes();
-        updateDragArrow();
-        return;
+      if (!r.empty() && inGroup(r.front())) {
+        resolvedInGroup[i] = true;
+        hit = hit || r.front().IsSame(picked);
       }
     } catch (const std::exception&) {
     }
   }
+  if (hit) {
+    if (viewport_->boxPicking()) return;   // a box adds, never removes
+    QStringList kept;
+    for (int i = 0; i < static_cast<int>(refs.size()); ++i)
+      if (!resolvedInGroup[i]) kept << refs[i];
+    store(kept.join(QLatin1Char(';')));
+    syncPickedShapes();
+    updateDragArrow();
+    return;
+  }
   try {
-    refs << QString::fromStdString(isFace ? kernel::faceReference(shape, picked) : kernel::edgeReference(shape, picked));
+    // Every edge of the group not picked yet.
+    const int before = static_cast<int>(refs.size());
+    for (const TopoDS_Shape& g : group) {
+      bool already = false;
+      for (int i = 0; i < before && !already; ++i)
+        if (resolvedInGroup[i]) {
+          const auto r = kernel::resolveEdges(shape, refs[i].toStdString());
+          already = !r.empty() && r.front().IsSame(g);
+        }
+      if (!already)
+        refs << QString::fromStdString(isFace ? kernel::faceReference(shape, g) : kernel::edgeReference(shape, g));
+    }
   } catch (const std::exception& e) {
     statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
     return;

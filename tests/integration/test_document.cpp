@@ -30,6 +30,28 @@ TEST(kernel_box_metrics) {
   CHECK_THROWS(kernel::makeBox(0, 1, 1));
 }
 
+TEST(kernel_tangent_chain) {
+  // A box with sharp edges: each edge is its own chain.
+  const auto box = kernel::makeBox(4, 3, 2);
+  const auto top = kernel::resolveEdges(box, "2,0,2");
+  CHECK_EQ(top.size(), 1u);
+  CHECK_EQ(kernel::tangentChain(box, top[0]).size(), 1u);
+  // Round the four vertical edges: the top loop is now four lines and four
+  // arcs meeting without corners, one chain of eight edges.
+  const auto verticals = kernel::resolveEdges(box, "0,0,1;4,0,1;4,3,1;0,3,1");
+  CHECK_EQ(verticals.size(), 4u);
+  const auto rounded = kernel::fillet(box, verticals, 0.5);
+  const auto front = kernel::resolveEdges(rounded, "2,0,2");
+  CHECK_EQ(front.size(), 1u);
+  const auto chain = kernel::tangentChain(rounded, front[0]);
+  CHECK_EQ(chain.size(), 8u);
+  for (const auto& e : chain) CHECK_NEAR(kernel::edgeMidpoint(e).z, 2.0, 1e-9);   // all on the top
+  // The bottom loop is a chain of its own.
+  const auto bottom = kernel::resolveEdges(rounded, "2,0,0");
+  CHECK_EQ(kernel::tangentChain(rounded, bottom[0]).size(), 8u);
+  for (const auto& e : kernel::tangentChain(rounded, bottom[0])) CHECK_NEAR(kernel::edgeMidpoint(e).z, 0.0, 1e-9);
+}
+
 TEST(doc_add_parameter_undo_redo) {
   doc::Session s;
   CHECK_EQ(s.run(doc::kCmdAddUserParameter, param("width", "25 mm")), std::string());

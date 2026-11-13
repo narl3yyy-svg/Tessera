@@ -66,6 +66,12 @@ std::string edgeReference(const TopoDS_Shape& body, const TopoDS_Shape& edge);
 // Upgrades plain points to full references against `body`.
 std::string completeEdgeReferences(const TopoDS_Shape& body, const std::string& refs);
 std::vector<TopoDS_Shape> resolveEdges(const TopoDS_Shape& body, const std::string& refs);
+// The tangent chain of `edge` in `body`: every edge joined to it end to end
+// without a corner (the two tangents at the shared vertex within angleTol
+// radians of a straight continuation), `edge` first. A fillet or chamfer of
+// one edge of the chain rounds all of it.
+std::vector<TopoDS_Shape> tangentChain(const TopoDS_Shape& body, const TopoDS_Shape& edge,
+                                       double angleTol = 0.5 * 3.14159265358979323846 / 180);
 // A point on the middle of an edge, for referring to it later.
 Vec3 edgeMidpoint(const TopoDS_Shape& edge);
 

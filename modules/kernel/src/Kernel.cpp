@@ -1822,6 +1822,50 @@ int smoothPatchCount(const TopoDS_Shape& s) {
   return count;
 }
 
+std::vector<TopoDS_Shape> tangentChain(const TopoDS_Shape& body, const TopoDS_Shape& edge, double angleTol) {
+  std::vector<TopoDS_Shape> chain;
+  if (body.IsNull() || edge.IsNull() || edge.ShapeType() != TopAbs_EDGE) return chain;
+  TopTools_IndexedDataMapOfShapeListOfShape vertexEdges;
+  TopExp::MapShapesAndAncestors(body, TopAbs_VERTEX, TopAbs_EDGE, vertexEdges);
+  // The unit tangent of e at its end on v, pointing along e away from v.
+  auto awayTangent = [](const TopoDS_Edge& e, const TopoDS_Vertex& v, gp_Vec& t) {
+    BRepAdaptor_Curve c(e);
+    const double f = c.FirstParameter(), l = c.LastParameter();
+    const gp_Pnt pv = BRep_Tool::Pnt(v);
+    const bool atStart = c.Value(f).SquareDistance(pv) <= c.Value(l).SquareDistance(pv);
+    gp_Pnt p;
+    gp_Vec d;
+    c.D1(atStart ? f : l, p, d);
+    if (d.Magnitude() < 1e-12) return false;
+    t = (atStart ? d : d.Reversed()).Normalized();
+    return true;
+  };
+  const double cosTol = std::cos(angleTol);
+  TopTools_IndexedMapOfShape seen;
+  seen.Add(edge);
+  chain.push_back(edge);
+  for (size_t k = 0; k < chain.size(); ++k) {
+    const TopoDS_Edge e = TopoDS::Edge(chain[k]);
+    for (TopExp_Explorer vx(e, TopAbs_VERTEX); vx.More(); vx.Next()) {
+      const TopoDS_Vertex v = TopoDS::Vertex(vx.Current());
+      if (!vertexEdges.Contains(v)) continue;
+      gp_Vec t1;
+      if (!awayTangent(e, v, t1)) continue;
+      for (const TopoDS_Shape& n : vertexEdges.FindFromKey(v)) {
+        if (seen.Contains(n) || BRep_Tool::Degenerated(TopoDS::Edge(n))) continue;
+        gp_Vec t2;
+        if (!awayTangent(TopoDS::Edge(n), v, t2)) continue;
+        // Smooth: leaving v along n continues straight on from arriving along e.
+        if (t1.Dot(t2) <= -cosTol) {
+          seen.Add(n);
+          chain.push_back(n);
+        }
+      }
+    }
+  }
+  return chain;
+}
+
 TopologyCounts topologyCounts(const TopoDS_Shape& s) {
   TopologyCounts t;
   if (s.IsNull()) return t;

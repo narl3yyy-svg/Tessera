@@ -1,0 +1,14 @@
+# Live: Fillet takes an edge's whole tangent chain. On a box with rounded
+# vertical edges, F and one click on the top front edge pick all eight edges
+# of the smooth top loop; OK.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key f
+waitfor panelOk
+wait 300
+wclick 20 0 20
+wait 600
+shot /tmp/live_tangent_chain.png
+click panelOk
+wait 1000
