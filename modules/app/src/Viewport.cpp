@@ -13,6 +13,7 @@
 #include <OpenGl_FrameBuffer.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_LineAspect.hxx>
+#include <Prs3d_PointAspect.hxx>
 #include <Prs3d_ShadingAspect.hxx>
 #include <Standard_Failure.hxx>
 #include <SelectMgr_ViewerSelector.hxx>
@@ -99,8 +100,10 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
   fmt.setDepthBufferSize(24);
   fmt.setStencilBufferSize(8);
   fmt.setSamples(4);
-  fmt.setVersion(4, 5);
-  fmt.setProfile(QSurfaceFormat::CoreProfile);
+  // A compatibility context, as OCCT's own Qt sample uses on Linux: a core
+  // profile draws every line one pixel wide (Mesa and others), so picked and
+  // hovered edges would not stand out.
+  fmt.setProfile(QSurfaceFormat::CompatibilityProfile);
   setFormat(fmt);
 
   // TKOpenGl on Kubuntu is built for GLX, so it needs the X11 (xcb) platform;
@@ -115,6 +118,7 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     Handle(Aspect_DisplayConnection) display = new Aspect_DisplayConnection();
     Handle(OpenGl_GraphicDriver) driver = new OpenGl_GraphicDriver(display, false);
     driver->ChangeOptions().buffersNoSwap = true;      // Qt swaps
+    driver->ChangeOptions().contextCompatible = true;  // matches the context above
     driver->ChangeOptions().buffersOpaqueAlpha = true;
     driver->ChangeOptions().useSystemBuffer = false;   // always render to an FBO
 
@@ -149,6 +153,19 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
       Handle(Prs3d_Drawer) sel = context_->HighlightStyle(Prs3d_TypeOfHighlight_Selected);
       sel->SetColor(rgb(30, 120, 220));
       sel->SetTransparency(0.0f);
+      // Faces, edges and vertices under the cursor or picked: edges drawn
+      // thick, as in the familiar tool, so the one about to be picked is
+      // easy to see.
+      auto subStyle = [](const Handle(Prs3d_Drawer)& d, const Quantity_Color& c, double width) {
+        d->SetColor(c);
+        d->SetTransparency(0.0f);
+        for (auto set : {&Prs3d_Drawer::SetWireAspect, &Prs3d_Drawer::SetLineAspect, &Prs3d_Drawer::SetFreeBoundaryAspect,
+                         &Prs3d_Drawer::SetUnFreeBoundaryAspect, &Prs3d_Drawer::SetSeenLineAspect})
+          (d.get()->*set)(new Prs3d_LineAspect(c, Aspect_TOL_SOLID, width));
+        d->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 3.0));
+      };
+      subStyle(context_->HighlightStyle(Prs3d_TypeOfHighlight_LocalDynamic), rgb(110, 170, 235), 4.0);
+      subStyle(context_->HighlightStyle(Prs3d_TypeOfHighlight_LocalSelected), rgb(30, 120, 220), 4.0);
     }
 
     view_ = viewer_->CreateView();
@@ -499,6 +516,7 @@ bool Viewport::focusNextPrevChild(bool next) {
 
 void Viewport::leaveEvent(QEvent* e) {
   hoverTimer_->stop();
+  showIdleHover({});
   if (pickHint_) pickHint_->hide();
   clearHoverHighlight();
   QOpenGLWidget::leaveEvent(e);
@@ -576,6 +594,7 @@ void Viewport::wheelEvent(QWheelEvent* e) {
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {
+  refreshSelectionOverlay();
   if (handlePickSelection()) return;
   const QStringList sel = selectedBodies();
   if (sel.size() == 1) emit bodyClicked(sel.first());
@@ -649,13 +668,20 @@ Handle(SelectMgr_EntityOwner) Viewport::frontEdgeOwner() const {
   return {};
 }
 
-void Viewport::handleMoveTo(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) {
-  AIS_ViewController::handleMoveTo(ctx, view);
-  if (interactor_ || !pickTypes_.empty() || planePicking_ || !ctx->HasDetected()) return;
+void Viewport::handleDynamicHighlight(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) {
+  AIS_ViewController::handleDynamicHighlight(ctx, view);
+  if (interactor_ || !pickTypes_.empty() || planePicking_ || !ctx->HasDetected()) {
+    showIdleHover({});
+    return;
+  }
   const Handle(SelectMgr_EntityOwner) edge = frontEdgeOwner();
-  if (edge.IsNull() || ctx->DetectedOwner() == edge) return;
-  for (int guard = 0; guard < 16 && ctx->HasNextDetected() && ctx->DetectedOwner() != edge; ++guard)
-    ctx->HilightNextDetected(view, false);
+  if (!edge.IsNull() && ctx->DetectedOwner() != edge)
+    for (int guard = 0; guard < 16 && ctx->HasNextDetected() && ctx->DetectedOwner() != edge; ++guard)
+      ctx->HilightNextDetected(view, false);
+  const Handle(StdSelect_BRepOwner) o = Handle(StdSelect_BRepOwner)::DownCast(ctx->DetectedOwner());
+  const bool thin = !o.IsNull() && o->HasShape() &&
+                    (o->Shape().ShapeType() == TopAbs_EDGE || o->Shape().ShapeType() == TopAbs_VERTEX);
+  showIdleHover(thin ? o->Shape() : TopoDS_Shape());
 }
 
 void Viewport::clickSelect(const QPointF& pos, Qt::KeyboardModifiers mods) {
@@ -718,6 +744,7 @@ void Viewport::boxSelect(const QPointF& from, const QPointF& to, Qt::KeyboardMod
     if (sel.size() == 1) emit bodyClicked(sel.first());
     emit selectionChanged();
   }
+  refreshSelectionOverlay();
   updateView();
 }
 
@@ -754,6 +781,7 @@ std::vector<std::pair<QString, TopoDS_Shape>> Viewport::selectedSubShapes() cons
 void Viewport::clearSelection() {
   if (context_.IsNull()) return;
   context_->ClearSelected(false);
+  refreshSelectionOverlay();
   redrawAll();
 }
 

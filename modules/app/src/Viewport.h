@@ -255,7 +255,7 @@ protected:
   void OnSelectionChanged(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
   void handleViewRedraw(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
   // Hover: near an edge of the face under the cursor, the edge lights up.
-  void handleMoveTo(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
+  void handleDynamicHighlight(const Handle(AIS_InteractiveContext)& ctx, const Handle(V3d_View)& view) override;
   Handle(SelectMgr_EntityOwner) frontEdgeOwner() const;
 
 private:
@@ -386,6 +386,13 @@ private:
   // While picking edges/faces/vertices: a bold highlight of the one under the cursor.
   Handle(AIS_InteractiveObject) hoverObject_;
   TopoDS_Shape hoverShape_;
+  // With no command running: the edge / vertex under the cursor and the ones
+  // selected, drawn thick over everything (the view's own highlight is thin).
+  void showIdleHover(const TopoDS_Shape& s);
+  void refreshSelectionOverlay();
+  Handle(AIS_InteractiveObject) idleHover_;
+  TopoDS_Shape idleHoverShape_;
+  std::vector<Handle(AIS_InteractiveObject)> selectionOverlay_;
   void updateHoverHighlight(const QPointF& pos);
   void clearHoverHighlight();
 };

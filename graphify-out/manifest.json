@@ -228,15 +228,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.cpp": {
-    "mtime": 1794558165.7164795,
-    "seen": 1794558333.004829,
-    "ast_hash": "7b8611decacbc25aadcb800dfa1b4847",
+    "mtime": 1794559740.5519872,
+    "seen": 1794559880.3677952,
+    "ast_hash": "79d031e4a2ca04edd7003cfc41680c23",
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794558165.7164795,
-    "seen": 1794558333.0048296,
-    "ast_hash": "fab8bdc4f100c9796b385a1f6363a0aa",
+    "mtime": 1794559562.6954575,
+    "seen": 1794559880.3677964,
+    "ast_hash": "15a8aea902321f61283808e2fe8c3616",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/ViewportSketch.cpp": {
-    "mtime": 1794533075.1718903,
-    "seen": 1794533517.3766465,
-    "ast_hash": "d865501b4580e1c44f1da65f550e4220",
+    "mtime": 1794559530.2499058,
+    "seen": 1794559880.367799,
+    "ast_hash": "4ce93c9bd4a3dd28699025eb55e1213e",
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {

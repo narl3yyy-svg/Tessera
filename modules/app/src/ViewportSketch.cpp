@@ -1,6 +1,8 @@
 // Viewport: sketches, profiles, plane picking and the sketch-editor hooks.
 #include "Viewport.h"
 
+#include <QTimer>
+
 #include <limits>
 
 #include <gp_Lin.hxx>
@@ -298,6 +300,47 @@ void Viewport::clearHoverHighlight() {
   }
   hoverObject_.Nullify();
   hoverShape_.Nullify();
+}
+
+void Viewport::showIdleHover(const TopoDS_Shape& s) {
+  if (context_.IsNull()) return;
+  if (s.IsNull()) {
+    if (!idleHover_.IsNull()) {
+      context_->Remove(idleHover_, false);
+      idleHover_.Nullify();
+      idleHoverShape_.Nullify();
+      QTimer::singleShot(0, this, [this] { redrawAll(); });
+    }
+    return;
+  }
+  if (!idleHoverShape_.IsNull() && s.IsSame(idleHoverShape_)) return;
+  if (!idleHover_.IsNull()) context_->Remove(idleHover_, false);
+  Handle(AIS_Shape) a = new AIS_Shape(s);
+  const Quantity_Color c = rgb(110, 170, 235);
+  lineStyle(a, c, 4.0, Aspect_TOL_SOLID);
+  a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 4.0));
+  context_->Display(a, AIS_WireFrame, -1, false);   // -1: not pickable itself
+  context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+  idleHover_ = a;
+  idleHoverShape_ = s;
+  // Shown while the view is mid-frame: draw a full frame next.
+  QTimer::singleShot(0, this, [this] { redrawAll(); });
+}
+
+void Viewport::refreshSelectionOverlay() {
+  if (context_.IsNull()) return;
+  for (auto& o : selectionOverlay_) context_->Remove(o, false);
+  selectionOverlay_.clear();
+  const Quantity_Color c = rgb(30, 120, 220);
+  for (const auto& [body, s] : selectedSubShapes()) {
+    if (s.ShapeType() == TopAbs_FACE) continue;   // faces show the view's own fill
+    Handle(AIS_Shape) a = new AIS_Shape(s);
+    lineStyle(a, c, 4.0, Aspect_TOL_SOLID);
+    a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 4.0));
+    context_->Display(a, AIS_WireFrame, -1, false);
+    context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+    selectionOverlay_.push_back(a);
+  }
 }
 
 void Viewport::updateHoverHighlight(const QPointF& pos) {
