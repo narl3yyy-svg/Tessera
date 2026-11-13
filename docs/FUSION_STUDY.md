@@ -63,7 +63,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] 2-Tangent Circle (placed in the corner by the cursor), 3-Tangent Circle (the one nearest the picks: a triangle's incircle), Overall Slot, Center Point Arc Slot.
 - [x] Ellipse (centre, one axis end, the other half axis): a closed profile; points can be kept on it.
 - [x] Ellipse dimensions: the Dimension tool gives the half axis the cursor is along (the drawn one, or the other as a radius).
-- [ ] Trim and offset of ellipses; sketch text; conic curve.
+- [x] Sketch text: the Text tool's panel (text, height, angle, font); the letters stand on a point (moves and constrains like any point), are profiles (each letter with its holes) and extrude into solid letters; double-click a text to change it.
+- [ ] Text along a path, text box (multi-line, alignment); trim and offset of ellipses; conic curve.
 - [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 
@@ -102,7 +103,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
-- [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7); Centerline linetype (Day 8). (3-point arc: done.)
+- [ ] Circumscribed / inscribed polygon with the side count typed after Tab (Day 6); Text with a draggable box (Day 7: text on a point done, the box not); Centerline linetype (Day 8). (3-point arc: done.)
 - [ ] Spline: Enter or the green check commits, Esc deletes an unfinished spline; drag fit points and handles (Days 2, 4).
 - [x] Dimension: where the cursor is dragged decides horizontal / vertical / aligned (Day 5).
 - [x] Dimensions named d1, d2 ... (model parameters, listed under their sketch in Change Parameters, named on hover) and used in other dimensions and feature values, e.g. d1 / 2 (Day 8).

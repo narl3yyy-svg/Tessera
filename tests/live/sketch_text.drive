@@ -1,0 +1,21 @@
+# Live: the Text tool. Click where the text starts, type it in the panel
+# (height 10 mm), Enter.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.text
+sclick 10 10
+waitfor sketchText
+wait 300
+type TO
+click textHeight
+key ctrl+a
+type 10 mm
+key Return
+wait 500
+key Escape
+shot /tmp/live_sketch_text.png
+click palette.finish
+wait 600

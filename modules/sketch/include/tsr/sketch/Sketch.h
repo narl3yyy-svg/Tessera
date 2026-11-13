@@ -91,11 +91,23 @@ struct Constraint {
 bool isDimension(ConstraintType t);
 const char* typeName(ConstraintType t);
 
+// Sketch text: letters standing on a point (bottom left of the first line),
+// as closed outlines that are profiles. `height` is the font size (cm),
+// `angle` turns the text about its point (radians, from the sketch's X).
+struct Text {
+  int point = -1;
+  std::string text;
+  double height = 0.5;
+  double angle = 0;
+  std::string font;   // a font family; empty: the default sans-serif
+};
+
 class Sketch {
 public:
   Sketch();
 
   std::vector<Point> points;     // points[0] is the origin
+  std::vector<Text> texts;
   std::vector<Entity> entities;
   std::vector<Constraint> constraints;
 
@@ -109,6 +121,7 @@ public:
   // last are the same point.
   int addSpline(const std::vector<int>& fitPoints, bool construction = false);
   int addEllipse(int center, int axisEnd, double otherRadius, bool construction = false);
+  int addText(int point, const std::string& text, double height, double angle = 0, const std::string& font = {});
   int addConstraint(Constraint c);   // no solving; see SolveResult / addConstraintChecked
 
   // Removes entities (and constraints that reference them), then the points

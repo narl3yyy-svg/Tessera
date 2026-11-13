@@ -40,7 +40,7 @@ public:
     CenterRectangle, Polygon, Slot, Trim, Collinear, Symmetry,
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
-    TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse,
+    TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -233,6 +233,10 @@ private:
   // (where the cursor is decides horizontal / vertical / aligned).
   std::optional<sketch::Constraint> dimensionCandidate(double x, double y) const;
   int dragLabel_ = -1;   // Select: a dimension's value being dragged
+  // Text: the panel for a new text at a point (textIndex < 0) or to change one.
+  // Returns false if cancelled.
+  bool editText(sketch::Text& t, bool isNew);
+  int textAt(double x, double y) const;   // the text whose letters' box holds (x, y), or -1
   // 2- / 3-Tangent Circle: the lines picked so far (and where they were clicked).
   std::vector<int> tangentLines_;
   std::vector<std::pair<double, double>> tangentClicks_;

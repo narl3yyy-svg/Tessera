@@ -26,6 +26,8 @@ void toSketch(const gp_Ax3& frame, const gp_Pnt& p, double& x, double& y);   // 
 // Edges of the sketch in 3D. Construction geometry only when asked.
 TopoDS_Shape curves(const Sketch& s, const gp_Ax3& frame, bool construction = false);
 TopoDS_Shape curve(const Sketch& s, const gp_Ax3& frame, int entity);
+// A text's letters as planar faces (outlines with their holes), in 3D.
+TopoDS_Shape textShape(const Sketch& s, const gp_Ax3& frame, int text);
 
 struct Profile {
   TopoDS_Face face;

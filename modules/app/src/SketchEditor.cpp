@@ -27,6 +27,12 @@
 #include <Prs3d_PointAspect.hxx>
 
 #include <QCursor>
+#include <QPushButton>
+#include <QFormLayout>
+#include <QFontDatabase>
+#include <QDialogButtonBox>
+#include <QDialog>
+#include <QComboBox>
 #include <QStyle>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -222,6 +228,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::OverallSlot: emit message(tr("Overall Slot: click both ends of the slot, then a point for the width.")); break;
     case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
     case Tool::Ellipse: emit message(tr("Ellipse: click the centre, the end of one axis, then a point for the other.")); break;
+    case Tool::Text: emit message(tr("Text: click where the text starts (bottom left). Double-click a text to change it.")); break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
@@ -1658,6 +1665,26 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       if (!res_.ok) undo();
       return;
     }
+    case Tool::Text: {
+      // A text already there: change it; else a new one standing on the click.
+      if (const int ti = textAt(x, y); ti >= 0) {
+        sketch::Text t = sk_.texts[ti];
+        if (editText(t, false)) {
+          checkpoint();
+          sk_.texts[ti] = t;
+          solveAndShow();
+        }
+        return;
+      }
+      const Pick p = pickPoint(x, y);
+      sketch::Text t;
+      if (!editText(t, true)) return;
+      checkpoint();
+      t.point = materialize(p);
+      sk_.texts.push_back(t);
+      solveAndShow();
+      return;
+    }
     case Tool::Project:
       projectAt(widgetPos);
       return;
@@ -1929,9 +1956,93 @@ void SketchEditor::selectInBox(const QPointF& from, const QPointF& to, Qt::Keybo
   rebuild();
 }
 
+int SketchEditor::textAt(double x, double y) const {
+  for (int i = static_cast<int>(sk_.texts.size()) - 1; i >= 0; --i) {
+    const TopoDS_Shape s = sketch::textShape(sk_, frame_, i);
+    if (s.IsNull()) continue;
+    // The letters' box in sketch coordinates, a little grown.
+    double x0 = 1e300, y0 = 1e300, x1 = -1e300, y1 = -1e300;
+    for (TopExp_Explorer v(s, TopAbs_VERTEX); v.More(); v.Next()) {
+      double vx, vy;
+      sketch::toSketch(frame_, BRep_Tool::Pnt(TopoDS::Vertex(v.Current())), vx, vy);
+      x0 = std::min(x0, vx), y0 = std::min(y0, vy), x1 = std::max(x1, vx), y1 = std::max(y1, vy);
+    }
+    const double m = tolerance() / 2;
+    if (x >= x0 - m && x <= x1 + m && y >= y0 - m && y <= y1 + m) return i;
+  }
+  return -1;
+}
+
+bool SketchEditor::editText(sketch::Text& t, bool isNew) {
+  // A small panel, as the familiar TEXT command: the words, their height,
+  // angle and font. Enter or OK makes it.
+  static double lastHeight = 0.5;
+  static QString lastFont;
+  QDialog dlg(view_);
+  dlg.setObjectName(QStringLiteral("sketchText"));
+  dlg.setWindowTitle(tr("Text"));
+  auto* form = new QFormLayout(&dlg);
+  auto* words = new QLineEdit(isNew ? QString() : QString::fromStdString(t.text));
+  words->setObjectName(QStringLiteral("textValue"));
+  auto* height = new QLineEdit(QString::number(fromInternal(isNew ? lastHeight : t.height, unit_), 'g', 6) +
+                               QStringLiteral(" ") + QString::fromUtf8(unitSymbol(unit_).data()));
+  height->setObjectName(QStringLiteral("textHeight"));
+  ParameterCompleter::attach(height, [this] { return parameterNames(); });
+  auto* angle = new QLineEdit(QString::number(isNew ? 0.0 : t.angle * 180 / std::numbers::pi, 'g', 6) + QStringLiteral(" deg"));
+  angle->setObjectName(QStringLiteral("textAngle"));
+  auto* font = new QComboBox;
+  font->setObjectName(QStringLiteral("textFont"));
+  font->setEditable(true);
+  font->addItem(tr("(default sans-serif)"), QString());
+  for (const QString& f : {QStringLiteral("serif"), QStringLiteral("monospace")}) font->addItem(f, f);
+  for (const QString& f : QFontDatabase::families()) font->addItem(f, f);
+  const QString current = isNew ? lastFont : QString::fromStdString(t.font);
+  if (const int k = font->findData(current); k >= 0) font->setCurrentIndex(k);
+  form->addRow(tr("Text"), words);
+  form->addRow(tr("Height"), height);
+  form->addRow(tr("Angle"), angle);
+  form->addRow(tr("Font"), font);
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+  buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("textOk"));
+  form->addRow(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  words->setFocus();
+  for (;;) {
+    if (dlg.exec() != QDialog::Accepted) return false;
+    try {
+      const double h = session_.document().evaluate(height->text().toStdString(), Unit::Millimeter, localDimensions());
+      const double a = session_.document().evaluate(angle->text().toStdString(), Unit::Degree);
+      if (words->text().trimmed().isEmpty()) throw std::runtime_error(tr("type the text").toStdString());
+      if (!(h > 0)) throw std::runtime_error(tr("the height must be greater than zero").toStdString());
+      t.text = words->text().toStdString();
+      t.height = h;
+      t.angle = a;
+      t.font = font->currentData().toString().isEmpty() && font->currentIndex() != 0 ? font->currentText().toStdString()
+                                                                                     : font->currentData().toString().toStdString();
+      lastHeight = h;
+      lastFont = QString::fromStdString(t.font);
+      return true;
+    } catch (const std::exception& e) {
+      emit message(tr("Text: %1").arg(QString::fromUtf8(e.what())));
+    }
+  }
+}
+
 void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
   double x, y;
   if (!toSketch(e->position(), x, y)) return;
+  // Double-click a text (with Select): change it.
+  if (tool_ == Tool::Select)
+    if (const int ti = textAt(x, y); ti >= 0) {
+      sketch::Text t = sk_.texts[ti];
+      if (editText(t, false)) {
+        checkpoint();
+        sk_.texts[ti] = t;
+        solveAndShow();
+      }
+      return;
+    }
   if (tool_ == Tool::Line) {
     // On the chain's end: a press-and-drag there still draws a tangent arc;
     // a double-click without moving ends the chain (decided on release).
@@ -3439,6 +3550,15 @@ void SketchEditor::rebuild() {
     Handle(AIS_Shape) a = wire(s, colour, hl ? 3.0 : 2.0, e.construction ? Aspect_TOL_DASH : Aspect_TOL_SOLID);
     ctx->Display(a, AIS_WireFrame, -1, false);
     ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);   // never hidden behind bodies
+    objects_.push_back(a);
+  }
+  for (int i = 0; i < static_cast<int>(sk_.texts.size()); ++i) {
+    const TopoDS_Shape ts = sketch::textShape(sk_, frame_, i);
+    if (ts.IsNull()) continue;
+    const bool fixed = res_.ok && sk_.texts[i].point < static_cast<int>(res_.pointFixed.size()) && res_.pointFixed[sk_.texts[i].point];
+    Handle(AIS_Shape) a = wire(ts, fixed ? fixedColor() : freeColor(), 1.5, Aspect_TOL_SOLID);
+    ctx->Display(a, AIS_WireFrame, -1, false);
+    ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
     objects_.push_back(a);
   }
   for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {

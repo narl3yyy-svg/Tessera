@@ -346,6 +346,14 @@ void ellipseIcon(QPainter& p) {
   dot(p, 32, 32);
 }
 
+void textIcon(QPainter& p) {   // a capital A on its baseline
+  stroke(p);
+  p.drawLine(QPointF(14, 52), QPointF(32, 10));
+  p.drawLine(QPointF(32, 10), QPointF(50, 52));
+  p.drawLine(QPointF(21, 38), QPointF(43, 38));
+  dot(p, 10, 54);
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -1028,6 +1036,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("slot-overall")) slotOverallIcon(p);
   else if (name == QLatin1String("slot-arc")) slotArcIcon(p);
   else if (name == QLatin1String("ellipse")) ellipseIcon(p);
+  else if (name == QLatin1String("text")) textIcon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

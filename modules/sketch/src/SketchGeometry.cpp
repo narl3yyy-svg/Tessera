@@ -3,6 +3,9 @@
 #include <BOPAlgo_Builder.hxx>
 #include <BOPAlgo_Tools.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <NCollection_String.hxx>
+#include <Font_BRepTextBuilder.hxx>
+#include <Font_BRepFont.hxx>
 #include <BRepClass_FaceClassifier.hxx>
 #include <BRepGProp.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
@@ -134,7 +137,8 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
   return {};
 }
 
-TopoDS_Shape curves(const Sketch& s, const gp_Ax3& f, bool construction) {
+namespace {
+TopoDS_Shape entityCurves(const Sketch& s, const gp_Ax3& f, bool construction) {
   TopoDS_Compound c;
   BRep_Builder b;
   b.MakeCompound(c);
@@ -143,6 +147,39 @@ TopoDS_Shape curves(const Sketch& s, const gp_Ax3& f, bool construction) {
     const TopoDS_Shape e = curve(s, f, i);
     if (!e.IsNull()) b.Add(c, e);
   }
+  return c;
+}
+} // namespace
+
+TopoDS_Shape textShape(const Sketch& s, const gp_Ax3& f, int id) {
+  const Text& t = s.texts.at(id);
+  if (t.text.empty() || !(t.height > 0)) return {};
+  try {
+    Font_BRepFont font;
+    const TCollection_AsciiString family(t.font.empty() ? "sans-serif" : t.font.c_str());
+    if (!font.FindAndInit(family, Font_FontAspect_Regular, t.height, Font_StrictLevel_Any)) return {};
+    const Point& p = s.points.at(t.point);
+    gp_Dir x = f.XDirection();
+    x.Rotate(gp_Ax1(f.Location(), f.Direction()), t.angle);
+    const gp_Ax3 pen(toWorld(f, p.x, p.y), f.Direction(), x);
+    Font_BRepTextBuilder builder;
+    return builder.Perform(font, NCollection_String(t.text.c_str()), pen, Graphic3d_HTA_LEFT, Graphic3d_VTA_BOTTOM);
+  } catch (const Standard_Failure&) {
+    return {};
+  }
+}
+
+TopoDS_Shape curves(const Sketch& s, const gp_Ax3& f, bool construction) {
+  const TopoDS_Shape base = entityCurves(s, f, construction);
+  if (construction || s.texts.empty()) return base;
+  TopoDS_Compound c;
+  BRep_Builder b;
+  b.MakeCompound(c);
+  if (!base.IsNull())
+    for (TopExp_Explorer it(base, TopAbs_EDGE); it.More(); it.Next()) b.Add(c, it.Current());
+  for (int i = 0; i < static_cast<int>(s.texts.size()); ++i)
+    if (const TopoDS_Shape ts = textShape(s, f, i); !ts.IsNull())
+      for (TopExp_Explorer it(ts, TopAbs_EDGE); it.More(); it.Next()) b.Add(c, it.Current());
   return c;
 }
 
@@ -174,8 +211,24 @@ bool interiorPoint(const TopoDS_Face& face, const gp_Ax3& f, double& x, double& 
 
 std::vector<Profile> profiles(const Sketch& s, const gp_Ax3& f) {
   std::vector<Profile> out;
-  const TopoDS_Shape edges = curves(s, f, false);
-  if (!TopExp_Explorer(edges, TopAbs_EDGE).More()) return out;
+  // Text: each letter's face (with its holes) is a profile of its own.
+  for (int i = 0; i < static_cast<int>(s.texts.size()); ++i) {
+    const TopoDS_Shape ts = textShape(s, f, i);
+    if (ts.IsNull()) continue;
+    for (TopExp_Explorer it(ts, TopAbs_FACE); it.More(); it.Next()) {
+      Profile p;
+      p.face = TopoDS::Face(it.Current());
+      GProp_GProps g;
+      BRepGProp::SurfaceProperties(p.face, g);
+      p.area = g.Mass();
+      if (p.area > 1e-9 && interiorPoint(p.face, f, p.x, p.y)) out.push_back(p);
+    }
+  }
+  const TopoDS_Shape edges = entityCurves(s, f, false);
+  if (!TopExp_Explorer(edges, TopAbs_EDGE).More()) {
+    std::stable_sort(out.begin(), out.end(), [](const Profile& a, const Profile& b) { return a.area > b.area; });
+    return out;
+  }
   try {
     // Split the curves at every crossing, chain them into wires, and let
     // OCCT build the faces of the planar arrangement.

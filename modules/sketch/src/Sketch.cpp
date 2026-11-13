@@ -143,6 +143,11 @@ int Sketch::addEllipse(int center, int axisEnd, double otherRadius, bool constru
   return static_cast<int>(entities.size()) - 1;
 }
 
+int Sketch::addText(int point, const std::string& text, double height, double angle, const std::string& font) {
+  texts.push_back({point, text, height, angle, font});
+  return static_cast<int>(texts.size()) - 1;
+}
+
 int Sketch::addConstraint(Constraint c) {
   constraints.push_back(std::move(c));
   return static_cast<int>(constraints.size()) - 1;
@@ -195,6 +200,8 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
     }
   }
   std::set<int> used = {0};
+  for (const auto& t : texts)
+    if (!forcePoints.count(t.point)) used.insert(t.point);
   for (const auto& e : keptE) {
     for (int p : {e.a, e.b, e.center})
       if (p >= 0) used.insert(p);
@@ -228,9 +235,16 @@ void Sketch::removeImpl(const std::set<int>& gone, const std::set<int>& forcePoi
     for (int& p : c.points) p = pointMap.at(p);
     for (int& e : c.entities) e = entityMap.at(e);
   }
+  std::vector<Text> keptT;
+  for (const auto& t : texts)
+    if (!dropP.count(t.point)) {
+      keptT.push_back(t);
+      keptT.back().point = pointMap.at(t.point);
+    }
   points = std::move(keptP);
   entities = std::move(keptE);
   constraints = std::move(keptC);
+  texts = std::move(keptT);
 }
 
 void Sketch::checkIndices() const {
@@ -241,6 +255,10 @@ void Sketch::checkIndices() const {
     if (p == -1 && !required) return;
     if (p < 0 || p >= np) throw SketchError("sketch references a missing point");
   };
+  for (const auto& t : texts) {
+    pt(t.point, true);
+    if (!(t.height > 0)) throw SketchError("text with no height");
+  }
   for (const auto& e : entities) {
     switch (e.type) {
       case EntityType::Line: pt(e.a, true); pt(e.b, true); if (e.a == e.b) throw SketchError("line with one point"); break;
@@ -282,6 +300,18 @@ std::string Sketch::toJson() const {
     }
     if (e.construction) je["construction"] = true;
     ents.push_back(je);
+  }
+  if (!texts.empty()) {
+    auto& tx = j["texts"] = nlohmann::json::array();
+    for (const auto& t : texts) {
+      nlohmann::json jt;
+      jt["p"] = t.point;
+      jt["text"] = t.text;
+      jt["h"] = t.height;
+      if (t.angle != 0) jt["a"] = t.angle;
+      if (!t.font.empty()) jt["font"] = t.font;
+      tx.push_back(jt);
+    }
   }
   auto& cons = j["constraints"] = nlohmann::json::array();
   for (const auto& c : constraints) {
@@ -337,6 +367,15 @@ Sketch Sketch::fromJson(const std::string& text) {
       e.construction = je.value("construction", false);
       e.projected = je.value("projected", false);
       s.entities.push_back(e);
+    }
+    for (const auto& jt : j.value("texts", nlohmann::json::array())) {
+      Text t;
+      t.point = jt.at("p").get<int>();
+      t.text = jt.value("text", std::string{});
+      t.height = jt.value("h", 0.5);
+      t.angle = jt.value("a", 0.0);
+      t.font = jt.value("font", std::string{});
+      s.texts.push_back(t);
     }
     for (const auto& jc : j.value("constraints", nlohmann::json::array())) {
       Constraint c;
