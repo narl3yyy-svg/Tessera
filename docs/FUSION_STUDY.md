@@ -58,7 +58,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 
 ### Solid
-- [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: closed profiles; open curves next); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).
+- [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: profiles and open curves); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).
 - [ ] Revolve, Sweep, Loft, Hole, Fillet, Chamfer, Shell, Press Pull: in-canvas manipulators everywhere (rotation ring for Revolve angle, Hole depth arrow, Shell thickness arrow).
 - [ ] Hole: thread options (tapped holes); hole types table.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.

@@ -424,6 +424,28 @@ std::vector<TopoDS_Shape> pickedFaces(const SketchProfiles& sp, const std::strin
   return faces;
 }
 
+// The open curves of a sketch (not construction, not closed loops), chained
+// into wires.
+std::vector<TopoDS_Wire> openChains(const sketch::Sketch& sk, const gp_Ax3& frame) {
+  Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
+  for (int i = 0; i < static_cast<int>(sk.entities.size()); ++i) {
+    const auto& e = sk.entities[i];
+    if (e.construction || e.type == sketch::EntityType::Circle) continue;
+    if (e.type == sketch::EntityType::Spline && e.fit.size() > 2 && e.fit.front() == e.fit.back()) continue;
+    const TopoDS_Shape c = sketch::curve(sk, frame, i);
+    if (!c.IsNull()) edges->Append(c);
+  }
+  std::vector<TopoDS_Wire> out;
+  if (edges->IsEmpty()) return out;
+  Handle(TopTools_HSequenceOfShape) wires;
+  ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+  for (int i = 1; i <= wires->Length(); ++i) {
+    const TopoDS_Wire w = TopoDS::Wire(wires->Value(i));
+    if (!BRep_Tool::IsClosed(w)) out.push_back(w);
+  }
+  return out;
+}
+
 class Extrude final : public Command {
 public:
   Extrude() {
@@ -551,6 +573,7 @@ public:
     Document& doc = docOf(ctx);
     std::vector<TopoDS_Shape> faces;
     gp_Dir n;
+    bool openWalls = false;   // walls along open curves (Thin Extrude)
     if (!facesOf(in).empty()) {
       std::tie(faces, n) = bodyFaces(doc, in);
     } else {
@@ -562,11 +585,32 @@ public:
       } catch (const sketch::SketchError& e) {
         throw CommandError(e.what());
       }
-      if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
-      faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
-      n = sp.frame.Direction();
+      // Thin Extrude with no profile picked: a sketch's open curves become walls.
+      const bool thin = in.count("thin") && getBool(in, "thin");
+      if (thin && getString(in, "profiles").empty()) {
+        const auto chains = openChains(sketch::Sketch::fromJson(rec->data), sp.frame);
+        if (!chains.empty()) {
+          const std::string loc = getString(in, "wallLocation");
+          const auto side = loc == "Side 2" ? kernel::WallSide::Side2 : loc == "Center" ? kernel::WallSide::Center
+                                                                                       : kernel::WallSide::Side1;
+          const gp_Dir nd = sp.frame.Direction();
+          try {
+            for (const auto& c : chains)
+              faces.push_back(kernel::openWallBand(c, {nd.X(), nd.Y(), nd.Z()}, side, getReal(in, "wallThickness")));
+          } catch (const kernel::KernelError& e) {
+            throw CommandError(e.what());
+          }
+          n = nd;
+          openWalls = true;
+        }
+      }
+      if (!openWalls) {
+        if (sp.profiles.empty()) throw CommandError(rec->name + " has no closed profile to extrude");
+        faces = pickedFaces(sp, getString(in, "profiles"), rec->name);
+        n = sp.frame.Direction();
+      }
     }
-    if (in.count("thin") && getBool(in, "thin")) {
+    if (!openWalls && in.count("thin") && getBool(in, "thin")) {
       const std::string loc = getString(in, "wallLocation");
       const auto side = loc == "Side 2" ? kernel::WallSide::Side2 : loc == "Center" ? kernel::WallSide::Center
                                                                                    : kernel::WallSide::Side1;
@@ -1738,21 +1782,11 @@ public:
     const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
     const sketch::Sketch sk = sketch::Sketch::fromJson(rec->data);
     // The open curves of the sketch, chained into wires; the longest is the path.
-    Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
-    for (int i = 0; i < static_cast<int>(sk.entities.size()); ++i) {
-      const auto& e = sk.entities[i];
-      if (e.construction || e.type == sketch::EntityType::Circle) continue;
-      if (e.type == sketch::EntityType::Spline && e.fit.size() > 2 && e.fit.front() == e.fit.back()) continue;
-      const TopoDS_Shape c = sketch::curve(sk, frame, i);
-      if (!c.IsNull()) edges->Append(c);
-    }
-    if (edges->IsEmpty()) throw CommandError("Path: the sketch has no open curve to follow");
-    Handle(TopTools_HSequenceOfShape) wires;
-    ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+    const auto chains = openChains(sk, frame);
+    if (chains.empty()) throw CommandError("Path: the sketch has no open curve to follow");
     TopoDS_Wire path;
     double length = -1;
-    for (int i = 1; i <= wires->Length(); ++i) {
-      const TopoDS_Wire w = TopoDS::Wire(wires->Value(i));
+    for (const TopoDS_Wire& w : chains) {
       GProp_GProps g;
       BRepGProp::LinearProperties(w, g);
       if (g.Mass() > length) {

@@ -1093,6 +1093,79 @@ std::vector<TopoDS_Shape> wallBand(const TopoDS_Shape& faceShape, WallSide side,
   return out;
 }
 
+namespace {
+// An open wire offset by `dist` to the left of its direction (right if
+// negative), with mitred corners.
+TopoDS_Wire offsetOpenWire(const TopoDS_Wire& w, const gp_Dir& n, double dist) {
+  if (std::abs(dist) < 1e-12) return w;
+  BRepAdaptor_CompCurve c(w);
+  gp_Pnt p0;
+  gp_Vec t0;
+  c.D1(c.FirstParameter(), p0, t0);
+  const gp_Vec left = gp_Vec(n).Crossed(t0).Normalized();
+  // A single straight edge: OCCT returns nothing, so move it directly.
+  int edges = 0;
+  TopoDS_Edge only;
+  for (TopExp_Explorer e(w, TopAbs_EDGE); e.More(); e.Next(), ++edges) only = TopoDS::Edge(e.Current());
+  // (A composite curve reports "other curve" even for one line: ask the edge.)
+  if (edges == 1 && BRepAdaptor_Curve(only).GetType() == GeomAbs_Line) {
+    gp_Trsf tr;
+    tr.SetTranslation(left * dist);
+    return TopoDS::Wire(BRepBuilderAPI_Transform(w, tr, true).Shape());
+  }
+  for (double s : {dist, -dist}) {
+    BRepOffsetAPI_MakeOffset off(w, GeomAbs_Intersection, true);
+    off.Perform(s);
+    if (!off.IsDone()) continue;
+    for (TopExp_Explorer x(off.Shape(), TopAbs_WIRE); x.More(); x.Next()) {
+      const TopoDS_Wire r = TopoDS::Wire(x.Current());
+      // On the wanted side? Test with the point nearest the start.
+      BRepAdaptor_CompCurve rc(r);
+      const gp_Pnt a = rc.Value(rc.FirstParameter()), b = rc.Value(rc.LastParameter());
+      const gp_Pnt q = a.Distance(p0) < b.Distance(p0) ? a : b;
+      if (gp_Vec(p0, q).Dot(left) * dist > 0) return r;
+    }
+  }
+  return {};
+}
+} // namespace
+
+TopoDS_Shape openWallBand(const TopoDS_Shape& wireShape, Vec3 nv, WallSide side, double thickness) {
+  requirePositive(thickness, "wall thickness");
+  if (wireShape.IsNull() || wireShape.ShapeType() != TopAbs_WIRE) throw KernelError("Thin Extrude: needs sketch curves");
+  const TopoDS_Wire w = TopoDS::Wire(wireShape);
+  const gp_Dir n(nv.x, nv.y, nv.z);
+  const double l = side == WallSide::Side1 ? thickness : side == WallSide::Center ? thickness / 2 : 0;
+  const double r = side == WallSide::Side2 ? thickness : side == WallSide::Center ? thickness / 2 : 0;
+  const TopoDS_Shape band = guarded("Thin Extrude", [&]() -> TopoDS_Shape {
+    const TopoDS_Wire a = offsetOpenWire(w, n, l), b = offsetOpenWire(w, n, -r);
+    if (a.IsNull() || b.IsNull()) return {};
+    // The outline: one side, across the end, the other side back, across the start.
+    BRepAdaptor_CompCurve ca(a), cb(b);
+    const gp_Pnt a0 = ca.Value(ca.FirstParameter()), a1 = ca.Value(ca.LastParameter());
+    const gp_Pnt b0 = cb.Value(cb.FirstParameter()), b1 = cb.Value(cb.LastParameter());
+    const bool same = a0.Distance(b0) + a1.Distance(b1) <= a0.Distance(b1) + a1.Distance(b0);
+    Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
+    for (TopExp_Explorer e(a, TopAbs_EDGE); e.More(); e.Next()) edges->Append(e.Current());
+    for (TopExp_Explorer e(b, TopAbs_EDGE); e.More(); e.Next()) edges->Append(e.Current());
+    edges->Append(BRepBuilderAPI_MakeEdge(a0, same ? b0 : b1).Edge());
+    edges->Append(BRepBuilderAPI_MakeEdge(a1, same ? b1 : b0).Edge());
+    Handle(TopTools_HSequenceOfShape) wires;
+    ShapeAnalysis_FreeBounds::ConnectEdgesToWires(edges, 1e-6, false, wires);
+    if (wires->Length() != 1) return {};
+    const TopoDS_Wire outline = TopoDS::Wire(wires->Value(1));
+    BRepBuilderAPI_MakeFace mf(gp_Pln(a0, n), outline, true);
+    if (!mf.IsDone()) return {};
+    TopoDS_Face f = mf.Face();
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(f, g);
+    if (g.Mass() < 0) f.Reverse();
+    return f;
+  });
+  if (band.IsNull() || !isValid(band)) throw KernelError("Thin Extrude: could not make a wall along these curves");
+  return band;
+}
+
 TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,
                        double startOffset) {
   if (faces.empty()) throw KernelError("nothing to extrude: no profile selected");

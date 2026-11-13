@@ -89,6 +89,9 @@ enum class ChamferType { TwoDistances, DistanceAngle };
 // Center half each way; corners are mitred. Returns flat faces.
 enum class WallSide { Side1, Center, Side2 };
 std::vector<TopoDS_Shape> wallBand(const TopoDS_Shape& face, WallSide side, double thickness);
+// The same for an open chain of curves in a plane with normal n: Side 1 is
+// to the left of the curve's direction (n up), Side 2 to the right.
+TopoDS_Shape openWallBand(const TopoDS_Shape& wire, Vec3 n, WallSide side, double thickness);
 TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, ChamferType type,
                        double first, double second, bool flip);
 

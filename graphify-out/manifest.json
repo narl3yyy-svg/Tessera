@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794533157.9918573,
-    "seen": 1794533517.3766615,
-    "ast_hash": "24b449e548e98824b17b3ade6e51f317",
+    "mtime": 1794533603.4464753,
+    "seen": 1794533917.2334726,
+    "ast_hash": "a61c500ffa86792fb90da9a19e2e5c57",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794532926.379049,
-    "seen": 1794533517.3766663,
-    "ast_hash": "3c97d23ed99bd516f103b6653036f787",
+    "mtime": 1794533603.4434743,
+    "seen": 1794533917.233478,
+    "ast_hash": "bfe94842bc743333cdf18b14c787b518",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794532926.379049,
-    "seen": 1794533517.3766682,
-    "ast_hash": "1b3b8452f3dc31c445653c55378d8ff6",
+    "mtime": 1794533702.9752464,
+    "seen": 1794533917.23348,
+    "ast_hash": "97a7bf35a4050730aff1ef46cba71420",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794533157.9928577,
-    "seen": 1794533517.3769007,
-    "ast_hash": "ae7b644d7409bf3483d3fd387c6195c9",
+    "mtime": 1794533719.7094579,
+    "seen": 1794533917.2337096,
+    "ast_hash": "2d23a0fd0ac9adb69fbf9cb42053aa02",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794533157.9928577,
-    "seen": 1794533517.376904,
-    "ast_hash": "b5af777db7bbe5dda746cdea01276d23",
+    "mtime": 1794533719.724579,
+    "seen": 1794533917.2337132,
+    "ast_hash": "5dd58a22b615a7981b28abe1105815e3",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -2034,9 +2034,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_thin_extrude.py": {
-    "mtime": 1794532578.951983,
-    "seen": 1794533517.3766978,
-    "ast_hash": "1448cf1de3856577ef166283ae0c0565",
+    "mtime": 1794533663.674162,
+    "seen": 1794533917.2335095,
+    "ast_hash": "ffb7088dbe1d6605929425b38d042e13",
     "semantic_hash": ""
   },
   "tests/live/hole_on_face_check.py": {
