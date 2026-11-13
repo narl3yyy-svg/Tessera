@@ -14,7 +14,7 @@ Each phase ends with something usable; nothing below is promised by date.
 | P3a | **Revolve, Fillet, Chamfer** with edge picking that survives edits | **done (this release)** |
 | P3b | **More features**: Shell, Hole, Sweep, Loft, Draft; extrude To Object/All/taper; trim/offset/spline/fillet in sketches ✅; in-canvas drag arrows ✅ (Extrude, Press Pull, Fillet, Chamfer); topological naming | next |
 | P4 | **Construction and patterns**: offset/angle/midplane planes, axes, points; rectangular/circular/path patterns; mirror; Combine, Split Body, Move/Copy, Press Pull | |
-| P5 | **Parameters and expressions**: `d1 = width/2 + 3 mm`, parameter table, every input accepts expressions | **done** (model parameter names `d1` still to come) |
+| P5 | **Parameters and expressions**: `d1 = width/2 + 3 mm`, parameter table, every input accepts expressions | **done** (sketch dimensions and feature values are named model parameters; rename, favourites, filter) |
 | P6 | **Components and assemblies**: components, joints (rigid, revolute, slider, ...), motion, interference | |
 | P7 | **Import/export**: STEP, IGES, STL, 3MF, OBJ, DXF; 3D-print export | |
 | P8 | **Drawings**: 2D drawings from the model with views, sections, dimensions, PDF/DXF output | |

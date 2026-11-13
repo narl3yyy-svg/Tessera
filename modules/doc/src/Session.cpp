@@ -233,6 +233,18 @@ std::string Session::deleteParameter(const std::string& name) {
   return err;
 }
 
+std::string Session::renameParameter(const std::string& name, const std::string& newName) {
+  auto err = historyEdit(*doc_, commands_, "Rename parameter", [&] { doc_->renameParameter(name, newName); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::setParameterFavorite(const std::string& name, bool favorite) {
+  auto err = plainEdit(*doc_, "Favorite", [&] { doc_->setParameterFavorite(name, favorite); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
 bool Session::undo() {
   const bool ok = doc_->undo();
   if (ok) notifyChanged();

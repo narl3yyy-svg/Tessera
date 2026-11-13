@@ -79,6 +79,9 @@ struct ModelParameter {
   std::string owner;        // the sketch it belongs to
   double value = 0;         // internal units
   bool angle = false;
+  Unit unit = Unit::Millimeter;   // the unit it is shown and evaluated in (None: a plain number)
+  std::string input;        // a feature value: the input's id ("distance"); empty for a sketch dimension
+  std::string label;        // a feature value: the input's label ("Distance")
 };
 
 struct Body {
@@ -122,6 +125,8 @@ struct Feature {
   std::string error;       // why the last recompute failed, empty if it worked
   bool suppressed = false;
   bool rolledBack = false; // after the history marker: not replayed
+  // Model parameter names of its values (input id -> "d5"), given when made.
+  std::map<std::string, std::string> parameterNames;
 };
 
 class Document final : public CommandContext {
@@ -178,6 +183,11 @@ public:
   // Sketch dimensions as model parameters: the named dimensions of the
   // computed sketches, in timeline order.
   std::vector<ModelParameter> modelParameters() const;
+  // Renames a user or model parameter; every expression that uses it follows.
+  void renameParameter(const std::string& name, const std::string& newName);
+  // Favourites (the star in Change Parameters), kept in the design.
+  std::vector<std::string> favoriteParameters() const;
+  void setParameterFavorite(const std::string& name, bool favorite);
   // The next free dimension name: d1, d2 ... (over every sketch feature)
   std::string nextDimensionName(const std::vector<std::string>& alsoTaken = {}) const;
   double evaluateExpression(const std::string& text, Unit unit) override { return evaluate(text, unit); }
@@ -290,6 +300,7 @@ private:
   void reevaluateParameters();
   // Evaluates the "=<id>" expressions of a feature's inputs into their values.
   void evaluateFeatureExpressions(const Command& cmd, Inputs& in) const;
+  void nameFeatureParameters(int featureId, const Command& cmd, const Inputs& inputs);
 
   std::map<std::string, TopoDS_Shape> bodyShapes() const;
   static FeatureEffect effectOf(const std::map<std::string, TopoDS_Shape>& before,

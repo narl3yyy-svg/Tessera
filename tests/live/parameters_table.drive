@@ -1,0 +1,30 @@
+# Live: Change Parameters as in the familiar dialog. Feature values are
+# model parameters (d1 ...); the filter narrows the table; a click on the
+# star makes a favourite (listed again under Favorites); double-click a
+# name to rename it.
+waitfor tsr.feature.extrude
+wait 600
+bdclick User_Parameters       # double-click opens Change Parameters
+waitfor parameterFilter
+wait 400
+expectrows 8                  # Box1: d1-d6; Extrude1: d7 (distance), d8 (taper)
+click parameterFilter
+type Extrude
+expectrows 2                  # a feature's name shows all its values
+key ctrl+a
+key BackSpace
+expectrows 8
+pstar d7
+expectrows 9                  # d7 again under Favorites
+pname d7
+wait 300
+key ctrl+a
+type stud
+key Return
+wait 600
+click parameterFilter
+type stud
+expectrows 2                  # the favourite and the model row
+shot /tmp/live_parameters_table.png
+key ctrl+a
+key BackSpace

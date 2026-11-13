@@ -32,8 +32,8 @@ scope.
 | **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
-| **Parametric** | Sketch dimensions are named model parameters (d1, d2 ...) usable in any expression; every step is in the timeline: double-click to change it and everything after it rebuilds; drag features to reorder (a drop that would break a feature is refused); drag the history marker back to roll the design back and add features earlier, or right-click > Roll History Marker Here / Roll to End; suppress, delete, unlimited undo |
-| **Parameters** | User parameters and every feature's values in one table (*Modify → Change Parameters*); every value and sketch dimension takes an expression such as `width / 2 + 3 mm`, `sqrt(a^2 + b^2)` or `atan(h / w)`, and the model follows when a parameter changes |
+| **Parametric** | Sketch dimensions and feature values (an extrude's distance, a fillet's radius ...) are named model parameters (d1, d2 ...) usable in any expression; every step is in the timeline: double-click to change it and everything after it rebuilds; drag features to reorder (a drop that would break a feature is refused); drag the history marker back to roll the design back and add features earlier, or right-click > Roll History Marker Here / Roll to End; suppress, delete, unlimited undo |
+| **Parameters** | User parameters and every feature's values in one table (*Modify → Change Parameters*); every value and sketch dimension takes an expression such as `width / 2 + 3 mm`, `sqrt(a^2 + b^2)` or `atan(h / w)`, and the model follows when a parameter changes; double-click a name to rename any parameter (its users follow), star favourites to list them first, and filter the table |
 | **Settings** | Document units (mm default, inches, cm, m), grid spacing and snap, Fusion / SolidWorks / Tinkercad mouse schemes, zoom direction, free or constrained orbit, orthographic or perspective camera |
 | **Scripting** | Python with a Fusion-style `adsk` API subset and `tsr` helpers; headless `tessera-cli` |
 
@@ -90,17 +90,17 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 
 | Area | Planned |
 |---|---|
-| **Parameters** | Model parameter names (`d1`) usable in other expressions, favourites and filtering in the table |
-| **Sketch** | control-point Spline, Ellipse, Conic, Text, sketch patterns, Include / Intersect, 3-point shapes, Tangent Arc |
+| **Sketch** | control-point Spline, Conic, Include, Tangent Arc; text along a path or in a box |
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, face patterns |
 | **Modify** | Replace Face, Split Face, Align, Appearance, Physical Material |
-| **Extrude** | To curved faces, thin walls; drag arrows for Shell, Hole and Move |
-| **Construct** | Tangent Plane, Plane Through Points, Axis, Point |
+| **Extrude** | To curved faces, Participant Bodies; drag arrows for Move |
+| **Construct** | Tangent Plane, Plane Through Points |
 | **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Contact Sets |
 | **Inspect** | Minimum Radius, Accessibility, Isocurve analysis |
 | **Insert** | SVG / DXF, Canvas, Decal |
 | **Workspaces** | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |
-| **Files** | DXF export of sketches, named views |
+| **Display** | Environments, ground shadow; Appearance (materials on faces) |
+| **Files** | DXF export of sketches; recent files |
 
 **Not planned:** cloud storage or collaboration, user accounts and logins, telemetry, electronics / PCB design.
 

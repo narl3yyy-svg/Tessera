@@ -133,6 +133,8 @@ public:
     if (parseUnit(name)) return "Name: '" + name + "' is a unit name";
     if (!isValidParameterName(name)) return "Name: '" + name + "' is a function or constant name";
     if (docOf(ctx).userParameter(name)) return "Name: a parameter named '" + name + "' already exists";
+    for (const auto& m : docOf(ctx).modelParameters())
+      if (m.name == name) return "Name: '" + name + "' is a model parameter (" + m.owner + ")";
     const auto unit = parseUnit(getString(in, "unit"));
     if (!unit) return "Unit: unknown unit '" + getString(in, "unit") + "'";
     try {

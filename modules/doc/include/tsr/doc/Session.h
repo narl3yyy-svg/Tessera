@@ -53,6 +53,9 @@ public:
   // re-evaluates the parameters and replays the timeline.
   std::string setParameter(const std::string& name, const std::string& expression, const std::string& comment);
   std::string deleteParameter(const std::string& name);
+  // Any parameter, user or model (d1 ... or a feature's value); expressions follow.
+  std::string renameParameter(const std::string& name, const std::string& newName);
+  std::string setParameterFavorite(const std::string& name, bool favorite);
 
   // Named views: one undo step each, no replay (a view is not history).
   std::string addNamedView(const NamedView& v);

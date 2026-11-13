@@ -38,7 +38,44 @@ constexpr int kAxesTag = 6;
 constexpr int kPointsTag = 7;
 constexpr int kComponentsTag = 8;
 constexpr int kBodyNamesTag = 9;
-constexpr int kNamedViewsTag = 10;   // body renames: "alias:<name>" -> internal, "show:<internal>" -> shown
+constexpr int kNamedViewsTag = 10;
+constexpr int kFavoritesTag = 11;   // favourite parameters: "list" = "a,b,c"
+
+// A feature's model parameter names, stored as "distance=d5;taperAngle=d6".
+std::map<std::string, std::string> parseNames(const std::string& s) {
+  std::map<std::string, std::string> out;
+  std::stringstream ss(s);
+  std::string item;
+  while (std::getline(ss, item, ';'))
+    if (const auto eq = item.find('='); eq != std::string::npos) out[item.substr(0, eq)] = item.substr(eq + 1);
+  return out;
+}
+std::string joinNames(const std::map<std::string, std::string>& names) {
+  std::string out;
+  for (const auto& [k, v] : names) out += (out.empty() ? "" : ";") + k + "=" + v;
+  return out;
+}
+
+// `text` with every whole identifier `from` replaced by `to` (numbers and
+// longer names that contain it are left alone).
+std::string replaceIdentifier(const std::string& text, const std::string& from, const std::string& to) {
+  auto start = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_'; };
+  auto part = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+  std::string out;
+  size_t i = 0;
+  while (i < text.size()) {
+    if (start(text[i]) && (i == 0 || !part(text[i - 1]))) {
+      size_t j = i;
+      while (j < text.size() && part(text[j])) ++j;
+      const std::string tok = text.substr(i, j - i);
+      out += tok == from ? to : tok;
+      i = j;
+    } else {
+      out += text[i++];
+    }
+  }
+  return out;
+}   // body renames: "alias:<name>" -> internal, "show:<internal>" -> shown
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -150,6 +187,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kComponentsTag, true);
   doc_->Main().FindChild(kBodyNamesTag, true);
   doc_->Main().FindChild(kNamedViewsTag, true);
+  doc_->Main().FindChild(kFavoritesTag, true);
 }
 
 std::vector<NamedView> Document::namedViews() const {
@@ -359,7 +397,7 @@ ExpressionEnv Document::expressionEnv() const {
   for (const auto& p : userParameters())
     (*values)[p.name] = quantityOf(p.value, parseUnit(p.unit).value_or(Unit::None));
   for (const auto& m : modelParameters())
-    if (!values->count(m.name)) (*values)[m.name] = quantityOf(m.value, m.angle ? Unit::Degree : Unit::Millimeter);
+    if (!values->count(m.name)) (*values)[m.name] = quantityOf(m.value, m.unit);
   env.lookup = [values](const std::string& n) -> std::optional<Quantity> {
     auto it = values->find(n);
     if (it == values->end()) return std::nullopt;
@@ -400,12 +438,153 @@ std::vector<ModelParameter> Document::modelParameters() const {
   for (const auto& rec : sketches()) {
     try {
       for (const auto& c : sketch::Sketch::fromJson(rec.data).constraints)
-        if (!c.name.empty() && !c.driven && sketch::isDimension(c.type))
-          out.push_back({c.name, c.expression, rec.name, c.value, c.type == sketch::ConstraintType::Angle});
+        if (!c.name.empty() && !c.driven && sketch::isDimension(c.type)) {
+          const bool angle = c.type == sketch::ConstraintType::Angle;
+          out.push_back({c.name, c.expression, rec.name, c.value, angle, angle ? Unit::Degree : Unit::Millimeter, {}, {}});
+        }
     } catch (const std::exception&) {
     }
   }
+  // Feature values (an extrude's distance, a fillet's radius ...): each
+  // shown value has its name, as in the familiar Parameters table.
+  if (!registry_) return out;
+  for (const auto& f : features()) {
+    const Command* cmd = registry_->find(f.commandId);
+    if (!cmd || f.parameterNames.empty()) continue;
+    for (const InputDef& d : cmd->def().inputs) {
+      const auto n = f.parameterNames.find(d.id);
+      if (n == f.parameterNames.end() || !isInputVisible(d, f.inputs)) continue;
+      const auto it = f.inputs.find(d.id);
+      if (it == f.inputs.end()) continue;
+      double v = 0;
+      if (const auto* x = std::get_if<double>(&it->second)) v = *x;
+      else if (const auto* i = std::get_if<std::int64_t>(&it->second)) v = static_cast<double>(*i);
+      else continue;
+      const Unit u = d.type == InputType::Integer ? Unit::None : d.unit;
+      out.push_back({n->second, inputExpression(f.inputs, d.id), f.name, v, dimensionOf(u) == Dimension::Angle, u,
+                     d.id, d.label});
+    }
+  }
   return out;
+}
+
+void Document::nameFeatureParameters(int featureId, const Command& cmd, const Inputs& inputs) {
+  if (cmd.def().id == kCmdSketch) return;   // a sketch's values are its dimensions
+  Handle(TDataStd_NamedData) nd = featureData(doc_, featureId);
+  auto names = parseNames(stringOf(nd, "params"));
+  std::vector<std::string> taken;
+  for (const auto& [k, v] : names) taken.push_back(v);
+  bool changed = false;
+  for (const InputDef& d : cmd.def().inputs) {
+    if (d.type != InputType::Real && d.type != InputType::Integer) continue;
+    if (names.count(d.id) || !inputs.count(d.id) || !isInputVisible(d, inputs)) continue;
+    names[d.id] = nextDimensionName(taken);
+    taken.push_back(names[d.id]);
+    changed = true;
+  }
+  if (changed) nd->SetString("params", ext(joinNames(names)));
+}
+
+void Document::renameParameter(const std::string& name, const std::string& newName) {
+  requireTransaction("renameParameter");
+  if (newName == name) return;
+  if (!isValidParameterName(newName))
+    throw DocumentError("'" + newName + "' cannot be a parameter name (letters, digits and underscores; "
+                        "not a unit or function name)");
+  const auto models = modelParameters();
+  auto taken = [&](const std::string& n) {
+    if (userParameter(n)) return true;
+    for (const auto& m : models)
+      if (m.name == n) return true;
+    return false;
+  };
+  if (!taken(name)) throw DocumentError("no parameter named '" + name + "'");
+  if (taken(newName)) throw DocumentError("a parameter named '" + newName + "' already exists");
+  // The parameter itself.
+  if (const TDF_Label l = findParameterLabel(doc_, name); !l.IsNull()) TDataStd_Name::Set(l, ext(newName));
+  for (const auto& f : features()) {
+    Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
+    auto names = f.parameterNames;
+    bool renamed = false;
+    for (auto& [k, v] : names)
+      if (v == name) {
+        v = newName;
+        renamed = true;
+      }
+    if (renamed) nd->SetString("params", ext(joinNames(names)));
+    // Expressions that use it, and a sketch dimension of that name.
+    Inputs in = f.inputs;
+    bool changed = false;
+    for (auto& [k, v] : in) {
+      auto* text = std::get_if<std::string>(&v);
+      if (!text) continue;
+      if (k.size() > 1 && k[0] == '=') {
+        const std::string t = replaceIdentifier(*text, name, newName);
+        changed = changed || t != *text;
+        *text = t;
+      } else if (k == "data" && f.commandId == kCmdSketch) {
+        auto j = nlohmann::json::parse(*text, nullptr, false);
+        if (j.is_discarded() || !j.contains("constraints")) continue;
+        bool sk = false;
+        for (auto& c : j["constraints"]) {
+          if (c.contains("name") && c["name"] == name) {
+            c["name"] = newName;
+            sk = true;
+          }
+          if (c.contains("expr") && c["expr"].is_string()) {
+            const std::string e = c["expr"], t = replaceIdentifier(e, name, newName);
+            if (t != e) {
+              c["expr"] = t;
+              sk = true;
+            }
+          }
+        }
+        if (sk) {
+          *text = j.dump();
+          changed = true;
+        }
+      }
+    }
+    if (changed) nd->SetString("inputs", ext(toJson(in).dump()));
+  }
+  for (const auto& p : userParameters()) {
+    const std::string t = replaceIdentifier(p.expression, name, newName);
+    if (t == p.expression) continue;
+    Handle(TDataStd_NamedData) nd;
+    findParameterLabel(doc_, p.name).FindAttribute(TDataStd_NamedData::GetID(), nd);
+    nd->SetString("expression", ext(t));
+  }
+  const auto favs = favoriteParameters();
+  if (std::find(favs.begin(), favs.end(), name) != favs.end()) {
+    setParameterFavorite(name, false);
+    setParameterFavorite(newName, true);
+  }
+}
+
+std::vector<std::string> Document::favoriteParameters() const {
+  Handle(TDataStd_NamedData) nd;
+  std::vector<std::string> out;
+  if (!doc_->Main().FindChild(kFavoritesTag, true).FindAttribute(TDataStd_NamedData::GetID(), nd)) return out;
+  std::stringstream ss(stringOf(nd, "list"));
+  std::string item;
+  while (std::getline(ss, item, ','))
+    if (!item.empty()) out.push_back(item);
+  return out;
+}
+
+void Document::setParameterFavorite(const std::string& name, bool favorite) {
+  requireTransaction("setParameterFavorite");
+  auto list = favoriteParameters();
+  const auto it = std::find(list.begin(), list.end(), name);
+  if (favorite == (it != list.end())) return;
+  if (favorite) list.push_back(name);
+  else list.erase(it);
+  std::string joined;
+  for (const auto& n : list) joined += (joined.empty() ? "" : ",") + n;
+  const TDF_Label l = doc_->Main().FindChild(kFavoritesTag, true);
+  Handle(TDataStd_NamedData) nd;
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
+  nd->SetString("list", ext(joined));
 }
 
 std::string Document::nextDimensionName(const std::vector<std::string>& alsoTaken) const {
@@ -417,8 +596,10 @@ std::string Document::nextDimensionName(const std::vector<std::string>& alsoTake
     top = std::max(top, std::stoi(n.substr(1)));
   };
   for (const auto& n : alsoTaken) take(n);
+  for (const auto& p : userParameters()) take(p.name);
   // Every sketch feature, computed or not (rolled back, failed), keeps its names.
   for (const auto& f : features()) {
+    for (const auto& [k, n] : f.parameterNames) take(n);
     if (f.commandId != "tsr.sketch.create") continue;
     const auto it = f.inputs.find("data");
     const auto* data = it == f.inputs.end() ? nullptr : std::get_if<std::string>(&it->second);
@@ -918,6 +1099,7 @@ std::vector<Feature> Document::features() const {
     f.inputs = fromJson(stringOf(nd, "inputs"));
     f.error = stringOf(nd, "error");
     f.suppressed = nd->HasInteger("suppressed") && nd->GetInteger("suppressed") != 0;
+    f.parameterNames = parseNames(stringOf(nd, "params"));
     out.push_back(std::move(f));
   }
   // The saved order (features made since come after, in the order made).
@@ -978,6 +1160,7 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   nd->SetString("inputs", ext(toJson(inputs).dump()));
   nd->SetString("error", ext(""));
   nd->SetInteger("suppressed", 0);
+  nameFeatureParameters(l.Tag(), cmd, inputs);
   effects_[l.Tag()] = effectOf(txnBodies_, bodyShapes());
   effects_[l.Tag()].tools = pendingTools_;
   if (marker >= 0) {
@@ -1016,6 +1199,10 @@ const Document::FeatureEffect* Document::featureEffect(int id) {
 void Document::setFeatureInputs(int id, const Inputs& inputs) {
   requireTransaction("setFeatureInputs");
   featureData(doc_, id)->SetString("inputs", ext(toJson(inputs).dump()));
+  // A value shown only now (Extent changed to Distance ...) gets its name.
+  if (registry_)
+    if (const auto f = feature(id))
+      if (const Command* cmd = registry_->find(f->commandId)) nameFeatureParameters(id, *cmd, inputs);
 }
 
 void Document::setFeatureSuppressed(int id, bool suppressed) {

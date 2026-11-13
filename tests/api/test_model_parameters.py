@@ -15,7 +15,6 @@ rect = {"points": [[0, 0], [0, 0], [4, 0], [4, 3], [0, 3]],
                         {"type": "distance", "e": [0], "v": 4.0, "name": "d1"},
                         {"type": "distance", "e": [1], "v": 3.0, "name": "d2"}]}
 tsr.run_command("tsr.sketch.create", plane="XY", data=json.dumps(rect))
-tsr.run_command("tsr.feature.extrude", distance="d1 / 4")
 # Two level lines from fixed starts: d4 (first) uses d3 (second).
 line = {"points": [[0, 0], [0, 5], [1, 5], [0, 8], [1, 8]],
         "entities": [{"type": "line", "p": [1, 2]}, {"type": "line", "p": [3, 4]}],
@@ -24,10 +23,12 @@ line = {"points": [[0, 0], [0, 5], [1, 5], [0, 8], [1, 8]],
                         {"type": "distance", "e": [0], "v": 1.0, "expr": "d1 / 2 + d3", "name": "d4"},
                         {"type": "distance", "e": [1], "v": 1.0, "expr": "d2 + 2 mm", "name": "d3"}]}
 tsr.run_command("tsr.sketch.create", plane="XY", data=json.dumps(line))
+# After both sketches (its own values take the next names, d5 and d6).
+tsr.run_command("tsr.feature.extrude", sketch="Sketch1", distance="d1 / 4")
 
 
 def params():
-    return {p["name"]: p for p in tsr.model_parameters()}
+    return {p["name"]: p for p in tsr.model_parameters() if p["input"] == ""}   # the sketch dimensions
 
 
 def check(d1):

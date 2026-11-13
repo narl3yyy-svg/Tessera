@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "modules/api/src/TsrModule.cpp": {
-    "mtime": 1794604264.9011052,
-    "seen": 1794604703.3541746,
-    "ast_hash": "0cd2563366ffbe779d269eb0376c0667",
+    "mtime": 1794610733.9407547,
+    "seen": 1794611265.5995936,
+    "ast_hash": "77ae76247ba2f90aed1f87ca72f68d9e",
     "semantic_hash": ""
   },
   "modules/api/src/cli_main.cpp": {
@@ -180,15 +180,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/ParametersDialog.cpp": {
-    "mtime": 1794564530.0512102,
-    "seen": 1794565864.9588244,
-    "ast_hash": "e6750a3b6122a1e78be0e9a119dbf711",
+    "mtime": 1794610987.9262838,
+    "seen": 1794611265.599618,
+    "ast_hash": "a9cb5cf7dcebb89648f695fcaae7be2c",
     "semantic_hash": ""
   },
   "modules/app/src/ParametersDialog.h": {
-    "mtime": 1794447408.4399178,
-    "seen": 1794532264.6008496,
-    "ast_hash": "36ae35ef986549d5815831a0d3ed4dae",
+    "mtime": 1794610987.9262838,
+    "seen": 1794611265.5996196,
+    "ast_hash": "6f76a172c4d63c6e6e244d416d7756de",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
-    "mtime": 1794573835.3869412,
-    "seen": 1794574120.7527335,
-    "ast_hash": "1b53806f010f51789b99c2182454d26d",
+    "mtime": 1794610987.927284,
+    "seen": 1794611265.5996377,
+    "ast_hash": "6d0c6ea755c3231c2f289d4896afcd44",
     "semantic_hash": ""
   },
   "modules/core/include/tsr/core/Command.h": {
@@ -348,27 +348,27 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
-    "mtime": 1794604259.6576333,
-    "seen": 1794604703.3542125,
-    "ast_hash": "14fa2ecdd8a1545522d55ab772dec285",
+    "mtime": 1794610733.9357567,
+    "seen": 1794611265.5996604,
+    "ast_hash": "56b44037d732404cdace3380d9f38b29",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Session.h": {
-    "mtime": 1794604259.6576333,
-    "seen": 1794604703.3542135,
-    "ast_hash": "a25018bef6d3aedd05a0b2b85de08b0f",
+    "mtime": 1794610733.9387555,
+    "seen": 1794611265.5996616,
+    "ast_hash": "65cbd4e848e94050fdde081f878cf9ad",
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794598252.1362307,
-    "seen": 1794598497.2194648,
-    "ast_hash": "e7588d4154f1421464b9c76152cb6e1e",
+    "mtime": 1794610733.9397552,
+    "seen": 1794611265.5996625,
+    "ast_hash": "28d6c627b4bcf45525c89f724c0aef04",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
-    "mtime": 1794604259.6576333,
-    "seen": 1794604703.3542151,
-    "ast_hash": "fbd2e6f36e98b81eff7934daa19d3b75",
+    "mtime": 1794610764.054832,
+    "seen": 1794611265.5996642,
+    "ast_hash": "c21cdc35868281bf340bf44f4391b00b",
     "semantic_hash": ""
   },
   "modules/doc/src/OcafApp.h": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/Session.cpp": {
-    "mtime": 1794604259.6586328,
-    "seen": 1794604703.354217,
-    "ast_hash": "a9a327e31c5d62ca4e8bc9f93e5c8f72",
+    "mtime": 1794610733.9397552,
+    "seen": 1794611265.5996666,
+    "ast_hash": "c45e4f2874593e3fb0a407492e81bfd5",
     "semantic_hash": ""
   },
   "modules/doc/src/TsrFile.cpp": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "scripts/xdrive.py": {
-    "mtime": 1794606909.4397259,
-    "seen": 1794607423.4955819,
-    "ast_hash": "9fe754fd9159acaee0468e67a3384ba3",
+    "mtime": 1794610987.9285157,
+    "seen": 1794611265.5996885,
+    "ast_hash": "3c1c382ad8cf35741993f61a19810577",
     "semantic_hash": ""
   },
   "tests/TestFramework.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794607237.4893417,
-    "seen": 1794607423.496002,
-    "ast_hash": "d72cca705500ff912ea45a195e5be97e",
+    "mtime": 1794611073.9553144,
+    "seen": 1794611265.6000998,
+    "ast_hash": "03960abe00bbcd54502b5c2f129d7741",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794607237.4893417,
-    "seen": 1794607423.4960065,
-    "ast_hash": "e2bfe0ed6233c4c0e255ce3f45b43722",
+    "mtime": 1794611073.9553144,
+    "seen": 1794611265.600104,
+    "ast_hash": "6c926aee1fd427fd6e392cbb7b7a322d",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794600966.1586168,
-    "seen": 1794600978.917179,
-    "ast_hash": "ad209d4907f0bc4679023e36de77b3c8",
+    "mtime": 1794611073.9553144,
+    "seen": 1794611265.6001055,
+    "ast_hash": "b7a4b1eaf2758778db686853da3e43c2",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794607237.4907272,
-    "seen": 1794607423.496012,
-    "ast_hash": "b480a1e7933e82c6cd14537b11399030",
+    "mtime": 1794611073.9553144,
+    "seen": 1794611265.6001098,
+    "ast_hash": "2083d085dcadf1ff0a11c03f320c782c",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794606909.5994835,
-    "seen": 1794607423.496022,
-    "ast_hash": "e92c18fe6d81aa39bb7dd23ddc0149f2",
+    "mtime": 1794611035.4822154,
+    "seen": 1794611265.6001194,
+    "ast_hash": "577c226d4ac3b0a8e09321bcac8f3aa4",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2142,9 +2142,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_model_parameters.py": {
-    "mtime": 1794564801.326485,
-    "seen": 1794565864.95888,
-    "ast_hash": "dcde6ec7f8002e65018e646d54e3d6c0",
+    "mtime": 1794610900.815525,
+    "seen": 1794611265.5997198,
+    "ast_hash": "17f22be7d63d6e0db5421fa8d8f192cc",
     "semantic_hash": ""
   },
   "tests/live/sketch_3pt_check.py": {
@@ -2253,6 +2253,18 @@
     "mtime": 1794604451.4166448,
     "seen": 1794604703.3542805,
     "ast_hash": "e1afb71515dd0ba2d908488f8b9b02e4",
+    "semantic_hash": ""
+  },
+  "tests/api/test_feature_parameters.py": {
+    "mtime": 1794610907.1636658,
+    "seen": 1794611265.5997071,
+    "ast_hash": "5e7f2368da32f75bbe3ccb0c501e3b37",
+    "semantic_hash": ""
+  },
+  "tests/live/parameters_table_check.py": {
+    "mtime": 1794611035.3763876,
+    "seen": 1794611265.5997798,
+    "ast_hash": "2b363979a93c5eef8a410253e2d31009",
     "semantic_hash": ""
   }
 }

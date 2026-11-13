@@ -149,10 +149,20 @@ void bindTsr(py::module_& m) {
       d["owner"] = p.owner;
       d["value"] = p.value;
       d["angle"] = p.angle;
+      d["input"] = p.input;   // a feature value's input id; "" for a sketch dimension
+      d["label"] = p.label;
+      d["unit"] = std::string(unitSymbol(p.unit));
       out.append(d);
     }
     return out;
-  }, "Sketch dimensions as model parameters (d1, d2 ...; values in cm or rad).");
+  }, "Model parameters: sketch dimensions and feature values (d1, d2 ...; values in cm or rad).");
+  m.def("rename_parameter", [](const std::string& name, const std::string& newName) {
+    if (auto err = activeSession().renameParameter(name, newName); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("new_name"), "Rename a user or model parameter; expressions that use it follow.");
+  m.def("set_favorite", [](const std::string& name, bool favorite) {
+    if (auto err = activeSession().setParameterFavorite(name, favorite); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("favorite") = true, "Star a parameter in Change Parameters.");
+  m.def("favorite_parameters", [] { return activeSession().document().favoriteParameters(); });
   m.def("named_views", [] {
     py::list out;
     for (const auto& v : activeSession().document().namedViews()) {

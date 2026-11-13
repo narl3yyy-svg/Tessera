@@ -646,6 +646,16 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
         widgets[a->objectName()] = QJsonArray{p.x(), p.y(), r.width(), r.height()};
       }
   o[QStringLiteral("widgets")] = widgets;
+  // Change Parameters, when open: each parameter's star and name cells.
+  for (auto* pd : w.findChildren<tsr::app::ParametersDialog*>())
+    if (pd->isVisible()) {
+      QJsonObject rows;
+      const auto pts = pd->rowPoints();
+      for (auto it = pts.begin(); it != pts.end(); ++it)
+        rows[it.key()] = QJsonArray{it.value().first.x(), it.value().first.y(), it.value().second.x(), it.value().second.y()};
+      o[QStringLiteral("parameters")] = rows;
+      o[QStringLiteral("parameterRows")] = pd->visibleParameterRows();
+    }
   o[QStringLiteral("tooltip")] = QToolTip::isVisible() ? QToolTip::text() : QString();
   {
     // Timeline items by feature name (centre, global coordinates).

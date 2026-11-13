@@ -419,6 +419,26 @@ def main():
             length = math.hypot(*v) or 1
             if math.hypot(v[0] / length - float(a[1]), v[1] / length - float(a[2])) < 0.2:
                 sys.exit("xdrive: line %d: axis %s still points %r" % (n, a[0], v))
+        elif cmd in ("pstar", "pname"):
+            # Change Parameters: click a parameter's star, or double-click its name.
+            end = time.time() + 5
+            while a[0] not in geometry().get("parameters", {}):
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: no parameter row %s" % (n, a[0]))
+                time.sleep(0.1)
+            r = geometry()["parameters"][a[0]]
+            if cmd == "pstar":
+                click(r[0], r[1])
+            else:
+                click(r[2], r[3], 2)
+            time.sleep(0.4)
+        elif cmd == "expectrows":
+            end = time.time() + 3
+            while geometry().get("parameterRows") != int(a[0]):
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: %r parameter rows showing, expected %s"
+                             % (n, geometry().get("parameterRows"), a[0]))
+                time.sleep(0.1)
         elif cmd == "expectaxis":
             # Where a world axis points on screen (unit dx dy, y down), or
             # "0 0": straight at the viewer. Waits out a camera move.
