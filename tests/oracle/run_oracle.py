@@ -29,6 +29,23 @@ def cm(v):
     return [x * MM for x in v]
 
 
+def L(v, sign=1):
+    """A recipe length for a command input: a number in mm (-> cm), or a
+    parameter name / expression, which Tessera evaluates in the input's unit
+    (mm), with the sign applied."""
+    if isinstance(v, str):
+        return v if sign > 0 else "-(%s)" % v
+    return v * MM * sign
+
+
+def num(v):
+    """A recipe value that must be a plain number here (geometry the runner
+    computes with): parameters are evaluated by Tessera."""
+    if isinstance(v, str):
+        return tsr.evaluate(v, "mm") * 10   # internal cm -> mm
+    return v
+
+
 def fmt(v):
     return ",".join("%.9g" % x for x in v)
 
@@ -90,9 +107,10 @@ def build_sketch(f, sketches):
             poly = [sk.points[a], sk.points[b]]
         elif t == "circle":
             c = add_point(sk, e["center"])
-            sk.entities.append({"type": "circle", "c": c, "r": e["radius"] * MM})
+            rad = num(e["radius"])
+            sk.entities.append({"type": "circle", "c": c, "r": rad * MM})
             ends = None
-            poly = arc_poly(sk.points[c], e["radius"], 0, 2 * math.pi, 96)
+            poly = arc_poly(sk.points[c], rad, 0, 2 * math.pi, 96)
         elif t in ("arc_three_point", "arc_center_start_sweep"):
             if t == "arc_three_point":
                 s = add_point(sk, e["start"])
@@ -166,6 +184,12 @@ def build_sketch(f, sketches):
     sketches[f["name"]] = sk
 
 
+def dim(c, expr):
+    if expr is not None:
+        c["expr"] = expr
+    return c
+
+
 def sketch_constraints(sk, cons, dims):
     """The recipe's constraints and dimensions in Tessera's sketch format."""
     def point(ref):
@@ -222,8 +246,10 @@ def sketch_constraints(sk, cons, dims):
             raise Unsupported("sketch constraint '%s'" % t)
     for d in dims:
         t, r, v = d["type"], d["refs"], d["value"]
+        expr = None
         if isinstance(v, str):
-            raise Unsupported("dimension driven by a parameter")
+            expr = v
+            v = tsr.evaluate(v, "deg") * 180 / math.pi if t == "angle" else tsr.evaluate(v, "mm") * 10   # mm / degrees
         if t in ("distance", "offset"):
             pts = [x for x in r if is_point(x)]
             ents = [x for x in r if not is_point(x)]
@@ -234,17 +260,17 @@ def sketch_constraints(sk, cons, dims):
                     k = 0 if o == "horizontal" else 1
                     if xy(b)[k] < xy(a)[k]:
                         a, b = b, a
-                    out.append({"type": o + "Distance", "p": [a, b], "v": v * MM})
+                    out.append(dim({"type": o + "Distance", "p": [a, b], "v": v * MM}, expr))
                 else:
-                    out.append({"type": "distance", "p": [a, b], "v": v * MM})
+                    out.append(dim({"type": "distance", "p": [a, b], "v": v * MM}, expr))
             elif len(pts) == 1 and len(ents) == 1:
-                out.append({"type": "distance", "p": [point(pts[0])], "e": [ent(ents[0])], "v": v * MM})
+                out.append(dim({"type": "distance", "p": [point(pts[0])], "e": [ent(ents[0])], "v": v * MM}, expr))
             elif len(ents) == 1 and not pts:
-                out.append({"type": "distance", "e": [ent(ents[0])], "v": v * MM})
+                out.append(dim({"type": "distance", "e": [ent(ents[0])], "v": v * MM}, expr))
             else:
                 raise Unsupported("distance between %s" % r)
         elif t in ("radius", "diameter"):
-            out.append({"type": t, "e": [ent(r[0])], "v": v * MM})
+            out.append(dim({"type": t, "e": [ent(r[0])], "v": v * MM}, expr))
         elif t == "angle":
             d1, d2 = line_dir(ent(r[0])), line_dir(ent(r[1]))
             signed = math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1])
@@ -252,7 +278,7 @@ def sketch_constraints(sk, cons, dims):
             # Keep the turn the drawing has (sign) and the size closest to it.
             cands = [val, -val, math.pi - val, val - math.pi]
             best = min(cands, key=lambda a: abs((a - signed + math.pi) % (2 * math.pi) - math.pi))
-            out.append({"type": "angle", "e": [ent(r[0]), ent(r[1])], "v": best})
+            out.append(dim({"type": "angle", "e": [ent(r[0]), ent(r[1])], "v": best}, expr))
         else:
             raise Unsupported("dimension '%s'" % t)
     return out
@@ -431,7 +457,7 @@ def op_extrude(state, f):
     kw = dict(sketch=sk.name, profiles=prof, operation=OPS[f.get("operation", "new")])
     t = ext["type"]
     if t == "distance":
-        kw.update(extent="Distance", distance=ext["distance"] * MM * (-1 if ext.get("direction") == "negative" else 1))
+        kw.update(extent="Distance", distance=L(ext["distance"], -1 if ext.get("direction") == "negative" else 1))
         if ext.get("taper_deg"):
             kw["taper"] = math.radians(ext["taper_deg"])
     elif t == "through_all":
@@ -439,10 +465,12 @@ def op_extrude(state, f):
         if ext.get("direction") == "both":
             kw.update(direction="Symmetric")
     elif t == "symmetric":
-        d = ext["distance"] * MM
-        kw.update(extent="Distance", direction="Symmetric", distance=d / 2 if ext.get("is_full_length") else d)
+        d = ext["distance"]
+        if ext.get("is_full_length"):
+            d = "(%s) / 2" % d if isinstance(d, str) else d / 2
+        kw.update(extent="Distance", direction="Symmetric", distance=L(d))
     elif t == "two_sides":
-        kw.update(extent="Distance", direction="Two Sides", distance=ext["side1"] * MM, distance2=ext["side2_opposite"] * MM)
+        kw.update(extent="Distance", direction="Two Sides", distance=L(ext["side1"]), distance2=L(ext["side2_opposite"]))
     else:
         raise Unsupported("extrude extent '%s'" % t)
     if f.get("thin"):
@@ -466,7 +494,7 @@ def op_fillet(state, f):
     if f.get("type", "constant_radius") != "constant_radius":
         raise Unsupported("fillet type '%s'" % f.get("type"))
     body = body_at(cm(f["edges"][0]["point"]))
-    do(state, f["name"], "tsr.feature.fillet", body=body, edges=picks(f["edges"]), radius=f["radius"] * MM)
+    do(state, f["name"], "tsr.feature.fillet", body=body, edges=picks(f["edges"]), radius=L(f["radius"]))
 
 
 def op_chamfer(state, f):
@@ -474,7 +502,7 @@ def op_chamfer(state, f):
     if f.get("type", "equal_distance") not in types:
         raise Unsupported("chamfer type '%s'" % f.get("type"))
     body = body_at(cm(f["edges"][0]["point"]))
-    do(state, f["name"], "tsr.feature.chamfer", body=body, edges=picks(f["edges"]), distance=f["distance"] * MM)
+    do(state, f["name"], "tsr.feature.chamfer", body=body, edges=picks(f["edges"]), distance=L(f["distance"]))
 
 
 def op_shell(state, f):
@@ -483,13 +511,13 @@ def op_shell(state, f):
         raise Unsupported("shell with both inside and outside thickness")
     faces = f.get("faces_removed", [])
     body = body_at(cm(faces[0]["point"])) if faces else (body_list() or [""])[-1]
-    do(state, f["name"], "tsr.feature.shell", body=body, faces=picks(faces), thickness=(inner or outer) * MM,
+    do(state, f["name"], "tsr.feature.shell", body=body, faces=picks(faces), thickness=L(inner or outer),
         direction="Inside" if inner else "Outside")
 
 
 def pattern_features(state, f):
-    if f.get("pattern_of") != "features":
-        raise Unsupported("pattern of %s" % f.get("pattern_of"))
+    if f.get("pattern_of", f.get("mirror_of")) != "features":
+        raise Unsupported("pattern of %s" % f.get("pattern_of", f.get("mirror_of")))
     names = []
     for n in f["features"]:
         # "HoleA (1)" names the first instance of the feature HoleA.
@@ -508,7 +536,7 @@ def op_rectangular_pattern(state, f):
         axis, flipped = world_axis({"origin": [0, 0, 0], "dir": d["axis"]})
         kw["direction%d" % k] = axis
         kw["quantity%d" % k] = d["count"]
-        kw["distance%d" % k] = d["spacing"] * MM * (-1 if flipped else 1)
+        kw["distance%d" % k] = L(d["spacing"], -1 if flipped else 1)
     do(state, f["name"], "tsr.feature.rectangularPattern", **kw)
 
 
@@ -528,7 +556,24 @@ def op_path_pattern(state, f):
     dt = "Extent" if f.get("distance_type", "").startswith("extent") else "Spacing"
     do(state, f["name"], "tsr.feature.pathPattern", patternType="Features", features=pattern_features(state, f),
        path=state.sketches[f["path"]["sketch"]].name, quantity=f["count"], distanceType=dt,
-       distance=f["spacing"] * MM, orientation=orient)
+       distance=L(f["spacing"]), orientation=orient)
+
+
+def op_mirror(state, f):
+    pl = f["plane"]
+    spec = pl.get("ref") if pl.get("ref") in ("XY", "XZ", "YZ") else None
+    if spec is None:
+        raise Unsupported("mirror plane '%s'" % pl.get("ref"))
+    if f.get("mirror_of") == "features":
+        do(state, f["name"], "tsr.feature.mirror", patternType="Features", features=pattern_features(state, f), plane=spec)
+    elif f.get("mirror_of") == "bodies":
+        if len(f["bodies"]) != 1:
+            raise Unsupported("mirror of several bodies")
+        new = do(state, f["name"], "tsr.feature.mirror", patternType="Bodies", body=state.bodies[f["bodies"][0]], plane=spec,
+                 operation="Join" if f.get("combine") or f.get("operation") == "join" else "New Body")
+        name_results(state, f, new)
+    else:
+        raise Unsupported("mirror of %s" % f.get("mirror_of"))
 
 
 def op_combine(state, f):
@@ -540,7 +585,7 @@ def op_combine(state, f):
 def op_construction_plane(state, f):
     if f.get("method") != "offset" or f.get("base") not in ("XY", "XZ", "YZ"):
         raise Unsupported("construction plane '%s'" % f.get("method"))
-    do(state, f["name"], "tsr.construct.offsetPlane", name=f["name"], plane=f["base"], distance=f["offset"] * MM)
+    do(state, f["name"], "tsr.construct.offsetPlane", name=f["name"], plane=f["base"], distance=L(f["offset"]))
     state.planes[f["name"]] = f["name"]
 
 
@@ -563,17 +608,17 @@ def op_sweep(state, f):
 
 def hole_kw(f):
     types = {"simple": "Simple", "counterbore": "Counterbore", "countersink": "Countersink"}
-    kw = dict(holeType=types[f.get("hole_type", "simple")], diameter=f["diameter"] * MM)
+    kw = dict(holeType=types[f.get("hole_type", "simple")], diameter=L(f["diameter"]))
     if f.get("extent") == "through_all":
         kw["extent"] = "All"
     else:
-        kw.update(extent="Distance", depth=f["depth"] * MM)
+        kw.update(extent="Distance", depth=L(f["depth"]))
     if f.get("tip_angle") and f.get("extent") != "through_all":
         raise Unsupported("drill-point tip on a blind hole")
     if kw["holeType"] == "Counterbore":
-        kw.update(cboreDiameter=f["counterbore_diameter"] * MM, cboreDepth=f["counterbore_depth"] * MM)
+        kw.update(cboreDiameter=L(f["counterbore_diameter"]), cboreDepth=L(f["counterbore_depth"]))
     if kw["holeType"] == "Countersink":
-        kw.update(csinkDiameter=f["countersink_diameter"] * MM, csinkAngle=math.radians(f.get("countersink_angle", 90)))
+        kw.update(csinkDiameter=L(f["countersink_diameter"]), csinkAngle=math.radians(f.get("countersink_angle", 90)))
     return kw
 
 
@@ -605,25 +650,25 @@ def op_hole(state, f):
     tsr.run_command("tsr.sketch.create", plane="custom:" + fmt(cm(p) + list(n) + x), data=json.dumps(data))
     sketch = [s for s in tsr.features() if s["command"] == "tsr.sketch.create"][-1]["name"]
     types = {"simple": "Simple", "counterbore": "Counterbore", "countersink": "Countersink"}
-    kw = dict(sketch=sketch, holeType=types[f.get("hole_type", "simple")], diameter=f["diameter"] * MM,
+    kw = dict(sketch=sketch, holeType=types[f.get("hole_type", "simple")], diameter=L(f["diameter"]),
               target=body_at(cm(p)))
     if f.get("extent") == "through_all":
         kw["extent"] = "All"
     else:
-        kw.update(extent="Distance", depth=f["depth"] * MM)
+        kw.update(extent="Distance", depth=L(f["depth"]))
     if f.get("tip_angle") and f.get("extent") != "through_all":
         raise Unsupported("drill-point tip on a blind hole")
     if kw["holeType"] == "Counterbore":
-        kw.update(cboreDiameter=f["counterbore_diameter"] * MM, cboreDepth=f["counterbore_depth"] * MM)
+        kw.update(cboreDiameter=L(f["counterbore_diameter"]), cboreDepth=L(f["counterbore_depth"]))
     if kw["holeType"] == "Countersink":
-        kw.update(csinkDiameter=f["countersink_diameter"] * MM, csinkAngle=math.radians(f.get("countersink_angle", 90)))
+        kw.update(csinkDiameter=L(f["countersink_diameter"]), csinkAngle=math.radians(f.get("countersink_angle", 90)))
     do(state, f["name"], "tsr.feature.hole", **kw)
 
 
 HANDLERS = {
     "extrude": op_extrude, "revolve": op_revolve, "fillet": op_fillet, "chamfer": op_chamfer, "shell": op_shell,
     "rectangular_pattern": op_rectangular_pattern, "circular_pattern": op_circular_pattern, "combine": op_combine,
-    "path_pattern": op_path_pattern,
+    "path_pattern": op_path_pattern, "mirror": op_mirror,
     "construction_plane": op_construction_plane, "loft": op_loft, "sweep": op_sweep, "hole": op_hole,
 }
 
@@ -693,8 +738,8 @@ def run_case(path):
     expected = json.load(open(os.path.join(path, "expected.json"), encoding="utf-8"))
     tsr.new_document()
     state = State()
-    if recipe.get("parameters"):
-        raise Unsupported("recipe parameters")
+    for prm in recipe.get("parameters", []):
+        tsr.run_command("tsr.parameters.addUser", name=prm["name"], expression=prm["expression"])
     for f in recipe["features"]:
         op = f["op"]
         if op == "sketch":

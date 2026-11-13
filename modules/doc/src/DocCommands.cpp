@@ -1123,35 +1123,6 @@ private:
   CommandDef def_;
 };
 
-class Mirror final : public Command {
-public:
-  Mirror() {
-    commonDef(def_, kCmdMirror, "Mirror", "Mirrors a body across a plane, as a new body or joined to the original.", "mirror", "Create");
-    def_.inputs = {bodyInput(), planeChoice("Mirror plane (origin plane, moved by Offset)."), planeOffset(),
-                   choice("operation", "Operation", {"New Body", "Join"}, "Join merges the mirror image with the original.")};
-  }
-  const CommandDef& def() const override { return def_; }
-  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkBody(in, docOf(ctx)); }
-  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
-  void apply(const Inputs& in, CommandContext& ctx) const override {
-    Document& doc = docOf(ctx);
-    const std::string name = bodyName(in, doc);
-    const gp_Ax3 f = planeOf(doc, in);
-    const TopoDS_Shape s = doc.body(name)->shape;
-    try {
-      const TopoDS_Shape m = kernel::mirrored(s, {f.Location().X(), f.Location().Y(), f.Location().Z()},
-                                              {f.Direction().X(), f.Direction().Y(), f.Direction().Z()});
-      if (getString(in, "operation") == "Join") doc.replaceBody(name, kernel::boolean(kernel::BooleanOp::Join, s, m));
-      else doc.addBody(doc.nextBodyName(), m);
-    } catch (const kernel::KernelError& e) {
-      throw CommandError(e.what());
-    }
-  }
-
-private:
-  CommandDef def_;
-};
-
 class Scale final : public Command {
 public:
   Scale() {
@@ -1508,6 +1479,48 @@ void runPattern(Document& doc, const Inputs& in, const std::vector<CopyFn>& copi
     throw CommandError(e.what());
   }
 }
+
+// Mirror: a body (new body or joined) or features (their tools reflected and
+// applied again), across an origin or construction plane.
+class Mirror final : public Command {
+public:
+  Mirror() {
+    commonDef(def_, kCmdMirror, "Mirror", "Mirrors features or a body across a plane.", "mirror", "Create");
+    InputDef type = choice("patternType", "Object Type", {"Bodies", "Features"},
+                           "Bodies: the whole body. Features: what the picked features made, mirrored onto the body.");
+    InputDef feats = featuresInput();
+    InputDef body = bodyInput();
+    body.visibleWhen = "patternType=Bodies";
+    InputDef op = choice("operation", "Operation", {"New Body", "Join"}, "Join merges the mirror image with the original.");
+    op.visibleWhen = "patternType=Bodies";
+    def_.inputs = {type, feats, body, planeChoice("Mirror plane (origin plane, moved by Offset)."), planeOffset(), op};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const gp_Ax3 f = planeOf(doc, in);
+    const kernel::Vec3 o{f.Location().X(), f.Location().Y(), f.Location().Z()};
+    const kernel::Vec3 n{f.Direction().X(), f.Direction().Y(), f.Direction().Z()};
+    try {
+      if (stringOr(in, "patternType", "Bodies") == "Features") {
+        patternFeatures(doc, in, {[o, n](const TopoDS_Shape& s) { return kernel::mirrored(s, o, n); }}, true);
+        return;
+      }
+      const std::string name = bodyName(in, doc);
+      const TopoDS_Shape s = doc.body(name)->shape;
+      const TopoDS_Shape m = kernel::mirrored(s, o, n);
+      if (getString(in, "operation") == "Join") storeBodies(doc, name, kernel::boolean(kernel::BooleanOp::Join, s, m), false);
+      else doc.addBody(doc.nextBodyName(), m);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
 
 class RectangularPattern final : public Command {
 public:

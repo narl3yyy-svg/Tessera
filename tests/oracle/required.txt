@@ -10,6 +10,7 @@
 09-shell
 10-rect-pattern-holes
 11-circular-pattern-flange
+12-mirror-feature
 13-combine-join
 14-combine-cut
 15-combine-intersect
@@ -18,6 +19,7 @@
 19-l-bracket-constrained
 20-slot-constrained
 23-bracket-multifeature
+24-user-parameters
 25-sketch-triangle
 27-sketch-trapezoid
 28-blind-pocket-fillets
@@ -44,6 +46,7 @@
 51-loft-rect-circle-offset
 52-circular-pattern-fillet
 53-path-pattern
+54-mirror-body-fillets
 57-hole-pattern-sketch-points
 58-phone-stand
 59-enclosure-base
@@ -54,3 +57,10 @@
 64-sketch-tangent-arc-chain
 65-sketch-gear-tooth
 66-sketch-linkage
+84-plate-two-bores
+85-plate-width-100
+86-plate-first-bore-12
+87-plate-bore1-deleted
+88-plate-four-bores
+94-plate-four-rounded-corners
+95-plate-rounded-top-chamfer

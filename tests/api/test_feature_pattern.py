@@ -119,3 +119,16 @@ except RuntimeError as e:
 else:
     raise AssertionError("pattern past the end of the path accepted")
 print("api path pattern: OK")
+
+# Mirror of a feature: a stud at x = 10 mm mirrored across YZ onto the same block.
+tsr.new_document()
+cmd("tsr.primitive.box", length=4.0, width=2.0, height=1.0, x=-2.0)   # x from -20 to 20 mm
+sk = {"points": [[0, 0], [1.0, 1.0]], "entities": [{"type": "circle", "c": 1, "r": 0.25}]}
+cmd("tsr.sketch.create", plane="XY", offset=1.0, data=json.dumps(sk))
+cmd("tsr.feature.extrude", distance=0.5, operation="Join")
+cmd("tsr.feature.mirror", patternType="Features", features="Extrude1", plane="YZ")
+assert root.bRepBodies.count == 1 and abs(vol() - (8 + 2 * stud)) < 1e-6, vol()
+bb = tsr.bounding_box("Body1")
+assert abs(bb[1][2] - 1.5) < 1e-9, bb
+print("api mirror features: OK")
+

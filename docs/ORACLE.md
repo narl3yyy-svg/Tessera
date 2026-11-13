@@ -16,11 +16,11 @@ ctest --test-dir build -R oracle --output-on-failure
 ```
 
 Results: *unsupported* means the recipe uses something Tessera does not have
-yet (sheet metal, variable-radius fillets, mirrored features, recipe
-parameters, thin extrudes, drill-point tips); *fail* and
+yet (sheet metal, variable-radius fillets, thin extrudes, drill-point tips,
+holes on curved faces); *fail* and
 *error* are differences to investigate.
 
-55 pass, 1 fail, 0 error, 34 unsupported of 90.
+65 pass, 1 fail, 0 error, 24 unsupported of 90.
 
 | Case | Result | Notes |
 |---|---|---|
@@ -35,7 +35,7 @@ parameters, thin extrudes, drill-point tips); *fail* and
 | 09-shell | pass |  |
 | 10-rect-pattern-holes | pass |  |
 | 11-circular-pattern-flange | pass |  |
-| 12-mirror-feature | unsupported | operation 'mirror' |
+| 12-mirror-feature | pass |  |
 | 13-combine-join | pass |  |
 | 14-combine-cut | pass |  |
 | 15-combine-intersect | pass |  |
@@ -47,7 +47,7 @@ parameters, thin extrudes, drill-point tips); *fail* and
 | 21-draft | unsupported | operation 'draft' |
 | 22-split-body | unsupported | construction plane 'at_angle' |
 | 23-bracket-multifeature | pass |  |
-| 24-user-parameters | unsupported | recipe parameters |
+| 24-user-parameters | pass |  |
 | 25-sketch-triangle | pass |  |
 | 26-sketch-belt | unsupported | no point found inside a profile |
 | 27-sketch-trapezoid | pass |  |
@@ -77,7 +77,7 @@ parameters, thin extrudes, drill-point tips); *fail* and
 | 51-loft-rect-circle-offset | pass |  |
 | 52-circular-pattern-fillet | pass |  |
 | 53-path-pattern | pass |  |
-| 54-mirror-body-fillets | unsupported | operation 'mirror' |
+| 54-mirror-body-fillets | pass |  |
 | 55-tapped-hole-cosmetic | unsupported | drill-point tip on a blind hole |
 | 56-holes-on-curved-face | unsupported | hole on a cylinder face |
 | 57-hole-pattern-sketch-points | pass |  |
@@ -107,10 +107,10 @@ parameters, thin extrudes, drill-point tips); *fail* and
 | 81-fillet-spline-radius | unsupported | fillet type 'spline_radius' |
 | 82-thin-extrude-frame | unsupported | thin extrude |
 | 83-boundary-loop-thicken | unsupported | operation 'boundary_surface' |
-| 84-plate-two-bores | unsupported | recipe parameters |
-| 85-plate-width-100 | unsupported | recipe parameters |
-| 86-plate-first-bore-12 | unsupported | recipe parameters |
-| 87-plate-bore1-deleted | unsupported | recipe parameters |
-| 88-plate-four-bores | unsupported | recipe parameters |
-| 94-plate-four-rounded-corners | unsupported | recipe parameters |
-| 95-plate-rounded-top-chamfer | unsupported | recipe parameters |
+| 84-plate-two-bores | pass |  |
+| 85-plate-width-100 | pass |  |
+| 86-plate-first-bore-12 | pass |  |
+| 87-plate-bore1-deleted | pass |  |
+| 88-plate-four-bores | pass |  |
+| 94-plate-four-rounded-corners | pass |  |
+| 95-plate-rounded-top-chamfer | pass |  |
