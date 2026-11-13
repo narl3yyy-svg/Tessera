@@ -26,6 +26,7 @@ Script lines (blank lines and # comments ignored):
   adrag DX DY                drag the in-canvas arrow by DX, DY pixels
   a2drag DX DY               drag the second arrow (Two Sides extrude)
   tclick NAME                click a feature in the timeline
+  tdrag ITEM TARGET          drag a timeline item onto another (History_Marker for the marker)
   bclick / brclick / bdclick TEXT   click / right-click / double-click a Browser item
   key KEY                    press a key: Tab, Return, Escape, a, ctrl+z, shift+Tab ...
   hold KEY / release KEY     keep a key down (ctrl, shift, alt or a key name) / let it go
@@ -242,6 +243,22 @@ def main():
             else:
                 click(x, y, 2 if cmd == "bdclick" else 1)
             time.sleep(0.3)
+        elif cmd == "tdrag":
+            # Drag a timeline item (feature or "History Marker") onto another:
+            # slowly, as a hand would, so Qt's drag starts and follows.
+            tl = geometry().get("timeline", {})
+            name, target = a[0].replace("_", " "), a[1].replace("_", " ")
+            if name not in tl or target not in tl:
+                sys.exit("xdrive: line %d: no timeline item %s or %s" % (n, name, target))
+            (x1, y1), (x2, y2) = tl[name], tl[target]
+            move(x1, y1)
+            button(True)
+            for i in range(1, 31):
+                move(x1 + (x2 - x1) * i / 30, y1 + (y2 - y1) * i / 30)
+                time.sleep(0.02)
+            time.sleep(0.2)
+            button(False)
+            time.sleep(0.5)
         elif cmd == "tclick":
             end = time.time() + 5
             while a[0] not in geometry().get("timeline", {}):

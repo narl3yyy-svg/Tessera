@@ -24,6 +24,8 @@
 #include <QCursor>
 #include <QSettings>
 #include <QApplication>
+#include <QMouseEvent>
+#include <QFrame>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QCompleter>
@@ -64,6 +66,7 @@ constexpr int kParametersRole = Qt::UserRole + 6;
 constexpr int kPlaneRole = Qt::UserRole + 7;
 constexpr int kOriginRole = Qt::UserRole + 8;   // an origin plane: its spec ("XY")
 constexpr int kSketchLockedRole = Qt::UserRole + 9;   // a fully defined sketch
+constexpr int kMarkerRole = Qt::UserRole + 10;        // the timeline's history marker
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -169,19 +172,29 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   // Timeline.
   timeline_ = new QListWidget;
   timeline_->setObjectName(QStringLiteral("timeline"));
-  timeline_->setViewMode(QListView::IconMode);
+  // Left to right, icons only; features and the history marker can be
+  // dragged to reorder or roll back, as in the familiar timeline.
+  timeline_->setViewMode(QListView::ListMode);
   timeline_->setFlow(QListView::LeftToRight);
   timeline_->setWrapping(false);
-  timeline_->setMovement(QListView::Static);
   timeline_->setIconSize(QSize(28, 28));
-  timeline_->setGridSize(QSize(40, 40));
+  timeline_->setSpacing(3);
+  // Dragging is done here (see timelineDrag): a blue bar shows where the
+  // feature or the marker goes, and the drop is applied as one undo step.
+  timeline_->setDragDropMode(QAbstractItemView::NoDragDrop);
+  timeline_->viewport()->installEventFilter(this);
+  timelineDropBar_ = new QFrame(timeline_->viewport());
+  timelineDropBar_->setStyleSheet(QStringLiteral("background:#2f8fe8;"));
+  timelineDropBar_->hide();
   timeline_->setFixedHeight(52);
   timeline_->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   timeline_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   timeline_->setContextMenuPolicy(Qt::CustomContextMenu);
   timeline_->setAccessibleName(tr("Timeline"));
   connect(timeline_, &QListWidget::itemDoubleClicked, this,
-          [this](QListWidgetItem* it) { editFeature(it->data(kFeatureIdRole).toInt()); });
+          [this](QListWidgetItem* it) {
+            if (!it->data(kMarkerRole).toBool()) editFeature(it->data(kFeatureIdRole).toInt());
+          });
   connect(timeline_, &QListWidget::customContextMenuRequested, this, &MainWindow::showTimelineMenu);
   // While a pattern wants features, a click on the timeline picks one.
   connect(timeline_, &QListWidget::itemClicked, this, [this](QListWidgetItem* it) {
@@ -793,6 +806,7 @@ void MainWindow::focusSearch() {
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
   if (watched == qApp) return ctrlFilter(e);
+  if (timeline_ && watched == timeline_->viewport() && timelineDrag(e)) return true;
   if (watched == viewport_ && (e->type() == QEvent::Resize || e->type() == QEvent::Show) && navBar_) {
     navBar_->adjustSize();
     navBar_->move((viewport_->width() - navBar_->width()) / 2, viewport_->height() - navBar_->height() - 10);
@@ -1035,6 +1049,16 @@ MarkingMenu* MainWindow::openMarkingMenu(const QPoint& globalPos) {
 void MainWindow::showTimelineMenu(const QPoint& pos) {
   QListWidgetItem* it = timeline_->itemAt(pos);
   if (!it) return;
+  const int markerPos = session_.document().historyMarker();
+  const int total = static_cast<int>(session_.document().features().size());
+  if (it->data(kMarkerRole).toBool()) {
+    QMenu m(this);
+    m.addAction(tr("Roll to End"), this, [this, total] {
+      if (auto err = session_.rollHistory(total); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+    })->setEnabled(!active_ && markerPos < total);
+    m.exec(timeline_->viewport()->mapToGlobal(pos));
+    return;
+  }
   const int id = it->data(kFeatureIdRole).toInt();
   const auto f = session_.document().feature(id);
   if (!f) return;
@@ -1059,6 +1083,22 @@ void MainWindow::showTimelineMenu(const QPoint& pos) {
     if (auto err = session_.setFeatureSuppressed(id, !f->suppressed); !err.empty())
       statusBar()->showMessage(qs(err), 5000);
   });
+  m.addSeparator();
+  {
+    // Roll the marker to just after this feature (it stays active).
+    int index = 0;
+    for (const auto& g : session_.document().features()) {
+      ++index;
+      if (g.id == id) break;
+    }
+    m.addAction(tr("Roll History Marker Here"), this, [this, index] {
+      if (auto err = session_.rollHistory(index); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+    });
+    if (markerPos < total)
+      m.addAction(tr("Roll to End"), this, [this, total] {
+        if (auto err = session_.rollHistory(total); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+      });
+  }
   m.addSeparator();
   m.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), tr("Delete"), this, [this, id] {
     if (auto err = session_.deleteFeature(id); !err.empty()) statusBar()->showMessage(qs(err), 5000);
@@ -1320,26 +1360,132 @@ void MainWindow::refreshBrowser(const QString& docName) {
   params->setExpanded(true);
 }
 
+// Where a drop at x goes: the number of items whose centre is left of x.
+int MainWindow::timelineSlot(int x) const {
+  int slot = 0;
+  for (int i = 0; i < timeline_->count(); ++i)
+    if (timeline_->visualItemRect(timeline_->item(i)).center().x() < x) slot = i + 1;
+  return slot;
+}
+
+// Press, drag past the start distance, release: the item moves to the slot
+// under the pointer. Returns true when the event was used.
+bool MainWindow::timelineDrag(QEvent* e) {
+  auto* me = static_cast<QMouseEvent*>(e);
+  switch (e->type()) {
+    case QEvent::MouseButtonPress:
+      timelineDragRow_ = -1;
+      timelineDragging_ = false;
+      if (me->button() == Qt::LeftButton)
+        if (QListWidgetItem* it = timeline_->itemAt(me->position().toPoint())) {
+          timelineDragRow_ = timeline_->row(it);
+          timelineDragStart_ = me->position().toPoint();
+        }
+      return false;
+    case QEvent::MouseMove: {
+      if (timelineDragRow_ < 0 || !(me->buttons() & Qt::LeftButton)) return false;
+      const QPoint p = me->position().toPoint();
+      if (!timelineDragging_ && (p - timelineDragStart_).manhattanLength() < QApplication::startDragDistance())
+        return false;
+      timelineDragging_ = true;
+      const int slot = timelineSlot(p.x());
+      int x = 0;
+      if (slot < timeline_->count()) x = timeline_->visualItemRect(timeline_->item(slot)).left() - 2;
+      else if (timeline_->count() > 0) x = timeline_->visualItemRect(timeline_->item(timeline_->count() - 1)).right() + 1;
+      timelineDropBar_->setGeometry(x, 2, 3, timeline_->viewport()->height() - 4);
+      timelineDropBar_->show();
+      timelineDropBar_->raise();
+      timeline_->viewport()->setCursor(Qt::ClosedHandCursor);
+      return true;
+    }
+    case QEvent::MouseButtonRelease: {
+      const bool dragged = timelineDragging_ && me->button() == Qt::LeftButton;
+      const int from = timelineDragRow_;
+      timelineDragRow_ = -1;
+      timelineDragging_ = false;
+      timelineDropBar_->hide();
+      timeline_->viewport()->unsetCursor();
+      if (!dragged || from < 0) return false;
+      int to = timelineSlot(me->position().toPoint().x());
+      if (to > from) --to;   // after taking the item out
+      if (to != from) QTimer::singleShot(0, this, [this, from, to] { applyTimelineFromList(from, to); });
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
+// The timeline after moving row `from` to row `to`: feature order and where
+// the marker is; refused (and the list restored) if a feature would break.
+void MainWindow::applyTimelineFromList(int from, int to) {
+  std::vector<QListWidgetItem*> items;
+  for (int i = 0; i < timeline_->count(); ++i) items.push_back(timeline_->item(i));
+  if (from < 0 || from >= static_cast<int>(items.size())) return;
+  QListWidgetItem* moved = items[from];
+  items.erase(items.begin() + from);
+  items.insert(items.begin() + std::clamp(to, 0, static_cast<int>(items.size())), moved);
+  std::vector<int> order;
+  int marker = -1;
+  for (QListWidgetItem* it : items) {
+    if (it->data(kMarkerRole).toBool()) marker = static_cast<int>(order.size());
+    else order.push_back(it->data(kFeatureIdRole).toInt());
+  }
+  if (marker < 0) marker = static_cast<int>(order.size());
+  std::vector<int> current;
+  for (const auto& f : session_.document().features()) current.push_back(f.id);
+  if (order == current && marker == session_.document().historyMarker()) return;
+  if (active_ || editor_) {
+    statusBar()->showMessage(tr("Finish the current command first."), 4000);
+    refresh();
+    return;
+  }
+  if (const auto err = session_.setTimeline(order, marker); !err.empty()) {
+    statusBar()->showMessage(qs(err), 6000);
+    refresh();   // the list goes back to the timeline as it is
+  }
+}
+
 void MainWindow::refreshTimeline() {
+  // (Not blocking the model's signals: the view must see the new rows.
+  // Clearing and adding never emit rowsMoved.)
   timeline_->clear();
-  for (const auto& f : session_.document().features()) {
+  const auto features = session_.document().features();
+  const int marker = session_.document().historyMarker();
+  auto addMarker = [this] {
+    auto* m = new QListWidgetItem(icon(QStringLiteral("history-marker")), QString());
+    m->setData(kMarkerRole, true);
+    m->setData(Qt::AccessibleTextRole, tr("History Marker"));
+    m->setToolTip(tr("<b>History marker</b><br>Drag it back to roll the design back; features made then go in here."));
+    m->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled);
+    timeline_->addItem(m);
+  };
+  int index = 0;
+  for (const auto& f : features) {
+    if (index++ == marker) addMarker();
     auto* it = new QListWidgetItem(icon(commandIcon(session_, f.commandId)), QString());
+    it->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDragEnabled);
     it->setData(kFeatureIdRole, f.id);
     it->setData(Qt::AccessibleTextRole, qs(f.name));
     QString tip = QStringLiteral("<b>%1</b>").arg(qs(f.name));
+    if (f.rolledBack) {   // after the marker: shown faded, not replayed
+      tip += tr("<br>Rolled back (after the history marker)");
+      it->setIcon(QIcon(it->icon().pixmap(28, 28, QIcon::Disabled)));
+    }
     if (f.suppressed) {
       tip += tr("<br>Suppressed");
       it->setForeground(Qt::gray);
       it->setIcon(QIcon(it->icon().pixmap(28, 28, QIcon::Disabled)));
     }
-    if (!f.error.empty()) {
+    if (!f.error.empty() && !f.rolledBack) {
       tip += QStringLiteral("<br><span style='color:#c0392b'>%1</span>").arg(qs(f.error).toHtmlEscaped());
       it->setBackground(themeColors().errorBackground);
     }
-    tip += tr("<br><i>Double-click to edit</i>");
+    tip += tr("<br><i>Double-click to edit; drag to move</i>");
     it->setToolTip(tip);
     timeline_->addItem(it);
   }
+  if (marker >= static_cast<int>(features.size())) addMarker();
   timeline_->scrollToBottom();
 }
 

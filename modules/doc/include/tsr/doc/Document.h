@@ -102,6 +102,7 @@ struct Feature {
   Inputs inputs;
   std::string error;       // why the last recompute failed, empty if it worked
   bool suppressed = false;
+  bool rolledBack = false; // after the history marker: not replayed
 };
 
 class Document final : public CommandContext {
@@ -194,6 +195,11 @@ public:
   std::vector<Feature> features() const;
   std::optional<Feature> feature(int id) const;
   void recordFeature(const Command& cmd, const Inputs& inputs) override;
+  // The timeline, as in the familiar tool: features in order, and the history
+  // marker (how many of them are replayed; new features go in at the marker).
+  // marker == number of features: at the end.
+  int historyMarker() const;
+  void setTimeline(const std::vector<int>& order, int marker);   // requires a transaction
   void setFeatureInputs(int id, const Inputs& inputs);
   void setFeatureSuppressed(int id, bool suppressed);
   void removeFeature(int id);

@@ -1,6 +1,8 @@
 #include "tsr/doc/Session.h"
 #include "tsr/doc/DocCommands.h"
 
+#include <map>
+
 namespace tsr::doc {
 
 namespace {
@@ -144,6 +146,31 @@ std::string Session::renameFeature(int featureId, const std::string& newName) {
   auto err = historyEdit(*doc_, commands_, "Rename feature", [&] { doc_->renameFeature(featureId, newName); });
   if (err.empty()) notifyChanged();
   return err;
+}
+
+std::string Session::setTimeline(const std::vector<int>& order, int marker) {
+  // A reorder that would break a feature (moved before what it uses) is
+  // refused, as the familiar timeline refuses the drop.
+  std::map<int, std::string> errorsBefore;
+  for (const auto& f : doc_->features()) errorsBefore[f.id] = f.error;
+  std::string broken;
+  auto err = historyEdit(*doc_, commands_, "Timeline", [&] {
+    doc_->setTimeline(order, marker);
+    doc_->recompute(commands_);
+    for (const auto& f : doc_->features())
+      if (!f.rolledBack && !f.error.empty() && errorsBefore[f.id].empty()) {
+        broken = f.name + ": " + f.error;
+        throw DocumentError("that order breaks " + broken);
+      }
+  });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::rollHistory(int marker) {
+  std::vector<int> order;
+  for (const auto& f : doc_->features()) order.push_back(f.id);
+  return setTimeline(order, marker);
 }
 
 std::string Session::deleteFeature(int featureId) {

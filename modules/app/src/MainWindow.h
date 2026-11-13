@@ -22,6 +22,7 @@
 class QTabWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
+class QFrame;
 class QListWidget;
 class QAction;
 class QLineEdit;
@@ -149,6 +150,9 @@ private:
   void updateDragArrow();
   void attachArrowCompleters();
   void showBrowserMenu(const QPoint& pos);
+  void applyTimelineFromList(int from, int to);
+  bool timelineDrag(QEvent* e);
+  int timelineSlot(int x) const;
   std::optional<gp_Pnt> patternCentre();
   std::map<QString, gp_Pnt> patternCentres_;   // per feature name, while a pattern is open
   void onDragArrow(double value);
@@ -179,6 +183,10 @@ private:
   QTabWidget* ribbon_ = nullptr;
   QTreeWidget* browser_ = nullptr;
   QListWidget* timeline_ = nullptr;
+  QFrame* timelineDropBar_ = nullptr;   // where a dragged timeline item goes
+  int timelineDragRow_ = -1;
+  QPoint timelineDragStart_;
+  bool timelineDragging_ = false;
   Viewport* viewport_ = nullptr;
   QWidget* navBar_ = nullptr;
   QLineEdit* search_ = nullptr;

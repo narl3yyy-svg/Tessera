@@ -68,7 +68,7 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   if (s.document().bodies().size() != 1 || s.document().hasOpenTransaction()) return fail("execute");
   if (w.browser()->findItems(QStringLiteral("Body1"), Qt::MatchStartsWith | Qt::MatchRecursive).isEmpty())
     return fail("browser not refreshed");
-  if (w.timeline()->count() != 1) return fail("timeline not refreshed");
+  if (w.timeline()->count() != 2) return fail("timeline not refreshed");   // the feature and the history marker
 
   // Cut a hole with a cylinder chosen through the Operation dropdown and a
   // body picked as in the 3D view.
@@ -81,7 +81,7 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
     return fail("cannot set position");
   cyl->accept();
   QApplication::processEvents();
-  if (s.document().bodies().size() != 1 || w.timeline()->count() != 2) return fail("cut");
+  if (s.document().bodies().size() != 1 || w.timeline()->count() != 3) return fail("cut");
 
   // Edit the box from the timeline: the cut must be replayed.
   const int boxId = s.document().features().front().id;

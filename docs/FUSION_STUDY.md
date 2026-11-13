@@ -48,7 +48,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy; a sketch-mode ring; OK / Cancel inside a command.
 - [ ] Pre-selection: selected items carried into the next command (select a face, then press E).
 - [ ] Hovering a body shows its name tooltip; double-click selects a tangent chain / loop.
-- [ ] Timeline: drag the rollback marker; drag features to reorder; right-click Edit Feature / Edit Profile Sketch / Suppress / Delete; feature groups.
+- [x] Timeline: drag the rollback marker; drag features to reorder (blue drop bar; refused if it breaks a feature); right-click Edit Feature / Edit Profile Sketch / Suppress / Delete / Roll History Marker Here / Roll to End. Not yet: feature groups, playback buttons.
 
 ### Sketch
 - [ ] Line tool: click-drag from an end makes a tangent arc (done); automatic midpoint / perpendicular / parallel / tangent inference (done); dashed inference lines to points far away; snap to the sketch's own projected origin axes.
@@ -112,7 +112,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).
 - [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [ ] Click and hold on overlapping geometry opens a "select other" list (Day 6).
-- [ ] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
+- [x] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
 - [x] Select a feature in the timeline and press Delete (Day 20); right-click > Edit Profile Sketch.
 - [ ] Ground / Unground components (thumbtack in the Browser); drag components in the canvas; As-Built Joint (Shift+J); joint limits with drag flags; right-click a joint > Animate / Lock (Day 23).
 - [x] V hides / shows the selected bodies, or the Browser item (Day 6).

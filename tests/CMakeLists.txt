@@ -51,6 +51,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_thin_extrude.py)
   add_test(NAME api_rename
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_rename.py)
+  add_test(NAME api_timeline
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_timeline.py)
   add_test(NAME api_chamfer_types
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_chamfer_types.py)
   add_test(NAME api_feature_pattern
@@ -156,7 +158,10 @@ if(TSR_WITH_QT)
     add_test(NAME live_browser_rename
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/browser_rename.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_face_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/browser_rename_check.py)
-    set_tests_properties(live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
+    add_test(NAME live_timeline_marker
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker_check.py)
+    set_tests_properties(live_timeline_marker live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()

@@ -10,6 +10,7 @@
 
 #include <TopoDS_Shape.hxx>
 
+#include <algorithm>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
@@ -107,6 +108,7 @@ void bindTsr(py::module_& m) {
       d["inputs"] = in;
       d["error"] = f.error;
       d["suppressed"] = f.suppressed;
+      d["rolled_back"] = f.rolledBack;
       out.append(d);
     }
     return out;
@@ -198,6 +200,24 @@ void bindTsr(py::module_& m) {
     if (!rec) throw std::runtime_error("no sketch named '" + name + "'");
     return rec->data;
   }, py::arg("sketch"), "A sketch as solved (JSON: points in cm, entities, constraints).");
+  m.def("roll_history", [](int marker) {
+    if (auto err = activeSession().rollHistory(marker); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("position"), "Move the timeline's history marker: replay only the first `position` features.");
+  m.def("history_marker", [] { return activeSession().document().historyMarker(); },
+        "How many features the history marker replays.");
+  m.def("move_feature", [](const std::string& name, int position) {
+    std::vector<int> order;
+    int id = -1;
+    for (const auto& f : activeSession().document().features()) {
+      if (f.name == name) id = f.id;
+      else order.push_back(f.id);
+    }
+    if (id < 0) throw std::runtime_error("no feature named '" + name + "'");
+    const int marker = activeSession().document().historyMarker();
+    position = std::clamp(position, 0, static_cast<int>(order.size()));
+    order.insert(order.begin() + position, id);
+    if (auto err = activeSession().setTimeline(order, marker); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("position"), "Move a feature to another place in the timeline.");
   m.def("rename", [](const std::string& kind, const std::string& name, const std::string& newName) {
     std::string err;
     if (kind == "body") err = activeSession().renameBody(name, newName);

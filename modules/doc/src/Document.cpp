@@ -755,6 +755,34 @@ std::string Document::nextPointName() const {
   return freeName(features(), "Point", [&](const std::string& n) { return point(n).has_value(); });
 }
 
+namespace {
+// Timeline order and marker, kept on the features label.
+Handle(TDataStd_NamedData) timelineData(const Handle(TDocStd_Document)& doc, bool create) {
+  const TDF_Label l = doc->Main().FindChild(kFeaturesTag, false);
+  Handle(TDataStd_NamedData) nd;
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd) && create) nd = TDataStd_NamedData::Set(l);
+  return nd;
+}
+} // namespace
+
+int Document::historyMarker() const {
+  const auto all = features();
+  int n = static_cast<int>(all.size());
+  const Handle(TDataStd_NamedData) nd = timelineData(doc_, false);
+  // -1 (or nothing stored): at the end.
+  if (!nd.IsNull() && nd->HasInteger("marker") && nd->GetInteger("marker") >= 0) n = std::min(nd->GetInteger("marker"), n);
+  return n;
+}
+
+void Document::setTimeline(const std::vector<int>& order, int marker) {
+  requireTransaction("setTimeline");
+  std::string s;
+  for (int id : order) s += (s.empty() ? "" : ",") + std::to_string(id);
+  const Handle(TDataStd_NamedData) nd = timelineData(doc_, true);
+  nd->SetString("order", ext(s));
+  nd->SetInteger("marker", marker >= static_cast<int>(order.size()) ? -1 : std::max(0, marker));
+}
+
 std::vector<Feature> Document::features() const {
   std::vector<Feature> out;
   for (TDF_ChildIterator it(doc_->Main().FindChild(kFeaturesTag, false)); it.More(); it.Next()) {
@@ -769,6 +797,24 @@ std::vector<Feature> Document::features() const {
     f.suppressed = nd->HasInteger("suppressed") && nd->GetInteger("suppressed") != 0;
     out.push_back(std::move(f));
   }
+  // The saved order (features made since come after, in the order made).
+  const Handle(TDataStd_NamedData) tl = timelineData(doc_, false);
+  if (!tl.IsNull() && tl->HasString("order")) {
+    std::vector<int> order;
+    std::stringstream ss(stringOf(tl, "order"));
+    std::string item;
+    while (std::getline(ss, item, ','))
+      if (!item.empty()) order.push_back(std::stoi(item));
+    auto rank = [&](int id) {
+      const auto it = std::find(order.begin(), order.end(), id);
+      return it == order.end() ? static_cast<long>(order.size()) + id : static_cast<long>(it - order.begin());
+    };
+    std::stable_sort(out.begin(), out.end(), [&](const Feature& a, const Feature& b) { return rank(a.id) < rank(b.id); });
+  }
+  int marker = static_cast<int>(out.size());
+  if (!tl.IsNull() && tl->HasInteger("marker") && tl->GetInteger("marker") >= 0)
+    marker = std::min(marker, tl->GetInteger("marker"));
+  for (int i = marker; i < static_cast<int>(out.size()); ++i) out[i].rolledBack = true;
   return out;
 }
 
@@ -791,6 +837,17 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   if (!d.nameInput.empty())
     if (auto it = inputs.find(d.nameInput); it != inputs.end())
       if (auto s = std::get_if<std::string>(&it->second); s && !s->empty()) name = *s;
+  // Rolled back: the new feature goes in at the history marker.
+  std::vector<int> order;
+  int marker = -1;
+  {
+    const auto before = features();
+    const int m = historyMarker();
+    if (m < static_cast<int>(before.size())) {
+      for (const auto& f : before) order.push_back(f.id);
+      marker = m;
+    }
+  }
   const TDF_Label l = doc_->Main().FindChild(kFeaturesTag, false).NewChild();
   TDataStd_Name::Set(l, ext(name));
   Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
@@ -800,6 +857,10 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   nd->SetInteger("suppressed", 0);
   effects_[l.Tag()] = effectOf(txnBodies_, bodyShapes());
   effects_[l.Tag()].tools = pendingTools_;
+  if (marker >= 0) {
+    order.insert(order.begin() + marker, l.Tag());
+    setTimeline(order, marker + 1);
+  }
 }
 
 std::map<std::string, TopoDS_Shape> Document::bodyShapes() const {
@@ -841,6 +902,17 @@ void Document::setFeatureSuppressed(int id, bool suppressed) {
 
 void Document::removeFeature(int id) {
   requireTransaction("removeFeature");
+  {
+    const auto all = features();
+    const int m = historyMarker();
+    std::vector<int> order;
+    int pos = -1;
+    for (size_t i = 0; i < all.size(); ++i) {
+      if (all[i].id == id) pos = static_cast<int>(i);
+      else order.push_back(all[i].id);
+    }
+    if (pos >= 0 && m < static_cast<int>(all.size())) setTimeline(order, pos < m ? m - 1 : m);
+  }
   (void)featureData(doc_, id);
   doc_->Main().FindChild(kFeaturesTag, false).FindChild(id, false).ForgetAllAttributes(true);
 }
@@ -862,6 +934,10 @@ void Document::recompute(const CommandRegistry& registry) {
     std::string error;
     const auto before = bodyShapes();
     pendingTools_.clear();
+    if (f.rolledBack) {   // after the history marker
+      effects_[f.id] = FeatureEffect{};
+      continue;
+    }
     if (!f.suppressed) {
       if (const Command* cmd = registry.find(f.commandId)) {
         try {

@@ -39,6 +39,10 @@ public:
   std::unique_ptr<CommandSession> editFeature(int featureId);
   std::string editFeature(int featureId, const Inputs& changes);   // non-interactive
   std::string deleteFeature(int featureId);
+  // Timeline: feature order (ids) and the history marker (features before it
+  // are replayed). Refused if a feature would break. rollHistory keeps the order.
+  std::string setTimeline(const std::vector<int>& order, int marker);
+  std::string rollHistory(int marker);
   // Renames (one undo step each); empty on success, else why not.
   std::string renameBody(const std::string& name, const std::string& newName);
   std::string renameSketch(const std::string& name, const std::string& newName);

@@ -232,6 +232,17 @@ void pathPatternIcon(QPainter& p) {
   for (const QPointF c : {QPointF(10, 42), QPointF(32, 20), QPointF(54, 42)}) p.drawRect(QRectF(c.x() - 6, c.y() - 6, 12, 12));
 }
 
+// The timeline's history marker: a bar with a grip.
+void historyMarkerIcon(QPainter& p) {
+  const QColor c(70, 150, 235);
+  p.setPen(Qt::NoPen);
+  p.setBrush(c);
+  p.drawRect(QRectF(29, 6, 6, 52));
+  p.drawRoundedRect(QRectF(22, 4, 20, 12), 3, 3);
+  p.setPen(QPen(QColor(255, 255, 255), 2));
+  for (int x : {27, 32, 37}) p.drawLine(QPointF(x, 7), QPointF(x, 13));
+}
+
 void extrudeIcon(QPainter& p) {
   face(p, {QPointF(8, 44), QPointF(32, 32), QPointF(56, 44), QPointF(32, 56)}, kTop);
   face(p, {QPointF(8, 44), QPointF(8, 22), QPointF(32, 10), QPointF(32, 32)}, kLeft);
@@ -937,6 +948,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("sketch")) sketchIcon(p);
   else if (name == QLatin1String("sketch-locked")) sketchLockedIcon(p);
   else if (name == QLatin1String("project")) projectIcon(p);
+  else if (name == QLatin1String("history-marker")) historyMarkerIcon(p);
   else if (name == QLatin1String("extrude")) extrudeIcon(p);
   else if (name == QLatin1String("line")) lineIcon(p);
   else if (name == QLatin1String("rectangle")) rectIcon(p);

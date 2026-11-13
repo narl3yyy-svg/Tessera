@@ -1,0 +1,7 @@
+# Live: drag the timeline's history marker back onto the Extrude: the design
+# rolls back to before it (no body yet).
+waitfor tsr.feature.extrude
+wait 600
+tdrag History_Marker Extrude1
+wait 800
+shot /tmp/live_marker.png
