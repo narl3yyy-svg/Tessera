@@ -135,6 +135,9 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
 
 
     context_ = new AIS_InteractiveContext(viewer_);
+    // Edges and points are picked within a few pixels, as in the familiar tool
+    // (OCCT's default of 2 makes thin edges hard to hit).
+    context_->SetPixelTolerance(6);
     context_->SetAutomaticHilight(true);
     {
       // Hover: light blue; selected: strong blue.
@@ -568,6 +571,11 @@ void Viewport::applyStyle(const Handle(AIS_Shape)& s) {
   context_->SetDisplayMode(s, style_ == Style::Wireframe ? AIS_WireFrame : AIS_Shaded, false);
 }
 
+void Viewport::setBodyOverrides(const std::map<std::string, TopoDS_Shape>& shapes) {
+  overrides_ = shapes;
+  if (!context_.IsNull()) rebuild();
+}
+
 void Viewport::rebuild() {
   // Keep selection by name across rebuilds.
   const QStringList selected = selectedBodies();
@@ -575,7 +583,8 @@ void Viewport::rebuild() {
   shapes_.clear();
 
   for (const auto& b : bodies_) {
-    Handle(AIS_Shape) s = new AIS_Shape(b.shape);
+    const auto ov = overrides_.find(b.name);
+    Handle(AIS_Shape) s = new AIS_Shape(ov != overrides_.end() ? ov->second : b.shape);
     s->SetMaterial(bodyMaterial());
     if (ghosted_) s->SetTransparency(0.78);
     if (sectionOn_ && !clip_.IsNull()) s->AddClipPlane(clip_);

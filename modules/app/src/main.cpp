@@ -657,7 +657,8 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   {
     // World axes (1 cm each) on screen: an affine map for the (orthographic) view.
     auto at = [&](double x, double y, double z) {
-      const QPoint g = w.viewport()->mapToGlobal(w.viewport()->toWidget(gp_Pnt(x, y, z)).toPoint());
+      // Sub-pixel: a whole-pixel error would grow with the distance from the origin.
+      const QPointF g = QPointF(w.viewport()->mapToGlobal(QPoint(0, 0))) + w.viewport()->toWidget(gp_Pnt(x, y, z));
       return QJsonArray{g.x(), g.y()};
     };
     o[QStringLiteral("world")] = QJsonObject{{QStringLiteral("o"), at(0, 0, 0)}, {QStringLiteral("x"), at(1, 0, 0)},
@@ -681,8 +682,8 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   }
   if (auto* ed = w.sketchEditor()) {
     auto at = [&](double x, double y) {
-      const QPointF p = w.viewport()->toWidget(tsr::sketch::toWorld(ed->frame(), x, y));
-      const QPoint g = w.viewport()->mapToGlobal(p.toPoint());
+      const QPointF g = QPointF(w.viewport()->mapToGlobal(QPoint(0, 0))) +
+                        w.viewport()->toWidget(tsr::sketch::toWorld(ed->frame(), x, y));
       return QJsonArray{g.x(), g.y()};
     };
     o[QStringLiteral("sketch")] = QJsonObject{{QStringLiteral("o"), at(0, 0)}, {QStringLiteral("x"), at(1, 0)},   // 1 cm = 10 mm

@@ -168,7 +168,17 @@ std::string CommandSession::setInput(const std::string& id, const Value& v) {
     else inputs_[expressionKey(id)] = text;
     return {};
   }
-  if (auto err = checkInputValue(*d, v); !err.empty()) return err;
+  // Clearing a selection (edges, faces, profiles ...) is always allowed while
+  // the panel is open; that something must be selected is checked on OK and
+  // by the preview, which then says what to pick.
+  const bool selection = d->type == InputType::Edges || d->type == InputType::Faces ||
+                         d->type == InputType::Vertices || d->type == InputType::Bodies ||
+                         d->type == InputType::Profiles || d->type == InputType::Features ||
+                         d->type == InputType::JointOrigin;
+  const auto* text = std::get_if<std::string>(&v);
+  const bool clearing = selection && text && text->empty();
+  if (!clearing)
+    if (auto err = checkInputValue(*d, v); !err.empty()) return err;
   dropPreview();
   inputs_[id] = (d->type == InputType::Real && std::holds_alternative<std::int64_t>(v))
                     ? Value(static_cast<double>(std::get<std::int64_t>(v)))

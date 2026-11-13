@@ -155,6 +155,16 @@ private:
   QString arrowInput_;
   QString arrowInput2_;   // the second arrow's input (Two Sides extrude)
   std::vector<std::string> bodiesBeforeCommand_;   // real bodies when the open panel started
+  // Each body as it was before the open command (for an edited feature: before
+  // that feature). Edge and face picks are made on these, never on the preview.
+  std::map<std::string, TopoDS_Shape> shapesBeforeCommand_;
+  int editingFeature_ = -1;
+  TopoDS_Shape originalShape(const QString& body) const;
+  TopoDS_Shape toOriginal(const QString& body, const TopoDS_Shape& picked) const;
+  void syncPickedShapes();                   // highlight = what the panel holds
+  void setShowOriginal(bool on);             // Ctrl held: the bodies without the preview
+  bool ctrlFilter(QEvent* e);
+  bool showingOriginal_ = false;
   std::vector<TopoDS_Shape> pickedFaces() const;   // the Real input the arrow drives, empty when none
   bool sketchVisible(const std::string& name) const;
   bool maybeSave();

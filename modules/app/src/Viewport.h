@@ -198,6 +198,8 @@ public:
   // A short instruction that follows the cursor ("Select sketch profiles or
   // planar faces to extrude"); empty hides it.
   void setCursorHint(const QString& text);
+  // Draws these shapes instead of the named bodies (empty: back to normal).
+  void setBodyOverrides(const std::map<std::string, TopoDS_Shape>& shapes);
   // The nearest shown body face under a widget position (null if none), and
   // the sketch plane spec of a flat one there (empty if none or curved).
   TopoDS_Face faceAt(const QPointF& pos) const;
@@ -263,6 +265,7 @@ private:
   std::vector<doc::Body> bodies_;
   std::map<std::string, Handle(AIS_Shape)> shapes_;
   std::map<std::string, bool> hidden_;
+  std::map<std::string, TopoDS_Shape> overrides_;
 
   Style style_ = Style::ShadedEdges;
   bool grid_ = true;

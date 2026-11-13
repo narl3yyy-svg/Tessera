@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include <QKeyEvent>
 #include "tsr/sketch/Sketch.h"
 #include <cstring>
 #include "CommandDialog.h"
@@ -661,6 +662,7 @@ void MainWindow::buildNavBar() {
   for (QWidget* w : std::initializer_list<QWidget*>{orbit, pan, fitB, homeB, views, display, gridButton}) row->addWidget(w);
   navBar_->adjustSize();
   viewport_->installEventFilter(this);
+  qApp->installEventFilter(this);   // Ctrl while picking edges (see ctrlFilter)
 }
 
 void MainWindow::styleNavBar() {
@@ -753,12 +755,22 @@ void MainWindow::buildShortcuts() {
     }
 }
 
+bool MainWindow::ctrlFilter(QEvent* e) {
+  if (e->type() != QEvent::KeyPress && e->type() != QEvent::KeyRelease) return false;
+  auto* k = static_cast<QKeyEvent*>(e);
+  if (k->key() != Qt::Key_Control || k->isAutoRepeat()) return false;
+  const bool picking = active_ && (active_->hasEdgesInput() || active_->hasFacesInput());
+  setShowOriginal(e->type() == QEvent::KeyPress && picking);
+  return false;
+}
+
 void MainWindow::focusSearch() {
   search_->setFocus(Qt::ShortcutFocusReason);
   search_->selectAll();
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* e) {
+  if (watched == qApp) return ctrlFilter(e);
   if (watched == viewport_ && (e->type() == QEvent::Resize || e->type() == QEvent::Show) && navBar_) {
     navBar_->adjustSize();
     navBar_->move((viewport_->width() - navBar_->width()) / 2, viewport_->height() - navBar_->height() - 10);
@@ -798,6 +810,7 @@ CommandDialog* MainWindow::startCommand(const QString& commandId) {
   auto cmd = session_.begin(commandId.toStdString());
   if (!cmd) return nullptr;
   lastCommand_ = commandId;
+  editingFeature_ = -1;
   return showDialog(std::move(cmd));
 }
 
@@ -810,9 +823,19 @@ CommandDialog* MainWindow::editFeature(int featureId) {
     statusBar()->showMessage(tr("Finish the current command first (OK or Esc)."), 3000);
     return nullptr;
   }
+  // The bodies before this feature (picks refer to them), known from the replay.
+  std::map<std::string, TopoDS_Shape> before;
+  for (const auto& b : session_.document().bodies()) before[b.name] = b.shape;
+  if (const auto* eff = session_.document().featureEffect(featureId))
+    for (const auto& [name, change] : eff->bodies)
+      if (!change.first.IsNull()) before[name] = change.first;
   auto cmd = session_.editFeature(featureId);
   if (!cmd) return nullptr;
-  return showDialog(std::move(cmd));
+  editingFeature_ = featureId;
+  auto* dlg = showDialog(std::move(cmd));
+  shapesBeforeCommand_ = std::move(before);
+  if (dlg) syncPickedShapes();
+  return dlg;
 }
 
 CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
@@ -833,7 +856,11 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     }
   }
   bodiesBeforeCommand_.clear();
-  for (const auto& b : session_.document().bodies()) bodiesBeforeCommand_.push_back(b.name);
+  shapesBeforeCommand_.clear();
+  for (const auto& b : session_.document().bodies()) {
+    bodiesBeforeCommand_.push_back(b.name);
+    shapesBeforeCommand_[b.name] = b.shape;
+  }
   auto* dlg = new CommandDialog(session_, std::move(cmd), this);
   dlg->setAttribute(Qt::WA_DeleteOnClose);
   // Command panels live inside the canvas, top right, like the familiar layout.
@@ -843,6 +870,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   active_ = dlg;
   connect(dlg, &CommandDialog::inputsChanged, this, [this, dlg] {
     updateProfilePicking();
+    syncPickedShapes();   // Clear, typed or edited picks: the highlight follows
     updateDragArrow();
     // Inputs that appear with an option (Extrude: To Object) switch plane picking.
     if (dlg->hasPlaneInput() && dlg->planeInputShown() != viewport_->planePicking())
@@ -863,6 +891,8 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     arrowInput_.clear();
     arrowInput2_.clear();
     pickedEdges_.clear();
+    if (showingOriginal_) setShowOriginal(false);
+    shapesBeforeCommand_.clear();
     refresh();
   });
   dlg->show();
@@ -872,19 +902,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   if (dlg->planeInputShown()) viewport_->setPlanePicking(true);   // click a plane or flat face
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).
-  pickedEdges_.clear();
-  if (dlg->hasEdgesInput()) {
-    const TopoDS_Shape body = viewport_->bodyShape(dlg->currentBody());
-    for (const QString& ref : dlg->currentEdges().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
-      TopoDS_Shape e;
-      try {
-        if (!body.IsNull()) e = kernel::resolveEdges(body, ref.toStdString()).front();
-      } catch (const std::exception&) {
-      }
-      pickedEdges_.push_back(e);
-    }
-  }
-  updateEdgePicking();
+  syncPickedShapes();
   // Started fresh (not editing): Extrude waits for a pick, except that the
   // single profile of a just-finished sketch is taken at once.
   if (dlg->commandId() == QLatin1String(doc::kCmdExtrude) && !dlg->isEditingFeature()) {

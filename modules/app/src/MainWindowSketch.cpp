@@ -3,6 +3,14 @@
 #include "CommandDialog.h"
 #include "Icons.h"
 #include "MainWindow.h"
+#include <limits>
+#include <TopoDS.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <BRep_Tool.hxx>
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include "SketchEditor.h"
 #include "SketchPalette.h"
 #include "Viewport.h"
@@ -374,6 +382,80 @@ void MainWindow::updateProfilePicking() {
 // ---------------------------------------------------------------------------
 // Edge picking (Fillet, Chamfer)
 
+TopoDS_Shape MainWindow::originalShape(const QString& body) const {
+  if (auto it = shapesBeforeCommand_.find(body.toStdString()); it != shapesBeforeCommand_.end()) return it->second;
+  return viewport_->bodyShape(body);
+}
+
+// The edge or face of the original body a click on the (preview) body means:
+// the same one when it is still there, else the nearest one of that kind. A
+// click on a fillet's edge therefore means the edge it rounds, as in the
+// familiar tool, where clicking it again deselects it.
+TopoDS_Shape MainWindow::toOriginal(const QString& body, const TopoDS_Shape& picked) const {
+  const TopoDS_Shape orig = originalShape(body);
+  if (orig.IsNull() || picked.IsNull()) return picked;
+  TopTools_IndexedMapOfShape subs;
+  TopExp::MapShapes(orig, picked.ShapeType(), subs);
+  if (subs.Contains(picked)) return picked;
+  // A point well inside the picked shape.
+  gp_Pnt probe;
+  if (picked.ShapeType() == TopAbs_EDGE) {
+    BRepAdaptor_Curve c(TopoDS::Edge(picked));
+    probe = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
+  } else if (picked.ShapeType() == TopAbs_FACE) {
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(picked, g);
+    probe = g.CentreOfMass();
+  } else if (picked.ShapeType() == TopAbs_VERTEX) {
+    probe = BRep_Tool::Pnt(TopoDS::Vertex(picked));
+  } else {
+    return picked;
+  }
+  const TopoDS_Vertex pv = BRepBuilderAPI_MakeVertex(probe).Vertex();
+  TopoDS_Shape best;
+  double bestD = std::numeric_limits<double>::max();
+  for (int i = 1; i <= subs.Extent(); ++i) {
+    BRepExtrema_DistShapeShape d(pv, subs(i));
+    if (d.IsDone() && d.NbSolution() > 0 && d.Value() < bestD) {
+      bestD = d.Value();
+      best = subs(i);
+    }
+  }
+  return best.IsNull() ? picked : best;
+}
+
+// The highlighted edges / faces are always what the panel holds, resolved on
+// the original bodies (so Clear, edits and re-picks all show correctly).
+void MainWindow::syncPickedShapes() {
+  pickedEdges_.clear();
+  if (!active_) return;
+  const QString body = active_->currentBody();
+  const TopoDS_Shape shape = originalShape(body.isEmpty() && !shapesBeforeCommand_.empty()
+                                               ? QString::fromStdString(shapesBeforeCommand_.rbegin()->first)
+                                               : body);
+  auto add = [&](const QString& refs, bool faces) {
+    if (shape.IsNull()) return;
+    for (const QString& ref : refs.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+      try {
+        const auto r = faces ? kernel::resolveFaces(shape, ref.toStdString()) : kernel::resolveEdges(shape, ref.toStdString());
+        if (!r.empty()) pickedEdges_.push_back(r.front());
+      } catch (const std::exception&) {
+      }
+    }
+  };
+  if (active_->hasEdgesInput()) add(active_->currentEdges(), false);
+  if (active_->hasFacesInput()) add(active_->currentFaces(), true);
+  updateEdgePicking();
+}
+
+// Ctrl held while picking edges or faces: the bodies as they were, without
+// the preview, so the picked edges are easy to see.
+void MainWindow::setShowOriginal(bool on) {
+  if (on == showingOriginal_) return;
+  showingOriginal_ = on;
+  viewport_->setBodyOverrides(on ? shapesBeforeCommand_ : std::map<std::string, TopoDS_Shape>{});
+}
+
 void MainWindow::updateEdgePicking() {
   std::vector<TopAbs_ShapeEnum> types;
   if (active_ && active_->hasEdgesInput()) types.push_back(TopAbs_EDGE);
@@ -420,21 +502,13 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
   }
   const bool isFace = edge.ShapeType() == TopAbs_FACE;
   if (isFace ? !active_->hasFacesInput() : !(edge.ShapeType() == TopAbs_EDGE && active_->hasEdgesInput())) return;
-  const TopoDS_Shape shape = viewport_->bodyShape(body);
+  const TopoDS_Shape shape = originalShape(body);
   if (shape.IsNull()) return;
+  const TopoDS_Shape picked = toOriginal(body, edge);
   auto current = [&] { return isFace ? active_->currentFaces() : active_->currentEdges(); };
   auto store = [&](const QString& v) {
     if (isFace) active_->setFaces(v);
     else active_->setEdges(v);
-  };
-  auto keyPoint = [](const TopoDS_Shape& s) {
-    if (s.ShapeType() == TopAbs_FACE) {
-      GProp_GProps g;
-      BRepGProp::SurfaceProperties(s, g);
-      const gp_Pnt c = g.CentreOfMass();
-      return kernel::Vec3{c.X(), c.Y(), c.Z()};
-    }
-    return kernel::edgeMidpoint(s);
   };
   // Picks from another body start a new selection.
   QStringList refs = current().split(QLatin1Char(';'), Qt::SkipEmptyParts);
@@ -443,33 +517,34 @@ void MainWindow::onEdgeClicked(const QString& body, const TopoDS_Shape& edge) {
     pickedEdges_.clear();
   }
   active_->pickBody(body);
-  // Clicking a picked edge again removes it (compared by position: the
-  // preview rebuilds the body, so the shapes are new objects).
-  const auto mid = keyPoint(edge);
-  for (int i = 0; i < static_cast<int>(pickedEdges_.size()); ++i) {
-    if (pickedEdges_[i].IsNull() || pickedEdges_[i].ShapeType() != edge.ShapeType()) continue;
-    const auto m = keyPoint(pickedEdges_[i]);
-    if (std::abs(m.x - mid.x) + std::abs(m.y - mid.y) + std::abs(m.z - mid.z) < 1e-6) {
-      pickedEdges_.erase(pickedEdges_.begin() + i);
-      if (i < refs.size()) refs.removeAt(i);
-      store(refs.join(QLatin1Char(';')));
-      updateEdgePicking();
-      return;
+  // Clicking a picked edge again removes it (the picks resolved on the
+  // original body are compared with the clicked one).
+  for (int i = 0; i < static_cast<int>(refs.size()); ++i) {
+    try {
+      const auto r = isFace ? kernel::resolveFaces(shape, refs[i].toStdString())
+                            : kernel::resolveEdges(shape, refs[i].toStdString());
+      if (!r.empty() && r.front().IsSame(picked)) {
+        refs.removeAt(i);
+        store(refs.join(QLatin1Char(';')));
+        syncPickedShapes();
+        updateDragArrow();
+        return;
+      }
+    } catch (const std::exception&) {
     }
   }
   try {
-    refs << QString::fromStdString(isFace ? kernel::faceReference(shape, edge) : kernel::edgeReference(shape, edge));
+    refs << QString::fromStdString(isFace ? kernel::faceReference(shape, picked) : kernel::edgeReference(shape, picked));
   } catch (const std::exception& e) {
     statusBar()->showMessage(QString::fromUtf8(e.what()), 5000);
     return;
   }
-  pickedEdges_.push_back(edge);
   // Extruding a body face adds to that body by default.
   if (isFace && active_->commandId() == QLatin1String(doc::kCmdExtrude) &&
       active_->textInput(QStringLiteral("operation")) == QLatin1String("New Body"))
     active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Join"));
   store(refs.join(QLatin1Char(';')));
-  updateEdgePicking();
+  syncPickedShapes();
   updateDragArrow();
 }
 

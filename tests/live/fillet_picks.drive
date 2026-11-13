@@ -1,0 +1,30 @@
+# Live: Fillet as in the familiar tool. F, click three edges; click the first
+# again where its fillet now is (it deselects); hold Ctrl to see the picks on
+# the plain body; Clear empties the selection; pick one edge, OK.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key f
+waitfor panelOk
+wait 300
+wclick 20 0 20                # top front edge
+wait 400
+wclick 40 15 20               # top right edge
+wait 400
+wclick 40 0 10                # front right vertical edge
+wait 600
+wclick 20 0 19.2              # on the fillet now rounding the top front edge: deselects it
+wait 600
+shot /tmp/live_fillet_two.png
+hold ctrl
+wait 500
+shot /tmp/live_fillet_ctrl.png
+release ctrl
+wait 300
+click clearEdges
+wait 400
+shot /tmp/live_fillet_cleared.png
+wclick 40 15 20
+wait 500
+click panelOk
+wait 800
