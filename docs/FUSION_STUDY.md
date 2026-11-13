@@ -79,7 +79,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [ ] Extrude: two arrows for Two Sides (done); thin extrude (done: profiles and open curves); extent To Object for curved faces and bodies; Participant Bodies; Extrude from a sketch curve (open profile -> thin wall).
 - [x] In-canvas arrows: Extrude, Press Pull, Offset Face, Fillet, Chamfer, Shell (thickness, into the body), Hole (depth, at the first position), Thread, Rectangular Pattern; each opens with its value ready to type over.
 - [x] Revolve's rotation ring: a ball on a ring round the axis, dragged (the angle follows the cursor round, past 180 and up to 360 deg) or typed in its box.
-- [ ] Rotation ring for Circular Pattern; Sweep / Loft handles.
+- [x] Rotation ring for Circular Pattern's total angle (round the pattern axis, through what is patterned).
+- [ ] Sweep / Loft handles.
 - [ ] Hole: thread options (tapped holes); hole types table.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.
 - [ ] Combine with Keep Tools (done) and New Component output.

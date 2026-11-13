@@ -140,6 +140,8 @@ std::optional<gp_Pnt> MainWindow::patternCentre() {
   }
   QString body = active_->currentBody();
   if (body.isEmpty() && !doc.bodies().empty()) body = QString::fromStdString(doc.bodies().back().name);
+  // The body as it was before the command: its preview already holds the copies.
+  if (auto it = shapesBeforeCommand_.find(body.toStdString()); it != shapesBeforeCommand_.end()) return centreOf(it->second);
   return centreOf(viewport_->bodyShape(body));
 }
 
@@ -164,6 +166,8 @@ void MainWindow::updateDragArrow() {
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to push or pull") : tr("Specify distance");
     else if (cid == QLatin1String(doc::kCmdThread))
       hint = active_->currentFaces().isEmpty() ? tr("Select a cylindrical face") : QString();
+    else if (cid == QLatin1String(doc::kCmdCircPattern))
+      hint = tr("Drag the ring to set the total angle");
     else if (cid == QLatin1String(doc::kCmdRevolve))
       hint = tr("Drag the ring or type the angle");
     else if (cid == QLatin1String(doc::kCmdShell))
@@ -269,6 +273,28 @@ void MainWindow::updateDragArrow() {
   } else if (id == QLatin1String(doc::kCmdPressPull) || id == QLatin1String(doc::kCmdOffsetFace)) {
     input = QStringLiteral("distance");
     place = facesPlacement(pickedFaces());
+  } else if (id == QLatin1String(doc::kCmdCircPattern)) {
+    // A ring round the pattern's axis through what is patterned; its ball sets
+    // the total angle.
+    const auto centre = patternCentre();
+    const auto angle = active_->realInput(QStringLiteral("angle"));
+    if (!centre || !angle) return off();
+    try {
+      const gp_Ax1 axis = doc.axisFrame(active_->textInput(QStringLiteral("axis")).toStdString());
+      const gp_Vec w(axis.Location(), *centre);
+      const gp_Pnt foot = axis.Location().Translated(gp_Vec(axis.Direction()) * w.Dot(gp_Vec(axis.Direction())));
+      const gp_Vec out(foot, *centre);
+      if (out.Magnitude() < 1e-9) return off();
+      arrowInput_ = QStringLiteral("angle");
+      arrowInput2_.clear();
+      viewport_->clearSecondArrow();
+      viewport_->setDragRing(gp_Ax1(foot, axis.Direction()), gp_Dir(out),
+                             std::max(out.Magnitude(), viewport_->modelPerPixel() * 60), *angle, active_->displayText(arrowInput_));
+      attachArrowCompleters();
+      return;
+    } catch (const std::exception&) {
+      return off();
+    }
   } else if (id == QLatin1String(doc::kCmdRevolve)) {
     // A ring round the axis through the middle of the profiles; its ball
     // sets the angle, as in the familiar tool.
@@ -388,6 +414,7 @@ void MainWindow::onDragArrow(double value) {
     if (value < 0 && op == QLatin1String("Join")) active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Cut"));
     if (value > 0 && op == QLatin1String("Cut")) active_->setInputForTest(QStringLiteral("operation"), QStringLiteral("Join"));
   }
+  if (id == QLatin1String(doc::kCmdCircPattern)) value = std::clamp(value, 1e-3, 2 * M_PI);
   if (id == QLatin1String(doc::kCmdRevolve)) {
     // The ring's angle: within (0, 360 deg] (twice that shown when symmetric).
     if (active_->textInput(QStringLiteral("direction")) == QLatin1String("Symmetric")) value *= 2;

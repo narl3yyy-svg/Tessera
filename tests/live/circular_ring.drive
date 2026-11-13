@@ -1,0 +1,21 @@
+# Live: Circular Pattern with its rotation ring. Pattern Type Bodies, the
+# cube picked; the ring's box opens with its value selected: 180 Enter puts
+# the six copies over half a turn; OK.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Circular Pattern
+key Return
+waitfor panelOk
+wait 400
+choose patternType 1
+wait 400
+wclick 35 0 10                # the cube
+waitfor arrowValue
+wait 600
+type 180
+key Return
+wait 600
+shot /tmp/live_circular_ring.png
+click panelOk
+wait 1000
