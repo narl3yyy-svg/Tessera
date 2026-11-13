@@ -207,6 +207,13 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     if (name.isEmpty()) QToolTip::hideText();
     else QToolTip::showText(mapToGlobal(hoverPos_.toPoint() + QPoint(14, 18)), name, this);
   });
+  // Click and hold still: the Select Other list.
+  holdTimer_ = new QTimer(this);
+  holdTimer_->setSingleShot(true);
+  holdTimer_->setInterval(550);
+  connect(holdTimer_, &QTimer::timeout, this, [this] {
+    if (leftDown_ && !boxDrag_ && ownsLeftButton()) showSelectOther(pressPos_);
+  });
   pickHint_ = new QLabel(tr("Select a plane or planar face"), this);
   pickHint_->setObjectName(QStringLiteral("pickHint"));
   pickHint_->setStyleSheet(QStringLiteral("QLabel { background: rgba(40,44,52,225); color: #e8eaee; border: 1px solid #5b6472;"
@@ -484,6 +491,7 @@ void Viewport::mousePressEvent(QMouseEvent* e) {
   if (e->button() == Qt::LeftButton && ownsLeftButton()) {
     leftDown_ = true;
     boxDrag_ = false;
+    holdTimer_->start();
   }
   if (!glReady_) return;
   if (UpdateMouseButtons(toPixels(e->position()), aisButtons(e->buttons()), toVKeys(e->modifiers()), false))
@@ -539,6 +547,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
     interactor_->mouseRelease(e);
     return;
   }
+  if (e->button() == Qt::LeftButton) holdTimer_->stop();
   if (e->button() == Qt::LeftButton && leftDown_) {
     leftDown_ = false;
     const bool box = boxDrag_;
@@ -565,6 +574,7 @@ void Viewport::mouseMoveEvent(QMouseEvent* e) {
   }
   if (leftDown_ && (e->buttons() & Qt::LeftButton) && ownsLeftButton() &&
       (boxDrag_ || (e->position() - pressPos_).manhattanLength() >= 5)) {
+    holdTimer_->stop();
     boxDrag_ = true;
     showSelectionBox(pressPos_, e->position());
   }

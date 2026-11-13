@@ -45,7 +45,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 
 ### Selection and the canvas
 - [x] Window selection left-to-right (fully inside, solid blue box) vs right-to-left (crossing, dashed green box), in the canvas, in sketches and while a command picks edges / faces / profiles; Shift adds, Ctrl removes.
-- [ ] Selection priority (bodies / faces / edges / sketch) and the select-through hold; freeform and paint selection.
+- [x] Selection priority (SELECT menu: No Selection Priority, Select Body / Face / Edge / Vertex Priority) and the click-and-hold Select Other list (everything under the cursor, front to back; hovering an entry highlights it).
+- [ ] Freeform and paint selection; Selection Filters as check items (sketches, construction, components).
 - [x] Marking menu (right-click radial menu) with Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy; a sketch-mode ring; OK / Cancel inside a command.
 - [x] Pre-selection: selected items carried into the next command: click a profile (no command running), then E; select edges (Select Edges filter), then F; selected bodies go into body inputs. A click picks the face or edge under the cursor by default (near an edge of the front face the edge wins, on hover too); Select Bodies picks whole bodies.
 - [x] Hovering a body shows its name tooltip (its Browser name, renames included).
@@ -114,7 +115,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).
 - [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).
 - [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
-- [ ] Click and hold on overlapping geometry opens a "select other" list (Day 6).
+- [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [x] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
 - [x] Select a feature in the timeline and press Delete (Day 20); right-click > Edit Profile Sketch.
 - [ ] Ground / Unground components (thumbtack in the Browser); drag components in the canvas; As-Built Joint (Shift+J); joint limits with drag flags; right-click a joint > Animate / Lock (Day 23).

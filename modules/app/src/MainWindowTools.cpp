@@ -111,17 +111,19 @@ void MainWindow::buildUiCommands() {
   planned("Insert", "ui.insertSvg", "Insert SVG / DXF", "insert-2d");
   planned("Insert", "ui.canvas", "Canvas", "image");
   planned("Insert", "ui.decal", "Decal", "image");
-  add("Select", "ui.select", "Select", "select", "Window selection of bodies (Esc clears).", "",
+  add("Select", "ui.select", "Select", "select",
+      "Click a face or edge; drag a window (left to right) or crossing (right to left) box; click and hold for "
+      "everything under the cursor (Select Other). Esc clears.", "",
       [this] { viewport_->setOrbitTool(false); viewport_->setPanTool(false); });
-  add("Select", "ui.filterDefault", "Select Faces and Edges", "face", "Selection filter (the default): the face or edge under the cursor.", "",
+  add("Select", "ui.filterDefault", "No Selection Priority", "face", "The default: a click picks the face or edge under the cursor.", "",
       [this] { setSelectionFilter({TopAbs_FACE, TopAbs_EDGE}); });
-  add("Select", "ui.filterBodies", "Select Bodies", "body", "Selection filter: whole bodies.", "",
+  add("Select", "ui.filterBodies", "Select Body Priority", "body", "A click picks whole bodies.", "",
       [this] { setSelectionFilter({}); });
-  add("Select", "ui.filterFaces", "Select Faces", "face", "Selection filter: faces.", "",
+  add("Select", "ui.filterFaces", "Select Face Priority", "face", "A click picks faces only.", "",
       [this] { setSelectionFilter({TopAbs_FACE}); });
-  add("Select", "ui.filterEdges", "Select Edges", "edge", "Selection filter: edges.", "",
+  add("Select", "ui.filterEdges", "Select Edge Priority", "edge", "A click picks edges only.", "",
       [this] { setSelectionFilter({TopAbs_EDGE}); });
-  add("Select", "ui.filterVertices", "Select Vertices", "vertex", "Selection filter: vertices.", "",
+  add("Select", "ui.filterVertices", "Select Vertex Priority", "vertex", "A click picks vertices only.", "",
       [this] { setSelectionFilter({TopAbs_VERTEX}); });
 }
 
@@ -402,12 +404,12 @@ ParametersDialog* MainWindow::showParameters() {
 
 void MainWindow::setSelectionFilter(const std::vector<TopAbs_ShapeEnum>& types) {
   viewport_->setSelectionFilter(types);
-  const char* what = types.empty()                ? "bodies"
-                     : types.size() > 1             ? "faces and edges"
-                     : types[0] == TopAbs_FACE      ? "faces"
-                     : types[0] == TopAbs_EDGE      ? "edges"
-                                                    : "vertices";
-  statusBar()->showMessage(tr("Selection filter: %1.").arg(QString::fromLatin1(what)), 3000);
+  const QString what = types.empty()            ? tr("Body priority")
+                        : types.size() > 1         ? tr("No priority (faces and edges)")
+                        : types[0] == TopAbs_FACE  ? tr("Face priority")
+                        : types[0] == TopAbs_EDGE  ? tr("Edge priority")
+                                                   : tr("Vertex priority");
+  statusBar()->showMessage(tr("Selection: %1.").arg(what), 3000);
 }
 
 // ---------------------------------------------------------------------------

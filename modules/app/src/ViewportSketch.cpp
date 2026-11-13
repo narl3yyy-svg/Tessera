@@ -2,6 +2,8 @@
 #include "Viewport.h"
 
 #include <QTimer>
+#include <AIS_InteractiveContext.hxx>
+#include <QMenu>
 
 #include <limits>
 
@@ -328,9 +330,14 @@ void Viewport::showIdleHover(const TopoDS_Shape& s) {
   if (!idleHover_.IsNull()) context_->Remove(idleHover_, false);
   Handle(AIS_Shape) a = new AIS_Shape(s);
   const Quantity_Color c = rgb(110, 170, 235);
-  lineStyle(a, c, 4.0, Aspect_TOL_SOLID);
-  a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 4.0));
-  context_->Display(a, AIS_WireFrame, -1, false);   // -1: not pickable itself
+  if (s.ShapeType() == TopAbs_FACE) {
+    faceStyle(a, c, 0.35);
+    context_->Display(a, AIS_Shaded, -1, false);
+  } else {
+    lineStyle(a, c, 4.0, Aspect_TOL_SOLID);
+    a->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_BALL, c, 4.0));
+    context_->Display(a, AIS_WireFrame, -1, false);   // -1: not pickable itself
+  }
   context_->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
   idleHover_ = a;
   idleHoverShape_ = s;
@@ -428,6 +435,66 @@ bool Viewport::selectEdgeLoop(const QPointF& pos) {
   }
   updateView();
   return true;
+}
+
+void Viewport::showSelectOther(const QPointF& pos) {
+  if (context_.IsNull() || !glReady_) return;
+  const Graphic3d_Vec2i px = toPixels(pos);
+  context_->MoveTo(px.x(), px.y(), view_, false);
+  const Handle(SelectMgr_ViewerSelector)& sel = context_->MainSelector();
+  struct Entry {
+    Handle(SelectMgr_EntityOwner) owner;
+    QString text;
+    TopoDS_Shape shape;
+  };
+  std::vector<Entry> entries;
+  for (int i = 1; i <= sel->NbPicked(); ++i) {
+    const Handle(SelectMgr_EntityOwner) owner = sel->Picked(i);
+    if (owner.IsNull() || std::any_of(entries.begin(), entries.end(), [&](const Entry& e) { return e.owner == owner; }))
+      continue;
+    QString text;
+    TopoDS_Shape shape;
+    for (const auto& p : profileObjects_)
+      if (p.shape == owner->Selectable()) text = tr("Profile (%1)").arg(QString::fromStdString(p.sketch));
+    for (const auto& [name, obj] : shapes_) {
+      if (obj != owner->Selectable()) continue;
+      QString body = QString::fromStdString(name);
+      for (const auto& b : bodies_)
+        if (b.name == name && !b.display.empty()) body = QString::fromStdString(b.display);
+      const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(owner);
+      const TopAbs_ShapeEnum t = (!brep.IsNull() && brep->HasShape()) ? brep->Shape().ShapeType() : TopAbs_SOLID;
+      if (!brep.IsNull() && brep->HasShape()) shape = brep->Shape();
+      const QString kind = t == TopAbs_FACE ? tr("Face") : t == TopAbs_EDGE ? tr("Edge") : t == TopAbs_VERTEX ? tr("Vertex") : tr("Body");
+      text = kind == tr("Body") ? body : QStringLiteral("%1 (%2)").arg(kind, body);
+    }
+    if (text.isEmpty()) continue;   // origin planes, arrows and the like
+    entries.push_back({owner, text, shape});
+  }
+  if (entries.size() < 2) return;   // nothing hidden under the first: a plain click
+  holdTimer_->stop();
+  leftDown_ = false;   // the release ends the hold, not a click
+  boxDrag_ = false;
+  auto* menu = new QMenu(this);
+  menu->setObjectName(QStringLiteral("selectOther"));
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  menu->addSection(tr("Select Other"));
+  int n = 0;
+  for (const Entry& e : entries) {
+    QAction* a = menu->addAction(e.text);
+    a->setObjectName(QStringLiteral("selectOther.%1").arg(++n));
+    connect(a, &QAction::hovered, this, [this, shape = e.shape] { showIdleHover(shape); });
+    connect(a, &QAction::triggered, this, [this, owner = e.owner] {
+      showIdleHover({});
+      // As a click on that item: a command takes it as a pick.
+      AIS_NArray1OfEntityOwner owners(1, 1);
+      owners.SetValue(1, owner);
+      context_->Select(owners, AIS_SelectionScheme_Replace);
+      OnSelectionChanged(context_, view_);
+      updateView();
+    });
+  }
+  connect(menu, &QMenu::aboutToHide, this, [this] { showIdleHover({}); });
+  menu->popup(mapToGlobal(pos.toPoint() + QPoint(8, 8)));
 }
 
 void Viewport::refreshSelectionOverlay() {

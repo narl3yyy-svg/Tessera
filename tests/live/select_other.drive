@@ -1,0 +1,17 @@
+# Live: click and hold on the box's front face: the Select Other list shows
+# everything under the cursor, front to back. The second entry is the face
+# the ray leaves through (the bottom, hidden); choosing it selects it, and E
+# extrudes that face (the box grows downwards).
+waitfor tsr.feature.extrude
+wait 600
+whold 20 0 10 900
+waitfor selectOther
+wait 300
+shot /tmp/live_select_other.png
+click selectOther.2
+wait 400
+key e
+waitfor panelOk
+wait 500
+click panelOk
+wait 1000

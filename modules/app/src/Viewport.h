@@ -391,6 +391,9 @@ private:
   void showIdleHover(const TopoDS_Shape& s);
   // Double-click on an edge: the loop of edges round the face it bounds.
   bool selectEdgeLoop(const QPointF& pos);
+  // Click and hold: a list of everything under the cursor (Select Other).
+  void showSelectOther(const QPointF& pos);
+  QTimer* holdTimer_ = nullptr;
   void refreshSelectionOverlay();
   Handle(AIS_InteractiveObject) idleHover_;
   TopoDS_Shape idleHoverShape_;
