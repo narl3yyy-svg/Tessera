@@ -161,3 +161,10 @@ if(TSR_WITH_QT)
                          TIMEOUT 240)
   endif()
 endif()
+
+# No test reads or writes the user's own settings (~/.config): each runs with
+# a private settings folder in the build tree, so it starts from the defaults.
+get_property(_tsr_tests DIRECTORY PROPERTY TESTS)
+foreach(_t IN LISTS _tsr_tests)
+  set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT "XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/test-config")
+endforeach()

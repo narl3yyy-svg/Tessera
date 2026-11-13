@@ -24,6 +24,9 @@ cat > "$work/session.sh" <<INNER
 #!/bin/bash
 cd "$here"
 export QT_QPA_PLATFORM=xcb TSR_THEME=dark LIBGL_ALWAYS_SOFTWARE=1
+# A fresh settings folder: the app starts from its defaults and never reads
+# or changes the user's own preferences.
+export XDG_CONFIG_HOME="$work/config"
 "$app" --live-geometry "$work/geom.json" --save-on-exit "$work/out.tsr" \
     ${setup:+--script "$setup"} --quit-after 120000 > "$work/app.log" 2>&1 &
 app=\$!
