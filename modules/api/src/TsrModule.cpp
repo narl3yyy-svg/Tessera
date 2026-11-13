@@ -195,6 +195,32 @@ void bindTsr(py::module_& m) {
     if (auto err = sketch::mirrorEntities(s, entities, mirrorLine); !err.empty()) throw std::runtime_error(err);
     return s.toJson();
   }, py::arg("data"), py::arg("entities"), py::arg("mirror_line"));
+  m.def("sketch_pattern_rect", [](const std::string& data, const std::vector<int>& entities, double angle, int count1,
+                                  double spacing1, int count2, double spacing2) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::rectangularPattern(s, entities, angle, count1, spacing1, count2, spacing2); !err.empty())
+      throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entities"), py::arg("angle"), py::arg("count1"), py::arg("spacing1"),
+     py::arg("count2") = 1, py::arg("spacing2") = 0.0, "Rectangular sketch pattern (cm, rad).");
+  m.def("sketch_pattern_circular", [](const std::string& data, const std::vector<int>& entities, int center, int count,
+                                      double total) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::circularPattern(s, entities, center, count, total); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entities"), py::arg("center"), py::arg("count"), py::arg("total"),
+     "Circular sketch pattern round a point (rad).");
+  m.def("sketch_place", [](const std::string& data, const std::vector<int>& entities, double dx, double dy, double angle,
+                           double scale, double cx, double cy, bool copy) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    sketch::Placement p;
+    p.dx = dx, p.dy = dy, p.angle = angle, p.scale = scale, p.cx = cx, p.cy = cy;
+    if (auto err = copy ? sketch::copyEntities(s, entities, p) : sketch::placeEntities(s, entities, p); !err.empty())
+      throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entities"), py::arg("dx") = 0.0, py::arg("dy") = 0.0, py::arg("angle") = 0.0,
+     py::arg("scale") = 1.0, py::arg("cx") = 0.0, py::arg("cy") = 0.0, py::arg("copy") = false,
+     "Move / turn / scale sketch curves (or copies of them).");
   m.def("sketch_offset", [](const std::string& data, int entity, double distance) {
     sketch::Sketch s = sketch::Sketch::fromJson(data);
     if (auto err = sketch::offsetChain(s, entity, distance); !err.empty()) throw std::runtime_error(err);

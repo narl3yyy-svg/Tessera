@@ -12,7 +12,7 @@ sclick 0 0
 sclick 30 20
 key Escape
 key Escape
-click sketch.circle
+menu sketch.group-circle sketch.circle
 sclick 70 0
 sclick 80 0
 key Escape

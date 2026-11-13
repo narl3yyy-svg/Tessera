@@ -18,22 +18,22 @@ sclick -80 0
 sclick -40 0              # a corner at (-80, 0), clear of the palette
 key Escape
 key Escape
-click sketch.circle-3tan
+menu sketch.group-circle sketch.circle-3tan
 sclick 30 0
 sclick 30 30
 sclick 0 30               # the three sides: the incircle
 key Escape
-click sketch.circle-2tan
+menu sketch.group-circle sketch.circle-2tan
 sclick -80 30
 sclick -55 0              # the corner's two lines
 sclick -65 20             # placed in the corner
 key Escape
-click sketch.slot-overall
+menu sketch.group-slot sketch.slot-overall
 sclick 0 -40
 sclick 60 -40             # the overall ends
 sclick 30 -30             # 20 wide
 key Escape
-click sketch.slot-arc
+menu sketch.group-slot sketch.slot-arc
 sclick 100 -60            # centre
 sclick 130 -60            # start (radius 30)
 sclick 100 -30            # end, a quarter turn on

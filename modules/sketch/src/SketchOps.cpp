@@ -1,4 +1,5 @@
 #include "tsr/sketch/SketchOps.h"
+#include <set>
 
 #include <algorithm>
 #include <cmath>
@@ -492,6 +493,183 @@ std::string offsetChain(Sketch& s, int entity, double distance, std::vector<int>
     return "Offset: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
   }
   if (created) *created = made;
+  return {};
+}
+
+Point Placement::apply(const Point& p) const {
+  const double x = p.x - cx, y = p.y - cy;
+  const double c = std::cos(angle), sn = std::sin(angle);
+  return {cx + scale * (c * x - sn * y) + dx, cy + scale * (sn * x + c * y) + dy};
+}
+
+namespace {
+// Relations that hold whatever the placement (turned, scaled, moved).
+bool shapeRelation(ConstraintType t) {
+  switch (t) {
+    case ConstraintType::Coincident:
+    case ConstraintType::Parallel:
+    case ConstraintType::Perpendicular:
+    case ConstraintType::Equal:
+    case ConstraintType::Tangent:
+    case ConstraintType::PointOnEntity:
+    case ConstraintType::Midpoint:
+    case ConstraintType::Concentric:
+    case ConstraintType::Collinear:
+    case ConstraintType::Symmetry:
+    case ConstraintType::Angle:
+      return true;
+    default:
+      return false;
+  }
+}
+bool orientationRelation(ConstraintType t) {
+  return t == ConstraintType::Horizontal || t == ConstraintType::Vertical || t == ConstraintType::HorizontalDistance ||
+         t == ConstraintType::VerticalDistance;
+}
+bool sizeDimension(ConstraintType t) {
+  return t == ConstraintType::Distance || t == ConstraintType::Radius || t == ConstraintType::Diameter ||
+         t == ConstraintType::HorizontalDistance || t == ConstraintType::VerticalDistance;
+}
+
+std::set<int> pointsOf(const Sketch& s, const std::vector<int>& entities) {
+  std::set<int> pts;
+  for (int id : entities)
+    for (int p : s.entityPoints(id)) pts.insert(p);
+  return pts;
+}
+
+bool validEntities(const Sketch& s, const std::vector<int>& entities) {
+  if (entities.empty()) return false;
+  for (int id : entities)
+    if (id < 0 || id >= static_cast<int>(s.entities.size())) return false;
+  return true;
+}
+} // namespace
+
+std::string copyEntities(Sketch& s, const std::vector<int>& entities, const Placement& place, std::vector<int>* created) {
+  if (!validEntities(s, entities)) return "pick the curves first";
+  if (!(place.scale > 0)) return "the scale must be greater than zero";
+  const Sketch backup = s;
+  const std::set<int> ents(entities.begin(), entities.end());
+  const std::set<int> pts = pointsOf(s, entities);
+  std::map<int, int> pointTwin, entityTwin;
+  for (int p : pts) {
+    const Point q = place.apply(s.points[p]);
+    pointTwin[p] = s.addPoint(q.x, q.y);
+  }
+  std::vector<int> made;
+  for (int id : ents) {
+    Entity c = s.entities[id];
+    for (int* p : {&c.a, &c.b, &c.center})
+      if (*p >= 0) *p = pointTwin.at(*p);
+    for (int& f : c.fit) f = pointTwin.at(f);
+    c.radius *= place.scale;
+    c.projected = false;
+    s.entities.push_back(c);
+    entityTwin[id] = static_cast<int>(s.entities.size()) - 1;
+    made.push_back(entityTwin[id]);
+  }
+  const bool level = std::abs(std::remainder(place.angle, 2 * std::numbers::pi)) < 1e-12;
+  const size_t nc = s.constraints.size();
+  for (size_t i = 0; i < nc; ++i) {
+    Constraint c = s.constraints[i];
+    if (c.driven) continue;
+    const bool keep = shapeRelation(c.type) || (level && orientationRelation(c.type)) || sizeDimension(c.type);
+    if (!keep || (orientationRelation(c.type) && !level)) continue;
+    bool inside = !c.points.empty() || !c.entities.empty();
+    for (int p : c.points) inside = inside && pts.count(p);
+    for (int e : c.entities) inside = inside && ents.count(e);
+    if (!inside) continue;
+    for (int& p : c.points) p = pointTwin.at(p);
+    for (int& e : c.entities) e = entityTwin.at(e);
+    if (sizeDimension(c.type)) c.value *= place.scale;
+    c.expression.clear();   // the copy holds its own value
+    c.name.clear();
+    c.labelX *= place.scale;
+    c.labelY *= place.scale;
+    s.constraints.push_back(c);
+  }
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return r.message.empty() ? std::string("the copies cannot be solved") : r.message;
+  }
+  if (created) created->insert(created->end(), made.begin(), made.end());
+  return {};
+}
+
+std::string placeEntities(Sketch& s, const std::vector<int>& entities, const Placement& place) {
+  if (!validEntities(s, entities)) return "pick the curves first";
+  if (!(place.scale > 0)) return "the scale must be greater than zero";
+  const Sketch backup = s;
+  const std::set<int> ents(entities.begin(), entities.end());
+  std::set<int> pts = pointsOf(s, entities);
+  pts.erase(0);   // the origin never moves
+  for (int p : pts) s.points[p] = place.apply(s.points[p]);
+  for (int id : ents)
+    if (s.entities[id].type != EntityType::Line) s.entities[id].radius *= place.scale;
+  const bool level = std::abs(std::remainder(place.angle, 2 * std::numbers::pi)) < 1e-12;
+  std::vector<Constraint> kept;
+  for (Constraint c : s.constraints) {
+    bool anyIn = false, anyOut = false;
+    for (int p : c.points) (pts.count(p) ? anyIn : anyOut) = true;
+    for (int e : c.entities) (ents.count(e) ? anyIn : anyOut) = true;
+    if (anyIn && anyOut) continue;                                   // ties to what stays
+    if (anyIn && !level && orientationRelation(c.type)) continue;   // no longer level / upright
+    if (anyIn && c.type == ConstraintType::Fix) {
+      const Point q = place.apply({c.value, c.value2});
+      c.value = q.x, c.value2 = q.y;
+    } else if (anyIn && sizeDimension(c.type) && !c.driven) {
+      c.value *= place.scale;
+      if (place.scale != 1) c.expression.clear();
+    }
+    kept.push_back(c);
+  }
+  s.constraints = std::move(kept);
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return r.message.empty() ? std::string("that move cannot be solved") : r.message;
+  }
+  return {};
+}
+
+std::string rectangularPattern(Sketch& s, const std::vector<int>& entities, double angle, int count1, double spacing1,
+                               int count2, double spacing2, std::vector<int>* created) {
+  if (count1 < 1 || count2 < 1 || count1 * count2 < 2) return "Pattern: at least two copies in all";
+  const Sketch backup = s;
+  const double ux = std::cos(angle), uy = std::sin(angle), vx = -uy, vy = ux;
+  for (int i = 0; i < count1; ++i)
+    for (int j = 0; j < count2; ++j) {
+      if (i == 0 && j == 0) continue;
+      Placement p;
+      p.dx = ux * spacing1 * i + vx * spacing2 * j;
+      p.dy = uy * spacing1 * i + vy * spacing2 * j;
+      if (auto err = copyEntities(s, entities, p, created); !err.empty()) {
+        s = backup;
+        return "Pattern: " + err;
+      }
+    }
+  return {};
+}
+
+std::string circularPattern(Sketch& s, const std::vector<int>& entities, int center, int count, double totalAngle,
+                            std::vector<int>* created) {
+  if (count < 2) return "Pattern: at least two copies";
+  if (center < 0 || center >= static_cast<int>(s.points.size())) return "Pattern: pick the centre point";
+  const Sketch backup = s;
+  const bool full = std::abs(std::abs(totalAngle) - 2 * std::numbers::pi) < 1e-9;
+  const double step = full ? totalAngle / count : totalAngle / (count - 1);
+  for (int k = 1; k < count; ++k) {
+    Placement p;
+    p.angle = step * k;
+    p.cx = s.points[center].x;
+    p.cy = s.points[center].y;
+    if (auto err = copyEntities(s, entities, p, created); !err.empty()) {
+      s = backup;
+      return "Pattern: " + err;
+    }
+  }
   return {};
 }
 

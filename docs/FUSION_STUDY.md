@@ -65,7 +65,9 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Ellipse dimensions: the Dimension tool gives the half axis the cursor is along (the drawn one, or the other as a radius).
 - [x] Sketch text: the Text tool's panel (text, height, angle, font); the letters stand on a point (moves and constrains like any point), are profiles (each letter with its holes) and extrude into solid letters; double-click a text to change it.
 - [ ] Text along a path, text box (multi-line, alignment); trim and offset of ellipses; conic curve.
-- [ ] Rectangular and circular sketch patterns; Project / Include and Intersect; Break; Sketch Scale; Move/Copy in the sketch.
+- [x] Rectangular and Circular sketch patterns, Move/Copy (M; turn about the picked curves' middle, Create Copy) and Sketch Scale: pick curves (or start with them selected), Enter, then the values; constraints that still hold come along.
+- [x] CREATE panel as split buttons (Rectangle, Circle, Arc, Slot): the button runs the tool it shows, its arrow lists the others.
+- [ ] Patterns kept parametric (edit count / spacing later); Project / Include and Intersect; Break.
 - [ ] Fully constrained sketches turn black (dark theme: white); under-defined geometry stays blue (partly done).
 
 ### Solid

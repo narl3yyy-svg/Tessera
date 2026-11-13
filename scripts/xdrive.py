@@ -38,6 +38,7 @@ Script lines (blank lines and # comments ignored):
   shot FILE                  ask the app to save a screenshot to FILE
   expect NAME                fail unless widget NAME is visible
   expectnot NAME             fail if widget NAME is visible
+  menu BUTTON ITEM           open a split button's menu (its arrow) and pick ITEM
   whold X Y Z MS             press at a world point, keep still MS ms, release
   wdclick X Y Z              double-click a world point (mm)
   wmove X Y Z                move the pointer to a world point (mm)
@@ -248,6 +249,20 @@ def main():
                 drag(x0, y0, x1, y1)
             else:
                 drag(x1, y0, x0, y1)
+        elif cmd == "menu":
+            # A split button's arrow (its right edge), then the entry.
+            r = geometry()["widgets"].get(a[0])
+            if not r:
+                sys.exit("xdrive: line %d: no widget %s" % (n, a[0]))
+            click(r[0] + r[2] - 5, r[1] + r[3] / 2)
+            end = time.time() + 3
+            while a[1] not in geometry()["widgets"]:
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: no menu entry %s" % (n, a[1]))
+                time.sleep(0.1)
+            time.sleep(0.2)
+            click(*widget(a[1]))
+            time.sleep(0.3)
         elif cmd == "whold":
             # Press at a world point and keep still for MS milliseconds, then let go.
             move(*world_point(float(a[0]), float(a[1]), float(a[2])))

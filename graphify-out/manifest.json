@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "modules/api/src/TsrModule.cpp": {
-    "mtime": 1794564770.3445456,
-    "seen": 1794565864.95881,
-    "ast_hash": "008ae8ccd2db76c1ce4f56202657c6ea",
+    "mtime": 1794570640.982469,
+    "seen": 1794571729.651398,
+    "ast_hash": "30a35438dd7d639380cd7bb27c5259ae",
     "semantic_hash": ""
   },
   "modules/api/src/cli_main.cpp": {
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794570141.756456,
-    "seen": 1794570333.8569021,
-    "ast_hash": "1541b32edd05ab12208e87011d5bb5c3",
+    "mtime": 1794570750.616596,
+    "seen": 1794571729.6514018,
+    "ast_hash": "41afc224adf36317e7feb55bcbcc3646",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794570141.756456,
-    "seen": 1794570333.8569117,
-    "ast_hash": "a29010a005c2ad276ef62f5739bfb5e4",
+    "mtime": 1794571272.5252788,
+    "seen": 1794571729.6514063,
+    "ast_hash": "339dd95ea288fffae3eb7bd7d26558e9",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -192,15 +192,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794570141.756456,
-    "seen": 1794570333.856925,
-    "ast_hash": "378346c14ff42d1039640622b9fe7ecf",
+    "mtime": 1794571208.1667044,
+    "seen": 1794571729.651413,
+    "ast_hash": "d4374134014aa8e79d7043cf2ff0e794",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
-    "mtime": 1794570141.751949,
-    "seen": 1794570333.8569262,
-    "ast_hash": "38fba42746f3adcd978416c2c7f5b92c",
+    "mtime": 1794570750.6102107,
+    "seen": 1794571729.6514137,
+    "ast_hash": "608a30a9938a1d88f1348e5c22f867fb",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.cpp": {
@@ -426,9 +426,9 @@
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/SketchOps.h": {
-    "mtime": 1794467784.0662231,
-    "seen": 1794532264.6008759,
-    "ast_hash": "75814e6b96a5b81d17002897d33824fb",
+    "mtime": 1794570612.4730856,
+    "seen": 1794571729.6514463,
+    "ast_hash": "f88e0a97b4d7ecc2c4ef6cf18ad38438",
     "semantic_hash": ""
   },
   "modules/sketch/src/Sketch.cpp": {
@@ -444,9 +444,9 @@
     "semantic_hash": ""
   },
   "modules/sketch/src/SketchOps.cpp": {
-    "mtime": 1794568681.5041404,
-    "seen": 1794569057.4702687,
-    "ast_hash": "8d2df936a56ec5b89c82c7b21618e0ae",
+    "mtime": 1794570612.474085,
+    "seen": 1794571729.6514485,
+    "ast_hash": "5389af0ccb4e972c4dbeab6538bb89a0",
     "semantic_hash": ""
   },
   "modules/sketch/src/Solver.cpp": {
@@ -468,9 +468,9 @@
     "semantic_hash": ""
   },
   "scripts/xdrive.py": {
-    "mtime": 1794560319.4508224,
-    "seen": 1794560567.0131516,
-    "ast_hash": "111879d7fbc6986841ad60c5fa0d7ca4",
+    "mtime": 1794571272.52683,
+    "seen": 1794571729.6514518,
+    "ast_hash": "58773700ae71ca950698281842217a14",
     "semantic_hash": ""
   },
   "tests/TestFramework.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794570328.1422496,
-    "seen": 1794570333.8573828,
-    "ast_hash": "4af8c467ad534353cfaf0a68f7fc7381",
+    "mtime": 1794571723.9115324,
+    "seen": 1794571729.6516814,
+    "ast_hash": "4f743c5e29f5b2fa4aec20c5d09412ae",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794570141.909452,
-    "seen": 1794570333.857398,
-    "ast_hash": "5f8dc18ce623191846f763074b7bb1c2",
+    "mtime": 1794570750.7701688,
+    "seen": 1794571729.6516907,
+    "ast_hash": "f321bbf50c437cec4dc4e94922442f45",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2181,6 +2181,18 @@
     "mtime": 1794570141.801655,
     "seen": 1794570333.8570971,
     "ast_hash": "9c8eb08eb896196dcb457fcaed8533de",
+    "semantic_hash": ""
+  },
+  "tests/api/test_sketch_patterns.py": {
+    "mtime": 1794570641.0090263,
+    "seen": 1794571729.651475,
+    "ast_hash": "7f9b4d1b718a2b3362bd65b92822508d",
+    "semantic_hash": ""
+  },
+  "tests/live/sketch_pattern_check.py": {
+    "mtime": 1794571208.2931213,
+    "seen": 1794571729.6515124,
+    "ast_hash": "ad432c32c1d89e89b71cc69be5c9658b",
     "semantic_hash": ""
   }
 }

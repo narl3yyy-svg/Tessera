@@ -354,6 +354,45 @@ void textIcon(QPainter& p) {   // a capital A on its baseline
   dot(p, 10, 54);
 }
 
+void sketchRectPatternIcon(QPainter& p) {
+  stroke(p);
+  for (int i = 0; i < 3; ++i)
+    for (int j = 0; j < 2; ++j) p.drawRect(QRectF(8 + i * 17, 16 + j * 18, 12, 12));
+}
+
+void sketchCircPatternIcon(QPainter& p) {
+  stroke(p);
+  for (int k = 0; k < 6; ++k) {
+    const double a = k * 3.14159265 / 3;
+    p.drawEllipse(QPointF(32 + 20 * std::cos(a), 32 + 20 * std::sin(a)), 5, 5);
+  }
+  dot(p, 32, 32);
+}
+
+void sketchMoveIcon(QPainter& p) {
+  stroke(p);
+  p.drawLine(QPointF(32, 8), QPointF(32, 56));
+  p.drawLine(QPointF(8, 32), QPointF(56, 32));
+  for (auto [x, y, dx, dy] : {std::array<double, 4>{32, 8, 1, 1}, {32, 56, 1, -1}, {8, 32, 1, 1}, {56, 32, -1, 1}}) {
+    if (y == 8 || y == 56) {
+      p.drawLine(QPointF(x, y), QPointF(x - 6, y + 6 * dy));
+      p.drawLine(QPointF(x, y), QPointF(x + 6, y + 6 * dy));
+    } else {
+      p.drawLine(QPointF(x, y), QPointF(x + 6 * dx, y - 6));
+      p.drawLine(QPointF(x, y), QPointF(x + 6 * dx, y + 6));
+    }
+  }
+}
+
+void sketchScaleIcon(QPainter& p) {
+  stroke(p);
+  p.drawRect(QRectF(10, 30, 16, 16));
+  p.drawRect(QRectF(10, 14, 36, 32));
+  p.drawLine(QPointF(26, 30), QPointF(50, 8));
+  p.drawLine(QPointF(50, 8), QPointF(42, 8));
+  p.drawLine(QPointF(50, 8), QPointF(50, 16));
+}
+
 void pointIcon(QPainter& p) {
   stroke(p, 2, kLine);
   p.drawLine(QPointF(32, 14), QPointF(32, 50));
@@ -1037,6 +1076,10 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("slot-arc")) slotArcIcon(p);
   else if (name == QLatin1String("ellipse")) ellipseIcon(p);
   else if (name == QLatin1String("text")) textIcon(p);
+  else if (name == QLatin1String("sketch-rect-pattern")) sketchRectPatternIcon(p);
+  else if (name == QLatin1String("sketch-circular-pattern")) sketchCircPatternIcon(p);
+  else if (name == QLatin1String("sketch-move")) sketchMoveIcon(p);
+  else if (name == QLatin1String("sketch-scale")) sketchScaleIcon(p);
   else if (name == QLatin1String("point")) pointIcon(p);
   else if (name == QLatin1String("dimension")) dimensionIcon(p);
   else if (name == QLatin1String("finish")) finishIcon(p);

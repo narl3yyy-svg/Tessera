@@ -26,6 +26,7 @@
 #include <Prs3d_LineAspect.hxx>
 #include <Prs3d_PointAspect.hxx>
 
+#include <QCheckBox>
 #include <QCursor>
 #include <QPushButton>
 #include <QFormLayout>
@@ -175,9 +176,9 @@ SketchEditor::~SketchEditor() {
 
 // ---------------------------------------------------------------------------
 void SketchEditor::setTool(Tool t) {
-  // Mirror can start from curves already selected.
+  // Mirror and the transform tools can start from curves already selected.
   std::vector<Hit> keep;
-  if (t == Tool::Mirror)
+  if (t == Tool::Mirror || isTransformTool(t))
     for (const auto& h : selection_)
       if (h.kind == Hit::Entity) keep.push_back(h);
   const std::vector<Hit> preselected = isConstraintTool(t) ? selection_ : std::vector<Hit>{};
@@ -186,7 +187,7 @@ void SketchEditor::setTool(Tool t) {
   if (t != Tool::Select) lastTool_ = t;
   selection_.clear();
   for (const auto& h : keep) picks_.push_back({h, 0, 0});
-  if (!keep.empty()) mirrorLineStage_ = true;
+  if (!keep.empty() && t == Tool::Mirror) mirrorLineStage_ = true;
   clearPreview();
   emit toolChanged();
   switch (t) {
@@ -229,6 +230,13 @@ void SketchEditor::setTool(Tool t) {
     case Tool::ArcSlot: emit message(tr("Center Point Arc Slot: click the centre, the start, the end, then a point for the width.")); break;
     case Tool::Ellipse: emit message(tr("Ellipse: click the centre, the end of one axis, then a point for the other.")); break;
     case Tool::Text: emit message(tr("Text: click where the text starts (bottom left). Double-click a text to change it.")); break;
+    case Tool::RectPattern:
+    case Tool::CircPattern:
+    case Tool::MoveCopy:
+    case Tool::SketchScale:
+      emit message(picks_.empty() ? tr("Click the curves, then press Enter.")
+                                  : tr("%n curve(s) picked: click more, or press Enter.", nullptr, static_cast<int>(picks_.size())));
+      break;
     case Tool::Trim: emit message(tr("Trim: click the part of a curve to remove (up to the nearest crossings).")); break;
     case Tool::Collinear: emit message(tr("Collinear: click two lines.")); break;
     case Tool::Symmetry: emit message(tr("Symmetry: click two points, lines or circles, then the line of symmetry.")); break;
@@ -248,6 +256,7 @@ void SketchEditor::resetSteps() {
   firstFilletLine_ = -1;
   offsetEntity_ = -1;
   mirrorLineStage_ = false;
+  xformPointStage_ = false;
   clearPreview();
 }
 
@@ -1123,7 +1132,18 @@ void SketchEditor::clickAt(double x, double y) {
 void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPointF& widgetPos) {
   // Typed sizes override the cursor (the cursor still gives the direction).
   const bool locked = hudTool() && !steps_.empty() && hudAnyLocked();
-  if (hudTool() && !steps_.empty()) std::tie(x, y) = hudTarget(x, y);
+  if (hudTool() && !steps_.empty()) {
+    std::tie(x, y) = hudTarget(x, y);
+    // The click lands where the preview showed it: snapped like the cursor
+    // (unless a size was typed), so a circle's radius follows the grid too.
+    // (Line and Rectangle snap their own clicks.)
+    if (!locked && (tool_ == Tool::Circle || tool_ == Tool::CenterRectangle || tool_ == Tool::Polygon ||
+                    tool_ == Tool::Slot)) {
+      const Pick snap = pickPoint(x, y);
+      x = snap.x;
+      y = snap.y;
+    }
+  }
   auto exact = [&](double px, double py, int exclude = -1) {
     return locked ? Pick{{}, px, py} : pickPoint(px, py, exclude);
   };
@@ -1685,6 +1705,12 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       solveAndShow();
       return;
     }
+    case Tool::RectPattern:
+    case Tool::CircPattern:
+    case Tool::MoveCopy:
+    case Tool::SketchScale:
+      transformPick(x, y);
+      return;
     case Tool::Project:
       projectAt(widgetPos);
       return;
@@ -2725,7 +2751,169 @@ void SketchEditor::mirrorPick(double x, double y) {
   emit message(tr("Mirrored. Click more curves to mirror again."));
 }
 
+std::optional<std::vector<QString>> SketchEditor::askFields(const QString& title,
+                                                            const std::vector<std::array<QString, 3>>& fields,
+                                                            const QString& check, bool* checked) {
+  QDialog dlg(view_);
+  dlg.setObjectName(QStringLiteral("sketchValues"));
+  dlg.setWindowTitle(title);
+  auto* form = new QFormLayout(&dlg);
+  std::vector<QLineEdit*> edits;
+  for (const auto& [label, id, def] : fields) {
+    auto* e = new QLineEdit(def);
+    e->setObjectName(id);
+    ParameterCompleter::attach(e, [this] { return parameterNames(); });
+    form->addRow(label, e);
+    edits.push_back(e);
+  }
+  QCheckBox* box = nullptr;
+  if (!check.isEmpty()) {
+    box = new QCheckBox(check);
+    box->setObjectName(QStringLiteral("valuesCheck"));
+    box->setChecked(checked && *checked);
+    form->addRow(box);
+  }
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+  buttons->button(QDialogButtonBox::Ok)->setObjectName(QStringLiteral("valuesOk"));
+  form->addRow(buttons);
+  connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+  if (!edits.empty()) {
+    edits.front()->setFocus();
+    edits.front()->selectAll();
+  }
+  if (dlg.exec() != QDialog::Accepted) return std::nullopt;
+  if (box && checked) *checked = box->isChecked();
+  std::vector<QString> out;
+  for (auto* e : edits) out.push_back(e->text().trimmed());
+  return out;
+}
+
+void SketchEditor::transformPick(double x, double y) {
+  if (xformPointStage_) {
+    // The pattern's centre / the scale's base point.
+    const Pick p = pickPoint(x, y);
+    xformPointStage_ = false;
+    if (tool_ == Tool::CircPattern) {
+      checkpoint();
+      const int c = materialize(p);
+      undo_.pop_back();   // the pattern makes its own undo step
+      transformApply(c, sk_.points[c].x, sk_.points[c].y);
+    } else {
+      transformApply(-1, p.x, p.y);
+    }
+    return;
+  }
+  const Hit h = hitEntity(x, y);
+  if (h.kind != Hit::Entity) return;
+  auto it = std::find_if(picks_.begin(), picks_.end(), [&](const Pick& p) { return p.hit.index == h.index; });
+  if (it != picks_.end()) picks_.erase(it);
+  else picks_.push_back({h, x, y});
+  emit message(tr("%n curve(s) picked: click more, or press Enter.", nullptr, static_cast<int>(picks_.size())));
+  rebuild();
+}
+
+void SketchEditor::transformEnter() {
+  if (picks_.empty()) {
+    emit message(tr("Click the curves first."));
+    return;
+  }
+  if (tool_ == Tool::CircPattern || tool_ == Tool::SketchScale) {
+    xformPointStage_ = true;
+    emit message(tool_ == Tool::CircPattern ? tr("Click the pattern's centre point.") : tr("Click the base point to scale about."));
+    return;
+  }
+  transformApply(-1, 0, 0);
+}
+
+void SketchEditor::transformApply(int centerPoint, double cx, double cy) {
+  std::vector<int> ents;
+  for (const auto& p : picks_) ents.push_back(p.hit.index);
+  const QString mm = QString::fromUtf8(unitSymbol(unit_).data());
+  auto length = [&](const QString& t) {
+    return session_.document().evaluate(t.toStdString(), Unit::Millimeter, localDimensions());
+  };
+  auto angle = [&](const QString& t) { return session_.document().evaluate(t.toStdString(), Unit::Degree, localDimensions()); };
+  auto count = [&](const QString& t) {
+    return static_cast<int>(std::lround(session_.document().evaluate(t.toStdString(), Unit::None, localDimensions())));
+  };
+  std::string err;
+  sketch::Sketch trial = sk_;
+  try {
+    switch (tool_) {
+      case Tool::RectPattern: {
+        const auto v = askFields(tr("Rectangular Pattern"),
+                                 {{{tr("Quantity"), QStringLiteral("patternCount1"), QStringLiteral("3")},
+                                   {tr("Distance"), QStringLiteral("patternSpacing1"), QStringLiteral("10 ") + mm},
+                                   {tr("Quantity (across)"), QStringLiteral("patternCount2"), QStringLiteral("1")},
+                                   {tr("Distance (across)"), QStringLiteral("patternSpacing2"), QStringLiteral("10 ") + mm},
+                                   {tr("Direction"), QStringLiteral("patternAngle"), QStringLiteral("0 deg")}}});
+        if (!v) return;
+        err = sketch::rectangularPattern(trial, ents, angle((*v)[4]), count((*v)[0]), length((*v)[1]), count((*v)[2]),
+                                         length((*v)[3]));
+        break;
+      }
+      case Tool::CircPattern: {
+        const auto v = askFields(tr("Circular Pattern"),
+                                 {{{tr("Quantity"), QStringLiteral("patternCount1"), QStringLiteral("6")},
+                                   {tr("Angle"), QStringLiteral("patternAngle"), QStringLiteral("360 deg")}}});
+        if (!v) return;
+        err = sketch::circularPattern(trial, ents, centerPoint, count((*v)[0]), angle((*v)[1]));
+        break;
+      }
+      case Tool::MoveCopy: {
+        bool copy = false;
+        const auto v = askFields(tr("Move/Copy"),
+                                 {{{tr("X distance"), QStringLiteral("moveX"), QStringLiteral("10 ") + mm},
+                                   {tr("Y distance"), QStringLiteral("moveY"), QStringLiteral("0 ") + mm},
+                                   {tr("Angle"), QStringLiteral("moveAngle"), QStringLiteral("0 deg")}}},
+                                 tr("Create Copy"), &copy);
+        if (!v) return;
+        // Turns go about the middle of the picked curves.
+        double sx = 0, sy = 0;
+        int n = 0;
+        for (int e : ents)
+          for (int p : sk_.entityPoints(e)) sx += sk_.points[p].x, sy += sk_.points[p].y, ++n;
+        sketch::Placement pl;
+        pl.dx = length((*v)[0]);
+        pl.dy = length((*v)[1]);
+        pl.angle = angle((*v)[2]);
+        pl.cx = n ? sx / n : 0;
+        pl.cy = n ? sy / n : 0;
+        err = copy ? sketch::copyEntities(trial, ents, pl) : sketch::placeEntities(trial, ents, pl);
+        break;
+      }
+      case Tool::SketchScale: {
+        const auto v = askFields(tr("Sketch Scale"), {{{tr("Scale factor"), QStringLiteral("scaleFactor"), QStringLiteral("2")}}});
+        if (!v) return;
+        sketch::Placement pl;
+        pl.scale = session_.document().evaluate((*v)[0].toStdString(), Unit::None, localDimensions());
+        pl.cx = cx, pl.cy = cy;
+        err = sketch::placeEntities(trial, ents, pl);
+        break;
+      }
+      default:
+        return;
+    }
+  } catch (const std::exception& e) {
+    err = e.what();
+  }
+  if (!err.empty()) {
+    emit message(QString::fromStdString(err));
+    return;
+  }
+  checkpoint();
+  sk_ = std::move(trial);
+  picks_.clear();
+  solveAndShow();
+  emit message(tr("Done. Click curves to go again."));
+}
+
 bool SketchEditor::keyPress(QKeyEvent* e) {
+  if (isTransformTool(tool_) && !xformPointStage_ && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
+    transformEnter();
+    return true;
+  }
   if (tool_ == Tool::Mirror && !mirrorLineStage_ && !picks_.empty() &&
       (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter || e->key() == Qt::Key_Tab)) {
     mirrorLineStage_ = true;

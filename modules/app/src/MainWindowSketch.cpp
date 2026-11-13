@@ -5,6 +5,7 @@
 #include "MainWindow.h"
 
 #include <QGuiApplication>
+#include <QMenu>
 #include <limits>
 #include <TopoDS.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -260,27 +261,73 @@ QWidget* MainWindow::buildSketchTab() {
     toolButtons_.emplace_back(static_cast<int>(tool), b);
   };
 
+  // A split button for kindred tools, as the familiar CREATE panel has
+  // (Rectangle, Circle, Arc, Slot): it runs the tool it shows; its arrow
+  // lists the others, and the one picked is shown from then on.
+  struct Item {
+    SketchEditor::Tool tool;
+    QString icon, name, key;
+  };
+  auto toolGroup = [&](QHBoxLayout* into, const QString& id, const std::vector<Item>& items) {
+    auto* b = new QToolButton;
+    b->setObjectName(QStringLiteral("sketch.group-") + id);
+    b->setIconSize(QSize(30, 30));
+    b->setAutoRaise(true);
+    b->setCheckable(true);
+    b->setPopupMode(QToolButton::MenuButtonPopup);
+    auto* menu = new QMenu(b);
+    auto show = [this, b](const Item& it) {
+      setIcon(b, it.icon);
+      b->setToolTip(it.key.isEmpty() ? it.name : QStringLiteral("%1 (%2)").arg(it.name, it.key));
+      b->setAccessibleName(it.name);
+      b->setProperty("tool", static_cast<int>(it.tool));
+    };
+    show(items.front());
+    for (const Item& it : items) {
+      QAction* a = menu->addAction(it.key.isEmpty() ? it.name : it.name + QLatin1Char('\t') + it.key);
+      a->setObjectName(QStringLiteral("sketch.") + it.icon);
+      setIcon(a, it.icon);
+      connect(a, &QAction::triggered, this, [this, b, it, show] {
+        show(it);
+        if (editor_) editor_->setTool(it.tool);
+      });
+      toolButtons_.emplace_back(static_cast<int>(it.tool), b);
+    }
+    b->setMenu(menu);
+    group->addButton(b);
+    into->addWidget(b);
+    connect(b, &QToolButton::clicked, this, [this, b] {
+      if (editor_) editor_->setTool(static_cast<SketchEditor::Tool>(b->property("tool").toInt()));
+    });
+  };
+
   using T = SketchEditor::Tool;
   QHBoxLayout* create = panel(tr("CREATE"));
   toolButton(create, T::Select, QStringLiteral("select"), tr("Select / move"), QStringLiteral("Q"));
   toolButton(create, T::Line, QStringLiteral("line"), tr("Line"), QStringLiteral("L"));
-  toolButton(create, T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R"));
-  toolButton(create, T::ThreePointRectangle, QStringLiteral("rectangle-3pt"), tr("3-Point Rectangle"), {});
-  toolButton(create, T::CenterRectangle, QStringLiteral("center-rectangle"), tr("Center Rectangle"), {});
-  toolButton(create, T::Circle, QStringLiteral("circle"), tr("Center Diameter Circle"), QStringLiteral("C"));
-  toolButton(create, T::TwoPointCircle, QStringLiteral("circle-2pt"), tr("2-Point Circle"), {});
-  toolButton(create, T::ThreePointCircle, QStringLiteral("circle-3pt"), tr("3-Point Circle"), {});
-  toolButton(create, T::TwoTangentCircle, QStringLiteral("circle-2tan"), tr("2-Tangent Circle"), {});
-  toolButton(create, T::ThreeTangentCircle, QStringLiteral("circle-3tan"), tr("3-Tangent Circle"), {});
-  toolButton(create, T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {});
-  toolButton(create, T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A"));
-  toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {});
+  toolGroup(create, QStringLiteral("rectangle"),
+            {{T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R")},
+             {T::ThreePointRectangle, QStringLiteral("rectangle-3pt"), tr("3-Point Rectangle"), {}},
+             {T::CenterRectangle, QStringLiteral("center-rectangle"), tr("Center Rectangle"), {}}});
+  toolGroup(create, QStringLiteral("circle"),
+            {{T::Circle, QStringLiteral("circle"), tr("Center Diameter Circle"), QStringLiteral("C")},
+             {T::TwoPointCircle, QStringLiteral("circle-2pt"), tr("2-Point Circle"), {}},
+             {T::ThreePointCircle, QStringLiteral("circle-3pt"), tr("3-Point Circle"), {}},
+             {T::TwoTangentCircle, QStringLiteral("circle-2tan"), tr("2-Tangent Circle"), {}},
+             {T::ThreeTangentCircle, QStringLiteral("circle-3tan"), tr("3-Tangent Circle"), {}}});
+  toolGroup(create, QStringLiteral("arc"),
+            {{T::Arc, QStringLiteral("arc"), tr("Center Point Arc"), QStringLiteral("A")},
+             {T::ThreePointArc, QStringLiteral("arc-3pt"), tr("3-Point Arc"), {}}});
   toolButton(create, T::Polygon, QStringLiteral("polygon"), tr("Polygon (inscribed)"), {});
-  toolButton(create, T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {});
-  toolButton(create, T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {});
-  toolButton(create, T::ArcSlot, QStringLiteral("slot-arc"), tr("Center Point Arc Slot"), {});
+  toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {});
+  toolGroup(create, QStringLiteral("slot"),
+            {{T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {}},
+             {T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {}},
+             {T::ArcSlot, QStringLiteral("slot-arc"), tr("Center Point Arc Slot"), {}}});
   toolButton(create, T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {});
   toolButton(create, T::Mirror, QStringLiteral("sketch-mirror"), tr("Mirror"), {});
+  toolButton(create, T::CircPattern, QStringLiteral("sketch-circular-pattern"), tr("Circular Pattern"), {});
+  toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {});
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
   toolButton(create, T::Text, QStringLiteral("text"), tr("Text"), {});
   toolButton(create, T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P"));
@@ -303,6 +350,8 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(modify, T::Trim, QStringLiteral("trim"), tr("Trim"), QStringLiteral("T"));
   toolButton(modify, T::Extend, QStringLiteral("extend"), tr("Extend"), {});
   toolButton(modify, T::Offset, QStringLiteral("offset"), tr("Offset"), QStringLiteral("O"));
+  toolButton(modify, T::MoveCopy, QStringLiteral("sketch-move"), tr("Move/Copy"), QStringLiteral("M"));
+  toolButton(modify, T::SketchScale, QStringLiteral("sketch-scale"), tr("Sketch Scale"), {});
 
   QHBoxLayout* constraints = panel(tr("CONSTRAINTS"));
   toolButton(constraints, T::Dimension, QStringLiteral("dimension"), tr("Sketch Dimension"), QStringLiteral("D"));
@@ -355,7 +404,9 @@ SketchPalette* MainWindow::sketchPalette() const { return palette_; }
 void MainWindow::syncSketchTools() {
   if (!editor_) return;
   if (palette_) palette_->sync();
-  for (auto& [tool, button] : toolButtons_) button->setChecked(tool == static_cast<int>(editor_->tool()));
+  for (auto& [tool, button] : toolButtons_) button->setChecked(false);
+  for (auto& [tool, button] : toolButtons_)
+    if (tool == static_cast<int>(editor_->tool())) button->setChecked(true);
   if (constructionButton_) constructionButton_->setChecked(editor_->construction());
 }
 

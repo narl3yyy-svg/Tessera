@@ -52,4 +52,31 @@ std::string extendLine(Sketch& s, int line, double x, double y);
 // shared). Returns empty on success (`created`: the new entities).
 std::string mirrorEntities(Sketch& s, const std::vector<int>& entities, int mirrorLine, std::vector<int>* created = nullptr);
 
+// A placement of sketch geometry: p -> scale * R(angle) * p + (dx, dy).
+struct Placement {
+  double angle = 0, scale = 1, dx = 0, dy = 0;
+  double cx = 0, cy = 0;   // rotation and scale centre
+  Point apply(const Point& p) const;
+};
+
+// Copies of `entities` placed by `place`. Constraints among the copied
+// geometry come with it when they still hold: shape relations always,
+// horizontal / vertical ones when there is no turn, dimensions scaled.
+// Returns empty on success (`created`: the new entities), else why not (the
+// sketch is then unchanged).
+std::string copyEntities(Sketch& s, const std::vector<int>& entities, const Placement& place,
+                         std::vector<int>* created = nullptr);
+// Moves (turns, scales) `entities` in place. Relations tying them to geometry
+// that stays are dropped, as are horizontal / vertical ones when turning;
+// dimensions among them scale. Returns empty on success, else why not.
+std::string placeEntities(Sketch& s, const std::vector<int>& entities, const Placement& place);
+// count1 x count2 copies (the originals included) along a direction at
+// `angle` and across it. Returns empty on success, else why not.
+std::string rectangularPattern(Sketch& s, const std::vector<int>& entities, double angle, int count1, double spacing1,
+                               int count2, double spacing2, std::vector<int>* created = nullptr);
+// `count` copies (the originals included) round the point `center`, spread
+// over `totalAngle` (a full turn: evenly, without doubling the first).
+std::string circularPattern(Sketch& s, const std::vector<int>& entities, int center, int count, double totalAngle,
+                            std::vector<int>* created = nullptr);
+
 } // namespace tsr::sketch

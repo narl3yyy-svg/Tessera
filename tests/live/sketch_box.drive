@@ -6,7 +6,7 @@ click tsr.sketch.create
 plane XY
 waitfor sketch.line
 wait 500
-click sketch.rectangle
+menu sketch.group-rectangle sketch.rectangle
 sclick 0 0
 sclick 40 30
 key Escape

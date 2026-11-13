@@ -41,6 +41,7 @@ public:
     Spline, Fillet, Offset, Chamfer, Extend, Mirror, Project,
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
+    RectPattern, CircPattern, MoveCopy, SketchScale,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -237,6 +238,19 @@ private:
   // Returns false if cancelled.
   bool editText(sketch::Text& t, bool isNew);
   int textAt(double x, double y) const;   // the text whose letters' box holds (x, y), or -1
+  // Rectangular / Circular Pattern, Move/Copy, Scale: pick curves, Enter,
+  // (a centre / base point,) then a panel of values.
+  static bool isTransformTool(Tool t) {
+    return t == Tool::RectPattern || t == Tool::CircPattern || t == Tool::MoveCopy || t == Tool::SketchScale;
+  }
+  bool xformPointStage_ = false;
+  void transformPick(double x, double y);
+  void transformEnter();
+  void transformApply(int centerPoint, double cx, double cy);
+  // A panel of values: labels, object names and default texts; returns the
+  // texts typed, or nothing if cancelled. `check` adds a checkbox.
+  std::optional<std::vector<QString>> askFields(const QString& title, const std::vector<std::array<QString, 3>>& fields,
+                                                const QString& check = {}, bool* checked = nullptr);
   // 2- / 3-Tangent Circle: the lines picked so far (and where they were clicked).
   std::vector<int> tangentLines_;
   std::vector<std::pair<double, double>> tangentClicks_;

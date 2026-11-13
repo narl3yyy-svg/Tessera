@@ -1,0 +1,37 @@
+# Live: Circular Pattern (a circle six times round the origin) and
+# Rectangular Pattern (a window-selected rectangle, three along X), each
+# picked, Enter, then the panel's values.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+menu sketch.group-circle sketch.circle
+sclick 30 0
+sclick 40 0               # radius 10 (on the 10 mm grid)
+key Escape
+click sketch.sketch-circular-pattern
+sclick 40 0               # the circle
+key Return
+sclick 0 0                # round the origin
+waitfor sketchValues
+wait 300
+key Return                # 6 over 360 deg
+wait 400
+key Escape
+menu sketch.group-rectangle sketch.rectangle
+sclick -60 20
+sclick -50 30
+key Escape
+key q
+sdrag -65 15 -45 35       # window round the rectangle
+click sketch.sketch-rect-pattern
+key Return
+waitfor sketchValues
+wait 300
+key Return                # 3 along X, 10 mm apart
+wait 400
+key Escape
+shot /tmp/live_sketch_pattern.png
+click palette.finish
+wait 600

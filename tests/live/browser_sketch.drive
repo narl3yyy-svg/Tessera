@@ -8,9 +8,9 @@ brclick XY
 wait 400
 key Down
 key Return
-waitfor sketch.circle
+waitfor sketch.group-circle
 wait 500
-click sketch.circle
+menu sketch.group-circle sketch.circle
 sclick 0 0
 sclick 10 0
 key Escape

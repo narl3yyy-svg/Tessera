@@ -12,7 +12,7 @@ sdrag 40 0 60 20       # drag from the end: tangent arc
 sclick 60 50.5         # straight on from the arc: tangent
 key Escape
 shot /tmp/live_line.png
-click sketch.rectangle
+menu sketch.group-rectangle sketch.rectangle
 sclick 80 0
 type 30
 key Tab
