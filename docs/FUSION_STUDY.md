@@ -81,7 +81,8 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [x] Revolve's rotation ring: a ball on a ring round the axis, dragged (the angle follows the cursor round, past 180 and up to 360 deg) or typed in its box.
 - [x] Rotation ring for Circular Pattern's total angle (round the pattern axis, through what is patterned).
 - [ ] Sweep / Loft handles.
-- [ ] Hole: thread options (tapped holes); hole types table.
+- [x] Hole Tap Type: Simple, Clearance (ISO 273 close / normal / loose for M2-M24) and Tapped (drilled at the ISO 68-1 minor diameter, ISO coarse pitch; cosmetic, or Modeled with the thread groove cut in one go).
+- [ ] Taper Tapped (pipe threads), fine pitches, inch sizes.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.
 - [ ] Combine with Keep Tools (done) and New Component output.
 - [ ] Appearance (drag materials onto faces) and Physical Material (affects mass in Properties).

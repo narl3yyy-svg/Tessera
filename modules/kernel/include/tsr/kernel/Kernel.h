@@ -184,6 +184,12 @@ struct ThreadInfo {
 };
 TopoDS_Shape thread(const TopoDS_Shape& body, const TopoDS_Shape& face, double pitch, double offset, double length,
                     bool rightHand, ThreadInfo* info = nullptr);
+// The thread groove alone, as a solid to cut away: a 60 degree V swept along
+// a helix of `radius` from `start` along `axisDir` for `length` (the V's
+// tip points away from the axis for an internal thread, towards it for an
+// external one). `xDir` (across the axis) is where the helix starts.
+TopoDS_Shape threadTool(Vec3 start, Vec3 axisDir, Vec3 xDir, double radius, double length, double pitch, bool rightHand,
+                        bool internal);
 // The coarse ISO metric pitch for a nominal diameter (cm).
 double isoCoarsePitch(double diameter);
 

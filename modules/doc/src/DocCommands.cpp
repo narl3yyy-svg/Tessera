@@ -12,6 +12,7 @@
 #include <TopoDS_Compound.hxx>
 #include <BRep_Builder.hxx>
 
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepPrimAPI_MakeCone.hxx>
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <Standard_Failure.hxx>
@@ -1349,6 +1350,43 @@ private:
 // ---------------------------------------------------------------------------
 // Hole: drilled at every point of a sketch (points not used by curves), into
 // the material on the side opposite the sketch plane's normal.
+// ISO metric screw sizes: nominal diameter, coarse pitch and ISO 273
+// clearance holes (close / normal / loose), in mm.
+struct MetricSize {
+  const char* name;
+  double d, pitch, close, normal, loose;
+};
+constexpr MetricSize kMetric[] = {
+    {"M2", 2, 0.4, 2.2, 2.4, 2.6},       {"M2.5", 2.5, 0.45, 2.7, 2.9, 3.1}, {"M3", 3, 0.5, 3.2, 3.4, 3.6},
+    {"M4", 4, 0.7, 4.3, 4.5, 4.8},       {"M5", 5, 0.8, 5.3, 5.5, 5.8},      {"M6", 6, 1.0, 6.4, 6.6, 7.0},
+    {"M8", 8, 1.25, 8.4, 9.0, 10.0},     {"M10", 10, 1.5, 10.5, 11.0, 12.0}, {"M12", 12, 1.75, 13.0, 13.5, 14.5},
+    {"M14", 14, 2.0, 15.0, 15.5, 16.5},  {"M16", 16, 2.0, 17.0, 17.5, 18.5}, {"M20", 20, 2.5, 21.0, 22.0, 24.0},
+    {"M24", 24, 3.0, 25.0, 26.0, 28.0},
+};
+
+struct HoleSize {
+  double radius = 0;   // drilled (cm)
+  double pitch = 0;    // tapped: the thread's (cm); 0 otherwise
+  bool modeled = false;
+};
+
+HoleSize holeSize(const Inputs& in) {
+  const std::string tap = stringOr(in, "tapType", "Simple");
+  if (tap == "Simple") return {getReal(in, "diameter") / 2, 0, false};
+  const std::string name = stringOr(in, "size", "M6");
+  for (const auto& m : kMetric) {
+    if (name != m.name) continue;
+    if (tap == "Clearance") {
+      const std::string fit = stringOr(in, "fit", "Normal");
+      const double mm = fit == "Close" ? m.close : fit == "Loose" ? m.loose : m.normal;
+      return {mm / 20, 0, false};
+    }
+    const double minor = m.d - 1.08253 * m.pitch;   // ISO 68-1 internal minor diameter
+    return {minor / 20, m.pitch / 10, in.count("threadModeled") && getBool(in, "threadModeled")};
+  }
+  throw CommandError("Size: '" + name + "' is not an ISO metric size");
+}
+
 class Hole final : public Command {
 public:
   Hole() {
@@ -1369,7 +1407,16 @@ public:
         {.id = "sketch", .label = "Sketch (points)", .tooltip = "Holes go at this sketch's points. Empty: latest sketch.",
          .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true, .visibleWhen = "placement=Sketch Points"},
         choice("holeType", "Hole Type", {"Simple", "Counterbore", "Countersink"}, {}),
-        len("diameter", "Diameter", 0.5),
+        // As in the familiar tool: a plain hole of any size, a clearance hole
+        // for a screw (ISO 273), or a tapped hole (ISO metric coarse thread).
+        choice("tapType", "Hole Tap Type", {"Simple", "Clearance", "Tapped"},
+               "Clearance: sized to pass a screw. Tapped: drilled for a thread."),
+        choice("size", "Size", {"M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M20", "M24"},
+               "ISO metric screw size."),
+        choice("fit", "Fit", {"Normal", "Close", "Loose"}, "ISO 273 clearance: medium, fine or coarse."),
+        InputDef{.id = "threadModeled", .label = "Modeled", .tooltip = "Off: a cosmetic thread. On: real thread geometry.",
+                 .type = InputType::Bool, .defaultValue = false, .visibleWhen = "tapType=Tapped"},
+        len("diameter", "Diameter", 0.5, "tapType=Simple"),
         choice("extent", "Extents", {"Distance", "All"}, "All: through the whole body."),
         len("depth", "Depth", 1.0, "extent=Distance"),
         // As in the familiar tool: blind holes end in a 118 deg drill point by
@@ -1387,8 +1434,11 @@ public:
         choice("flip", "Direction", {"Into material", "Flipped"}, "Holes go opposite the sketch plane's normal; Flipped reverses."),
         bodyInput("target", "Body"),
     };
-    for (auto& d : def_.inputs)
+    for (auto& d : def_.inputs) {
       if (d.id == "flip") d.visibleWhen = "placement=Sketch Points";   // on a face: along its normal
+      if (d.id == "size") d.visibleWhen = "tapType=Clearance|Tapped";
+      if (d.id == "fit") d.visibleWhen = "tapType=Clearance";
+    }
   }
   const CommandDef& def() const override { return def_; }
   // Documents made before Placement existed placed holes at sketch points.
@@ -1454,7 +1504,10 @@ public:
     const double size = std::hypot(bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z) +
                         std::hypot(bb.max.x, bb.max.y, bb.max.z) + std::hypot(bb.min.x, bb.min.y, bb.min.z) + 1;
     const double depth = getString(in, "extent") == "All" ? size : getReal(in, "depth");
-    const double r = getReal(in, "diameter") / 2;
+    // The drilled radius: typed, a clearance size, or a tapped hole's minor
+    // diameter D1 = D - 1.08253 P (ISO 68-1).
+    const HoleSize hs = holeSize(in);
+    const double r = hs.radius;
     const std::string type = getString(in, "holeType");
     const double eps = 1e-3;   // start just outside the face so the cut is clean
     try {
@@ -1486,6 +1539,25 @@ public:
           const gp_Pnt bottom = c.Translated(gp_Vec(into) * depth);
           const TopoDS_Shape tip = BRepPrimAPI_MakeCone(gp_Ax2(bottom, into), r, 0, r / std::tan(half)).Shape();
           tool = kernel::boolean(kernel::BooleanOp::Join, tool, tip);
+        }
+        // Tapped and modeled: the thread groove joins the drill, so one cut
+        // makes the threaded hole; it runs the hole's depth inside the body.
+        if (hs.pitch > 0 && hs.modeled) {
+          double through = depth;
+          if (!blind) {
+            const auto b = kernel::boundingBox(body);
+            through = 0;
+            for (double bx : {b.min.x, b.max.x})
+              for (double by : {b.min.y, b.max.y})
+                for (double bz : {b.min.z, b.max.z})
+                  through = std::max(through, gp_Vec(c, gp_Pnt(bx, by, bz)).Dot(gp_Vec(into)));
+          }
+          const gp_Dir across = std::abs(into.Z()) < 0.9 ? into.Crossed(gp::DZ()) : into.Crossed(gp::DX());
+          const gp_Pnt from = c.Translated(-gp_Vec(into) * hs.pitch);   // starts outside: a clean run-in
+          tool = kernel::boolean(kernel::BooleanOp::Join, tool,
+                                 kernel::threadTool({from.X(), from.Y(), from.Z()}, {into.X(), into.Y(), into.Z()},
+                                                    {across.X(), across.Y(), across.Z()}, r, through + hs.pitch,
+                                                    hs.pitch, true, true));
         }
         doc.noteTool(tool, "cut", target);
         body = kernel::boolean(kernel::BooleanOp::Cut, body, tool);

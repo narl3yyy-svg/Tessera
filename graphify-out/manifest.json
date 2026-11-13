@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794575210.432617,
-    "seen": 1794575565.1899323,
-    "ast_hash": "0ea51c7d9afaf7849449820fa2d91e66",
+    "mtime": 1794598252.1362307,
+    "seen": 1794598497.2194648,
+    "ast_hash": "e7588d4154f1421464b9c76152cb6e1e",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794560634.4966404,
-    "seen": 1794560876.7764528,
-    "ast_hash": "06a11c107168c3e044cc0973c7562ebb",
+    "mtime": 1794598252.1352303,
+    "seen": 1794598497.21947,
+    "ast_hash": "b2fef9bcf81fa0a8814397441f881660",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794560634.4966404,
-    "seen": 1794560876.776456,
-    "ast_hash": "b4a449f3654a2e2119c2d3685ee5618b",
+    "mtime": 1794598252.1352303,
+    "seen": 1794598497.2194717,
+    "ast_hash": "7a6deee251e6cd3b130881239739d588",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794576223.1622882,
-    "seen": 1794576228.4500306,
-    "ast_hash": "0d68280674d7c2b1950da691353efc12",
+    "mtime": 1794598492.1751435,
+    "seen": 1794598497.2197216,
+    "ast_hash": "d13be2e22b9e731820ebc6c03cc1cab7",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794575940.9948227,
-    "seen": 1794576228.45004,
-    "ast_hash": "b6acba71e1d102ff638f41082b884148",
+    "mtime": 1794577218.8568096,
+    "seen": 1794598497.2197306,
+    "ast_hash": "80bd8f158c7aa987d129c17e83aea31e",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2235,6 +2235,12 @@
     "mtime": 1794575940.8569548,
     "seen": 1794576228.4498456,
     "ast_hash": "1fcf4b97d2b2dc4c390883e2071692f9",
+    "semantic_hash": ""
+  },
+  "tests/api/test_hole_tapped.py": {
+    "mtime": 1794577218.7458856,
+    "seen": 1794598497.219495,
+    "ast_hash": "3abcfde5aa5e0a6d8fc57a293a04678c",
     "semantic_hash": ""
   }
 }
