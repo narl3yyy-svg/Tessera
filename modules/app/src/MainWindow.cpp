@@ -71,6 +71,8 @@ constexpr int kPlaneRole = Qt::UserRole + 7;
 constexpr int kOriginRole = Qt::UserRole + 8;   // an origin plane: its spec ("XY")
 constexpr int kSketchLockedRole = Qt::UserRole + 9;   // a fully defined sketch
 constexpr int kMarkerRole = Qt::UserRole + 10;        // the timeline's history marker
+constexpr int kViewRole = Qt::UserRole + 11;          // a named view: its name ("TOP" ... or the design's)
+constexpr int kViewsFolderRole = Qt::UserRole + 12;   // the Named Views folder
 
 QString qs(const std::string& s) { return QString::fromStdString(s); }
 
@@ -110,6 +112,15 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   connect(browser_, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int) {
     {
       const QString text = item->text(0).trimmed();
+      if (const QString view = item->data(0, kViewRole).toString(); !view.isEmpty()) {
+        if (view != text)
+          QTimer::singleShot(0, this, [this, view, text] {
+            const std::string err = session_.renameNamedView(view.toStdString(), text.toStdString());
+            if (!err.empty()) statusBar()->showMessage(qs(err), 5000);
+            refresh();
+          });
+        return;
+      }
       const QString body = item->data(0, kBodyRole).toString();
       const QString sketch = item->data(0, kSketchRole).toString();
       // Renamed: done after this signal returns, because the rename refreshes
@@ -157,6 +168,10 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       QTimer::singleShot(0, this, [this] { showParameters(); });
       return;
     }
+    if (const QString view = item->data(0, kViewRole).toString(); !view.isEmpty()) {
+      goToNamedView(view);
+      return;
+    }
     const QString sketch = item->data(0, kSketchRole).toString();
     if (sketch.isEmpty()) return;
     for (const auto& f : session_.document().features())
@@ -164,6 +179,12 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
         editSketch(f.id);
         return;
       }
+  });
+  connect(browser_, &QTreeWidget::itemExpanded, this, [this](QTreeWidgetItem* it) {
+    if (it->data(0, kViewsFolderRole).toBool()) namedViewsOpen_ = true;
+  });
+  connect(browser_, &QTreeWidget::itemCollapsed, this, [this](QTreeWidgetItem* it) {
+    if (it->data(0, kViewsFolderRole).toBool()) namedViewsOpen_ = false;
   });
   browser_->setContextMenuPolicy(Qt::CustomContextMenu);
   connect(browser_, &QTreeWidget::customContextMenuRequested, this, &MainWindow::showBrowserMenu);
@@ -1294,6 +1315,24 @@ void MainWindow::showBrowserMenu(const QPoint& pos) {
       if (startSketch(planeSpec)) statusBar()->showMessage(tr("Sketching on %1.").arg(planeSpec), 3000);
     });
   }
+  if (it->data(0, kViewsFolderRole).toBool() && !active_) {
+    QAction* a = m.addAction(icon(QStringLiteral("look-at")), tr("New Named View"));
+    a->setObjectName(QStringLiteral("browserNewView"));
+    connect(a, &QAction::triggered, this, [this] { newNamedView(); });
+  }
+  if (const QString view = it->data(0, kViewRole).toString(); !view.isEmpty()) {
+    QAction* go = m.addAction(tr("Go To"), this, [this, view] { goToNamedView(view); });
+    go->setObjectName(QStringLiteral("browserGoToView"));
+    if (it->flags() & Qt::ItemIsEditable) {
+      QAction* ren = m.addAction(tr("Rename"), this, [this, it] { browser_->editItem(it, 0); });
+      ren->setObjectName(QStringLiteral("browserRenameView"));
+      QAction* del = m.addAction(QIcon::fromTheme(QStringLiteral("edit-delete")), tr("Delete"), this, [this, view] {
+        if (auto err = session_.deleteNamedView(view.toStdString()); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+      });
+      del->setObjectName(QStringLiteral("browserDeleteView"));
+      del->setEnabled(!active_);
+    }
+  }
   const QString sketch = it->data(0, kSketchRole).toString();
   if (!sketch.isEmpty() && !editor_ && !active_)
     for (const auto& f : session_.document().features())
@@ -1309,6 +1348,47 @@ void MainWindow::showBrowserMenu(const QPoint& pos) {
   }
   if (m.isEmpty()) return;
   m.exec(browser_->viewport()->mapToGlobal(pos));
+}
+
+void MainWindow::goToNamedView(const QString& name) {
+  if (name == QStringLiteral("TOP")) return viewport_->glideTo(V3d_TypeOfOrientation_Zup_Top);
+  if (name == QStringLiteral("FRONT")) return viewport_->glideTo(V3d_TypeOfOrientation_Zup_Front);
+  if (name == QStringLiteral("RIGHT")) return viewport_->glideTo(V3d_TypeOfOrientation_Zup_Right);
+  if (name == QStringLiteral("HOME")) return viewport_->glideTo(V3d_TypeOfOrientation_Zup_AxoRight);
+  for (const auto& v : session_.document().namedViews())
+    if (qs(v.name) == name) {
+      Viewport::ViewCamera c;
+      c.eye = gp_Pnt(v.eye[0], v.eye[1], v.eye[2]);
+      c.target = gp_Pnt(v.target[0], v.target[1], v.target[2]);
+      c.up = gp_Dir(v.up[0], v.up[1], v.up[2]);
+      c.size = v.size;
+      viewport_->glideTo(c);
+      return;
+    }
+}
+
+// Saves the current camera as the next free "Named View N".
+void MainWindow::newNamedView() {
+  const auto existing = session_.document().namedViews();
+  QString name;
+  for (int n = 1;; ++n) {
+    name = tr("Named View %1").arg(n);
+    bool taken = false;
+    for (const auto& v : existing) taken = taken || qs(v.name) == name;
+    if (!taken) break;
+  }
+  const Viewport::ViewCamera c = viewport_->camera();
+  doc::NamedView v;
+  v.name = name.toStdString();
+  for (int i = 0; i < 3; ++i) {
+    v.eye[i] = c.eye.Coord(i + 1);
+    v.target[i] = c.target.Coord(i + 1);
+    v.up[i] = c.up.Coord(i + 1);
+  }
+  v.size = c.size;
+  namedViewsOpen_ = true;
+  if (auto err = session_.addNamedView(v); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+  else statusBar()->showMessage(tr("Saved the view as %1.").arg(name), 3000);
 }
 
 // V: shows or hides what is selected (bodies in the canvas, else the
@@ -1340,6 +1420,25 @@ void MainWindow::refreshBrowser(const QString& docName) {
   units->setData(0, kUnitsRole, true);
   units->setToolTip(0, tr("Click to change the design's units"));
   settings->setExpanded(true);
+
+  // Named Views: the four standard ones, then the design's own (renamable).
+  auto* views = new QTreeWidgetItem(root, {tr("Named Views")});
+  views->setIcon(0, icon(QStringLiteral("look-at")));
+  views->setData(0, kViewsFolderRole, true);
+  views->setToolTip(0, tr("Double-click a view to go to it; right-click to save the current one"));
+  for (const char* fixed : {"TOP", "FRONT", "RIGHT", "HOME"}) {
+    auto* it = new QTreeWidgetItem(views, {QString::fromLatin1(fixed)});
+    it->setIcon(0, icon(QString::fromLatin1(fixed) == QStringLiteral("HOME") ? QStringLiteral("home")
+                                                                              : QStringLiteral("look-at")));
+    it->setData(0, kViewRole, QString::fromLatin1(fixed));
+  }
+  for (const auto& v : d.namedViews()) {
+    auto* it = new QTreeWidgetItem(views, {qs(v.name)});
+    it->setIcon(0, icon(QStringLiteral("look-at")));
+    it->setData(0, kViewRole, qs(v.name));
+    it->setFlags(it->flags() | Qt::ItemIsEditable);   // click again (or F2) to rename
+  }
+  views->setExpanded(namedViewsOpen_);
   if (section_.active) {
     auto* analysis = new QTreeWidgetItem(root, {tr("Analysis")});
     analysis->setIcon(0, icon(QStringLiteral("section")));

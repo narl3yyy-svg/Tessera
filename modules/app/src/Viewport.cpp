@@ -1096,6 +1096,63 @@ void Viewport::viewFrom(V3d_TypeOfOrientation o) {
   fitAll();
 }
 
+Viewport::ViewCamera Viewport::camera() const {
+  ViewCamera v;
+  if (view_.IsNull()) return v;
+  const Handle(Graphic3d_Camera)& cam = view_->Camera();
+  v.eye = cam->Eye();
+  v.target = cam->Center();
+  v.up = cam->Up();
+  double w = 0, h = 0;
+  view_->Size(w, h);
+  v.size = w;
+  return v;
+}
+
+// The familiar tool moves the camera to a named view, not jumps.
+static void glide(Viewport& vp, const Handle(V3d_View)& view, const Handle(Graphic3d_Camera)& start,
+                  const Handle(Graphic3d_Camera)& end) {
+  view->Camera()->Copy(start);
+  vp.AbortViewAnimation();
+  const Handle(AIS_AnimationCamera)& a = vp.ViewAnimation();
+  a->SetView(view);
+  a->SetCameraStart(start);
+  a->SetCameraEnd(end);
+  a->SetOwnDuration(0.4);
+  a->StartTimer(0, 1.0, true, false);
+}
+
+void Viewport::glideTo(const ViewCamera& v) {
+  if (view_.IsNull()) return;
+  Handle(Graphic3d_Camera) start = new Graphic3d_Camera(view_->Camera());
+  Handle(Graphic3d_Camera) end = new Graphic3d_Camera(view_->Camera());
+  end->SetEyeAndCenter(v.eye, v.target);
+  end->SetUp(v.up);
+  double w = 0, h = 0;
+  view_->Size(w, h);
+  if (w > 1e-12 && v.size > 1e-12) end->SetScale(start->Scale() * v.size / w);
+  glide(*this, view_, start, end);
+  updateView();
+}
+
+void Viewport::glideTo(V3d_TypeOfOrientation o) {
+  if (view_.IsNull()) return;
+  Handle(Graphic3d_Camera) start = new Graphic3d_Camera(view_->Camera());
+  AbortViewAnimation();
+  view_->SetProj(o);
+  bool any = false;
+  for (const auto& [name, shape] : shapes_) any = any || context_->IsDisplayed(shape);
+  if (any) {
+    view_->FitAll(0.15, false);
+    view_->ZFitAll();
+  } else {
+    view_->SetSize(30.0);
+  }
+  Handle(Graphic3d_Camera) end = new Graphic3d_Camera(view_->Camera());
+  glide(*this, view_, start, end);
+  updateView();
+}
+
 void Viewport::setStyle(Style s) {
   style_ = s;
   if (glReady_) rebuild();

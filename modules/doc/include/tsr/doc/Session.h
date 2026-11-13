@@ -54,6 +54,11 @@ public:
   std::string setParameter(const std::string& name, const std::string& expression, const std::string& comment);
   std::string deleteParameter(const std::string& name);
 
+  // Named views: one undo step each, no replay (a view is not history).
+  std::string addNamedView(const NamedView& v);
+  std::string renameNamedView(const std::string& name, const std::string& newName);
+  std::string deleteNamedView(const std::string& name);
+
   bool undo();
   bool redo();
 

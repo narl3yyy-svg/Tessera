@@ -54,6 +54,15 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// A saved camera (Browser > Named Views), kept in the design.
+struct NamedView {
+  std::string name;
+  double eye[3] = {0, 0, 1};
+  double target[3] = {0, 0, 0};
+  double up[3] = {0, 1, 0};
+  double size = 10;   // the view's width across, cm (orthographic scale)
+};
+
 struct UserParameter {
   std::string name;
   std::string expression; // as typed, e.g. "10 mm"
@@ -140,6 +149,12 @@ public:
 
   // Model. Mutators require an open transaction and throw DocumentError
   // otherwise.
+  // Named views, in the order made. Names are unique.
+  std::vector<NamedView> namedViews() const;
+  void addNamedView(const NamedView& v);
+  void renameNamedView(const std::string& name, const std::string& newName);
+  void removeNamedView(const std::string& name);
+
   std::vector<UserParameter> userParameters() const;
   std::optional<UserParameter> userParameter(const std::string& name) const;
   void addUserParameter(const UserParameter& p);

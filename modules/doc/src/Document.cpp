@@ -37,7 +37,8 @@ constexpr int kPlanesTag = 5;
 constexpr int kAxesTag = 6;
 constexpr int kPointsTag = 7;
 constexpr int kComponentsTag = 8;
-constexpr int kBodyNamesTag = 9;   // body renames: "alias:<name>" -> internal, "show:<internal>" -> shown
+constexpr int kBodyNamesTag = 9;
+constexpr int kNamedViewsTag = 10;   // body renames: "alias:<name>" -> internal, "show:<internal>" -> shown
 // Plan §2 asks for unbounded undo; OCAF needs a number. A million steps is
 // unbounded for practical purposes and is recorded in docs/KNOWN_GAPS.md.
 constexpr int kUndoLimit = 1'000'000;
@@ -148,6 +149,73 @@ void Document::initLayout() {
   doc_->Main().FindChild(kPointsTag, true);
   doc_->Main().FindChild(kComponentsTag, true);
   doc_->Main().FindChild(kBodyNamesTag, true);
+  doc_->Main().FindChild(kNamedViewsTag, true);
+}
+
+std::vector<NamedView> Document::namedViews() const {
+  std::vector<NamedView> out;
+  for (TDF_ChildIterator it(doc_->Main().FindChild(kNamedViewsTag, true)); it.More(); it.Next()) {
+    Handle(TDataStd_NamedData) nd;
+    if (!it.Value().FindAttribute(TDataStd_NamedData::GetID(), nd)) continue;   // removed by undo
+    NamedView v;
+    v.name = nameOf(it.Value());
+    const char* axes = "xyz";
+    for (int i = 0; i < 3; ++i) {
+      const std::string k(1, axes[i]);
+      v.eye[i] = nd->GetReal(ext("eye" + k));
+      v.target[i] = nd->GetReal(ext("target" + k));
+      v.up[i] = nd->GetReal(ext("up" + k));
+    }
+    v.size = nd->GetReal("size");
+    out.push_back(std::move(v));
+  }
+  return out;
+}
+
+static TDF_Label findNamedView(const Handle(TDocStd_Document)& doc, const std::string& name) {
+  for (TDF_ChildIterator it(doc->Main().FindChild(kNamedViewsTag, true)); it.More(); it.Next())
+    if (it.Value().IsAttribute(TDataStd_NamedData::GetID()) && nameOf(it.Value()) == name) return it.Value();
+  return {};
+}
+
+static void checkViewName(const std::string& name) {
+  if (name.empty() || name.find_first_not_of(' ') == std::string::npos) throw DocumentError("a view needs a name");
+  for (const char* fixed : {"TOP", "FRONT", "RIGHT", "HOME"})
+    if (name == fixed) throw DocumentError("'" + name + "' is one of the standard views");
+}
+
+void Document::addNamedView(const NamedView& v) {
+  requireTransaction("addNamedView");
+  checkViewName(v.name);
+  if (!findNamedView(doc_, v.name).IsNull()) throw DocumentError("a view named '" + v.name + "' already exists");
+  const TDF_Label l = doc_->Main().FindChild(kNamedViewsTag, true).NewChild();
+  TDataStd_Name::Set(l, ext(v.name));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  const char* axes = "xyz";
+  for (int i = 0; i < 3; ++i) {
+    const std::string k(1, axes[i]);
+    nd->SetReal(ext("eye" + k), v.eye[i]);
+    nd->SetReal(ext("target" + k), v.target[i]);
+    nd->SetReal(ext("up" + k), v.up[i]);
+  }
+  nd->SetReal("size", v.size);
+}
+
+void Document::renameNamedView(const std::string& name, const std::string& newName) {
+  requireTransaction("renameNamedView");
+  const TDF_Label l = findNamedView(doc_, name);
+  if (l.IsNull()) throw DocumentError("no view named '" + name + "'");
+  if (newName == name) return;
+  checkViewName(newName);
+  if (!findNamedView(doc_, newName).IsNull()) throw DocumentError("a view named '" + newName + "' already exists");
+  TDataStd_Name::Set(l, ext(newName));
+}
+
+void Document::removeNamedView(const std::string& name) {
+  requireTransaction("removeNamedView");
+  const TDF_Label l = findNamedView(doc_, name);
+  if (l.IsNull()) throw DocumentError("no view named '" + name + "'");
+  l.ForgetAllAttributes(true);
 }
 
 void Document::requireTransaction(const char* what) const {

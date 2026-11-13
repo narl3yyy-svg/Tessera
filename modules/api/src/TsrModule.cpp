@@ -11,6 +11,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <algorithm>
+#include <array>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
@@ -152,6 +153,38 @@ void bindTsr(py::module_& m) {
     }
     return out;
   }, "Sketch dimensions as model parameters (d1, d2 ...; values in cm or rad).");
+  m.def("named_views", [] {
+    py::list out;
+    for (const auto& v : activeSession().document().namedViews()) {
+      py::dict d;
+      d["name"] = v.name;
+      d["eye"] = py::make_tuple(v.eye[0], v.eye[1], v.eye[2]);
+      d["target"] = py::make_tuple(v.target[0], v.target[1], v.target[2]);
+      d["up"] = py::make_tuple(v.up[0], v.up[1], v.up[2]);
+      d["size"] = v.size;
+      out.append(d);
+    }
+    return out;
+  }, "The design's named views (eye, target and up in cm; size: the width shown, cm).");
+  m.def("add_named_view", [](const std::string& name, std::array<double, 3> eye, std::array<double, 3> target,
+                             std::array<double, 3> up, double size) {
+    tsr::doc::NamedView v;
+    v.name = name;
+    for (int i = 0; i < 3; ++i) {
+      v.eye[i] = eye[i];
+      v.target[i] = target[i];
+      v.up[i] = up[i];
+    }
+    v.size = size;
+    if (auto err = activeSession().addNamedView(v); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("eye"), py::arg("target"), py::arg("up") = std::array<double, 3>{0, 0, 1},
+     py::arg("size") = 10.0, "Save a camera as a named view.");
+  m.def("rename_named_view", [](const std::string& name, const std::string& newName) {
+    if (auto err = activeSession().renameNamedView(name, newName); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"), py::arg("new_name"));
+  m.def("delete_named_view", [](const std::string& name) {
+    if (auto err = activeSession().deleteNamedView(name); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("name"));
   m.def("set_parameter", [](const std::string& name, const std::string& expression, py::object comment) {
     auto p = activeSession().document().userParameter(name);
     if (!p) throw std::runtime_error("no parameter named '" + name + "'");

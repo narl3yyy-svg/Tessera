@@ -106,6 +106,10 @@ private:
   void placeDialog(QWidget* dlg);
   void refresh();
   void refreshBrowser(const QString& docName);
+  // Browser > Named Views: the standard views and the design's own.
+  bool namedViewsOpen_ = false;
+  void goToNamedView(const QString& name);
+  void newNamedView();
   void refreshTimeline();
   void showContextMenu(const QPoint& globalPos);
   void showTimelineMenu(const QPoint& pos);

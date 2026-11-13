@@ -96,6 +96,16 @@ public:
   void fitAll();
   void home();
   void viewFrom(V3d_TypeOfOrientation orientation);
+  // Named views: the camera as eye, target, up and the width shown (cm), and
+  // a smooth move to one (or to a standard view, fitted; home: isometric).
+  struct ViewCamera {
+    gp_Pnt eye, target;
+    gp_Dir up;
+    double size = 10;
+  };
+  ViewCamera camera() const;
+  void glideTo(const ViewCamera& v);
+  void glideTo(V3d_TypeOfOrientation orientation);
   void setStyle(Style s);
   Style style() const { return style_; }
   void setGridVisible(bool visible);

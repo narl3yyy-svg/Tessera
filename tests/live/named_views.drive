@@ -1,0 +1,30 @@
+# Live: Browser > Named Views, as in the familiar tool. Open the folder,
+# double-click FRONT (the camera glides there), right-click the folder >
+# New Named View saves it, TOP looks down, the saved view brings the front
+# back; rename it in place.
+waitfor tsr.feature.extrude
+wait 600
+bdclick Named_Views           # double-click opens the folder
+wait 300
+bdclick FRONT
+expectaxis z 0 -1             # Z up the screen
+expectaxis x 1 0
+expectaxis y 0 0              # Y straight into it
+brclick Named_Views
+waitfor browserNewView
+click browserNewView
+wait 400
+bdclick TOP
+expectaxis y 0 -1
+expectaxis z 0 0
+bdclick Named_View_1
+expectaxis z 0 -1
+expectaxis y 0 0
+shot /tmp/live_named_views.png
+brclick Named_View_1
+waitfor browserRenameView
+click browserRenameView
+wait 300
+type Side
+key Return
+wait 500

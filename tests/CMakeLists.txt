@@ -59,6 +59,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sketch_text.py)
   add_test(NAME api_ellipse
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_ellipse.py)
+  add_test(NAME api_named_views
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_named_views.py)
   add_test(NAME api_model_parameters
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_model_parameters.py)
   add_test(NAME api_timeline
@@ -204,6 +206,9 @@ if(TSR_WITH_QT)
     add_test(NAME live_axis_snap
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/axis_snap.drive
                           "" ${CMAKE_CURRENT_SOURCE_DIR}/live/axis_snap_check.py)
+    add_test(NAME live_named_views
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/named_views.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_stud_block.py ${CMAKE_CURRENT_SOURCE_DIR}/live/named_views_check.py)
     add_test(NAME live_visual_styles
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/visual_styles.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_stud_block.py)
@@ -228,7 +233,7 @@ if(TSR_WITH_QT)
     add_test(NAME live_timeline_marker
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker_check.py)
-    set_tests_properties(live_visual_styles live_circular_ring live_revolve_ring live_shell_arrow live_break_intersect live_sketch_pattern live_sketch_text live_ellipse live_sketch_tangent_slots live_sketch_3pt live_driven_dimension live_dimension_place live_axis_snap live_tangent_chain live_select_other live_edge_loop live_preselect live_sketch_box live_box_fillet live_timeline_marker live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
+    set_tests_properties(live_named_views live_visual_styles live_circular_ring live_revolve_ring live_shell_arrow live_break_intersect live_sketch_pattern live_sketch_text live_ellipse live_sketch_tangent_slots live_sketch_3pt live_driven_dimension live_dimension_place live_axis_snap live_tangent_chain live_select_other live_edge_loop live_preselect live_sketch_box live_box_fillet live_timeline_marker live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()

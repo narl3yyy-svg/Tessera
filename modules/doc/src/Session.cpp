@@ -142,6 +142,39 @@ std::string Session::renameSketch(const std::string& name, const std::string& ne
   return err;
 }
 
+// A change outside the history: its own undo step, nothing replayed.
+template <typename F>
+static std::string plainEdit(Document& doc, const char* name, F&& change) {
+  if (doc.hasOpenTransaction()) return "finish the current command first";
+  doc.openTransaction(name);
+  try {
+    change();
+  } catch (const std::exception& e) {
+    doc.abortTransaction();
+    return e.what();
+  }
+  doc.commitTransaction();
+  return {};
+}
+
+std::string Session::addNamedView(const NamedView& v) {
+  auto err = plainEdit(*doc_, "New Named View", [&] { doc_->addNamedView(v); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::renameNamedView(const std::string& name, const std::string& newName) {
+  auto err = plainEdit(*doc_, "Rename view", [&] { doc_->renameNamedView(name, newName); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
+std::string Session::deleteNamedView(const std::string& name) {
+  auto err = plainEdit(*doc_, "Delete view", [&] { doc_->removeNamedView(name); });
+  if (err.empty()) notifyChanged();
+  return err;
+}
+
 std::string Session::renameFeature(int featureId, const std::string& newName) {
   auto err = historyEdit(*doc_, commands_, "Rename feature", [&] { doc_->renameFeature(featureId, newName); });
   if (err.empty()) notifyChanged();

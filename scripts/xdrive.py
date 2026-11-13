@@ -46,6 +46,7 @@ Script lines (blank lines and # comments ignored):
 """
 import ctypes
 import json
+import math
 import os
 import sys
 import time
@@ -275,6 +276,7 @@ def main():
         elif cmd == "wclick":
             click(*world_point(float(a[0]), float(a[1]), float(a[2])))
         elif cmd in ("bclick", "brclick", "bdclick"):
+            a = [" ".join(a).replace("_", " ")]   # Browser names may have spaces: Named_Views
             end = time.time() + 5
             while a[0] not in geometry().get("browser", {}):
                 if time.time() > end:
@@ -394,6 +396,27 @@ def main():
             count = diff.histogram()[255]
             if count < int(a[2]):
                 sys.exit("xdrive: line %d: %s and %s differ in %d pixels, expected %s or more" % (n, a[0], a[1], count, a[2]))
+        elif cmd == "expectaxis":
+            # Where a world axis points on screen (unit dx dy, y down), or
+            # "0 0": straight at the viewer. Waits out a camera move.
+            want = (float(a[1]), float(a[2]))
+            end = time.time() + 4
+            while True:
+                w = geometry()["world"]
+                o = w["o"]
+                vec = {k: (w[k][0] - o[0], w[k][1] - o[1]) for k in "xyz"}
+                ref = max(math.hypot(*v) for v in vec.values())
+                v = vec[a[0]]
+                length = math.hypot(*v)
+                if want == (0.0, 0.0):
+                    ok = length < 0.05 * ref
+                else:
+                    ok = length > 0.5 * ref and math.hypot(v[0] / length - want[0], v[1] / length - want[1]) < 0.05
+                if ok:
+                    break
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: axis %s on screen %r, expected %r" % (n, a[0], v, want))
+                time.sleep(0.1)
         elif cmd == "expectnot":
             if a[0] in geometry()["widgets"]:
                 sys.exit("xdrive: line %d: expected '%s' not to be visible" % (n, a[0]))
