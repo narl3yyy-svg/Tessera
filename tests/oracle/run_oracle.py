@@ -584,6 +584,31 @@ def op_thread(state, f):
     do(state, f["name"], "tsr.feature.thread", **kw)
 
 
+def op_draft(state, f):
+    np_ = f["neutral_plane"]
+    if np_.get("type") != "plane":
+        raise Unsupported("draft neutral plane of type %s" % np_.get("type"))
+    n = np_["plane_normal_outward"]
+    x = [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0]
+    d = sum(a * b for a, b in zip(x, n))
+    x = [a - d * b for a, b in zip(x, n)]
+    l = math.sqrt(sum(a * a for a in x))
+    plane = "custom:" + fmt(cm(np_["point"]) + list(n) + [a / l for a in x])
+    faces = f["faces"]
+    do(state, f["name"], "tsr.feature.draft", body=body_at(cm(faces[0]["point"])), faces=picks(faces), plane=plane,
+       angle=math.radians(f["angle"]), flip="Flipped" if f.get("flipped") else "Normal")
+
+
+def op_split_body(state, f):
+    tool = f["tool"]
+    plane = state.planes.get(tool) or (tool if tool in ("XY", "XZ", "YZ") else None)
+    if plane is None:
+        raise Unsupported("split by %s" % tool)
+    new = do(state, f["name"], "tsr.feature.splitBody", body=state.bodies[f["body"]], plane=plane)
+    for rname, tname in zip(f.get("result_bodies", [])[1:], new):
+        state.bodies[rname] = tname
+
+
 def op_combine(state, f):
     do(state, f["name"], "tsr.feature.combine", target=state.bodies[f["target_body"]],
         tools=";".join(state.bodies[b] for b in f["tool_bodies"]), operation=OPS[f["operation"]],
@@ -591,6 +616,18 @@ def op_combine(state, f):
 
 
 def op_construction_plane(state, f):
+    if f.get("method") == "at_angle":
+        # About one of the base origin plane's own axes (their X / Y directions).
+        axes = {"XY": {"world X axis": "Plane X axis", "world Y axis": "Plane Y axis"},
+                "XZ": {"world X axis": "Plane X axis", "world Z axis": "Plane Y axis"},
+                "YZ": {"world Y axis": "Plane X axis", "world Z axis": "Plane Y axis"}}
+        axis = axes.get(f.get("base_plane"), {}).get(f.get("axis"))
+        if not axis:
+            raise Unsupported("plane at angle about %s of %s" % (f.get("axis"), f.get("base_plane")))
+        do(state, f["name"], "tsr.construct.planeAtAngle", name=f["name"], plane=f["base_plane"], axis=axis,
+           angle=math.radians(f["angle"]))
+        state.planes[f["name"]] = f["name"]
+        return
     if f.get("method") != "offset" or f.get("base") not in ("XY", "XZ", "YZ"):
         raise Unsupported("construction plane '%s'" % f.get("method"))
     do(state, f["name"], "tsr.construct.offsetPlane", name=f["name"], plane=f["base"], distance=L(f["offset"]))
@@ -667,7 +704,7 @@ def op_hole(state, f):
 HANDLERS = {
     "extrude": op_extrude, "revolve": op_revolve, "fillet": op_fillet, "chamfer": op_chamfer, "shell": op_shell,
     "rectangular_pattern": op_rectangular_pattern, "circular_pattern": op_circular_pattern, "combine": op_combine,
-    "path_pattern": op_path_pattern, "mirror": op_mirror, "thread": op_thread,
+    "path_pattern": op_path_pattern, "mirror": op_mirror, "thread": op_thread, "draft": op_draft, "split_body": op_split_body,
     "construction_plane": op_construction_plane, "loft": op_loft, "sweep": op_sweep, "hole": op_hole,
 }
 

@@ -20,7 +20,7 @@ yet (sheet metal, variable-radius fillets, thin extrudes, holes on curved
 faces); *fail* and
 *error* are differences to investigate.
 
-67 pass, 1 fail, 0 error, 22 unsupported of 90.
+70 pass, 1 fail, 0 error, 19 unsupported of 90.
 
 | Case | Result | Notes |
 |---|---|---|
@@ -44,8 +44,8 @@ faces); *fail* and
 | 18-hole-features | pass |  |
 | 19-l-bracket-constrained | pass |  |
 | 20-slot-constrained | pass |  |
-| 21-draft | unsupported | operation 'draft' |
-| 22-split-body | unsupported | construction plane 'at_angle' |
+| 21-draft | pass |  |
+| 22-split-body | pass |  |
 | 23-bracket-multifeature | pass |  |
 | 24-user-parameters | pass |  |
 | 25-sketch-triangle | pass |  |
@@ -70,7 +70,7 @@ faces); *fail* and
 | 44-shell-l-bracket | pass |  |
 | 45-shell-boss-plate | pass |  |
 | 46-shell-two-open-faces | pass |  |
-| 47-draft-curved-pocket | unsupported | operation 'draft' |
+| 47-draft-curved-pocket | pass |  |
 | 48-pulley | pass |  |
 | 49-helical-sweep | unsupported | sketch entity 'fitted_spline' |
 | 50-sweep-tight-bend | pass |  |
