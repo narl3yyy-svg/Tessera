@@ -7,6 +7,12 @@
 //   Curvature Map  mean curvature from blue (concave) through green (flat) to
 //                  red (convex).
 //   Curvature Comb teeth along edges, as long as the curvature there.
+//   Accessibility  green where the surface faces the direction a tool comes
+//                  from, red where it faces away (no shadowing by other
+//                  faces yet).
+//   Minimum Radius red where the surface curves tighter than a radius
+//                  (a cutter of that radius cannot reach in), green elsewhere.
+//   Isocurve       the faces' surface lines (U and V), over the shaded bodies.
 #include "Viewport.h"
 
 #include <AIS_Shape.hxx>
@@ -24,6 +30,7 @@
 #include <BRepBndLib.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Prs3d_LineAspect.hxx>
+#include <Prs3d_IsoAspect.hxx>
 #include <TColStd_HArray1OfInteger.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -70,6 +77,24 @@ void Viewport::clearAnalysisObjects() {
 void Viewport::buildAnalysis() {
   clearAnalysisObjects();
   if (analysis_.kind == AnalysisKind::None || context_.IsNull()) return;
+  if (analysis_.kind == AnalysisKind::Isocurve) {
+    // The bodies stay shaded; their surface lines go on top.
+    for (const auto& body : bodies_) {
+      if (hidden_[body.name]) continue;
+      Handle(AIS_Shape) a = new AIS_Shape(body.shape);
+      const Quantity_Color c(0.15, 0.45, 0.95, Quantity_TOC_sRGB);
+      a->SetColor(c);
+      const Handle(Prs3d_Drawer)& dr = a->Attributes();
+      dr->SetUIsoAspect(new Prs3d_IsoAspect(c, Aspect_TOL_SOLID, 1.0, analysis_.isoLines));
+      dr->SetVIsoAspect(new Prs3d_IsoAspect(c, Aspect_TOL_SOLID, 1.0, analysis_.isoLines));
+      dr->SetIsoOnPlane(true);
+      dr->SetFreeBoundaryDraw(false);
+      dr->SetUnFreeBoundaryDraw(false);
+      context_->Display(a, AIS_WireFrame, -1, false);
+      analysisObjects_.push_back(a);
+    }
+    return;
+  }
   const gp_Dir pull = analysis_.pull;
   const gp_Dir stripeAxis = analysis_.stripeAxis;
   const gp_Dir e1 = std::abs(stripeAxis.Z()) < 0.9 ? gp_Dir(gp_Vec(stripeAxis).Crossed(gp_Vec(0, 0, 1)))
@@ -103,7 +128,7 @@ void Viewport::buildAnalysis() {
         const gp_Pnt p = tri->Node(i).Transformed(loc);
         nodes.push_back(p);
         gp_Dir n = gp::DZ();
-        double mean = 0;
+        double mean = 0, tightest = 0;   // mean curvature; largest principal curvature (absolute)
         bool ok = false;
         if (tri->HasUVNodes()) {
           const gp_Pnt2d uv = tri->UVNode(i);
@@ -112,7 +137,10 @@ void Viewport::buildAnalysis() {
             n = props.Normal();
             if (reversed) n.Reverse();
             ok = true;
-            if (props.IsCurvatureDefined()) mean = props.MeanCurvature() * (reversed ? -1 : 1);
+            if (props.IsCurvatureDefined()) {
+              mean = props.MeanCurvature() * (reversed ? -1 : 1);
+              tightest = std::max(std::abs(props.MaxCurvature()), std::abs(props.MinCurvature()));
+            }
           }
         }
         const double lit = ok ? 0.55 + 0.45 * std::max(0.0, gp_Vec(n).Dot(gp_Vec(light))) : 0.8;
@@ -139,7 +167,14 @@ void Viewport::buildAnalysis() {
           case AnalysisKind::CurvatureMap:
             c = ramp(mean * analysis_.curvatureScale);
             break;
+          case AnalysisKind::Accessibility:
+            c = gp_Vec(n).Dot(gp_Vec(pull)) > 1e-9 ? shade(60, 190, 80, lit) : shade(210, 60, 50, lit);
+            break;
+          case AnalysisKind::MinimumRadius:
+            c = tightest * analysis_.minRadius > 1 + 1e-9 ? shade(210, 60, 50, lit) : shade(60, 190, 80, lit);
+            break;
           case AnalysisKind::None:
+          case AnalysisKind::Isocurve:
             break;
         }
         colours.push_back(c);

@@ -63,7 +63,7 @@ struct SketchDisplay {
 };
 
 // Surface analysis shown instead of the plain bodies (Inspect panel).
-enum class AnalysisKind { None, Zebra, Draft, CurvatureMap };
+enum class AnalysisKind { None, Zebra, Draft, CurvatureMap, Accessibility, MinimumRadius, Isocurve };
 struct AnalysisSettings {
   AnalysisKind kind = AnalysisKind::None;
   int stripes = 12;                    // Zebra: stripes per half turn of the normal
@@ -71,6 +71,8 @@ struct AnalysisSettings {
   gp_Dir pull = gp::DZ();              // Draft: pull direction
   double draftAngle = 0.0174532925;    // Draft: required angle (rad)
   double curvatureScale = 1.0;         // Curvature Map: colour scale (cm)
+  double minRadius = 0.1;              // Minimum Radius: smallest allowed radius (cm)
+  int isoLines = 8;                    // Isocurve: lines each way per face
 };
 
 class Viewport : public QOpenGLWidget, public AIS_ViewController {

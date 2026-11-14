@@ -37,7 +37,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Construct**: Offset Plane ✅ · Plane at Angle ✅ · Midplane ✅ · Tangent Plane ✅ (cylinders) · Plane through three points ✅ · Plane through two edges · Plane tangent to face at point · Axis ✅ (cylinder/cone/torus, edge, two points, two planes) · Point ✅ (vertex, two edges, three planes, centre, edge and plane)
 
-**Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb ✅ · Zebra ✅ · Draft Analysis ✅ · Curvature Map ✅ · Isocurve · Minimum Radius · Accessibility
+**Inspect**: Measure ✅ · Interference ✅ · Section Analysis ✅ · Center of Mass ✅ · Curvature Comb ✅ · Zebra ✅ · Draft Analysis ✅ · Curvature Map ✅ · Isocurve ✅ · Minimum Radius ✅ · Accessibility ✅ (by facing; no shadowing yet)
 
 **Display**: ViewCube ✅ (faces, edges, corners, drag to orbit) · Named Views ✅ · Visual Style ✅ (all six, hidden-line wireframes) · Orthographic / Perspective ✅ · Environment · Ground shadow · Layout grid
 

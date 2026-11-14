@@ -30,7 +30,7 @@ scope.
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer (equal, two distances, distance and angle), Shell, Draft, Offset Face, Delete (faces: holes, fillets, bosses close over), Split Face (by a plane), Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical, pin-slot, planar, ball; click a face, edge or point on each part; angle, offset, flip; rotation and slide limits), Drive Joints (slider and Play, within the limits) |
 | **Construct** | Offset Plane, Plane at Angle, Midplane, Plane Through Three Points, Tangent Plane (on a cylinder, at an angle from a reference plane); axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
-| **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb |
+| **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb, Accessibility, Minimum Radius, Isocurve |
 | **Files** | `.tsr` designs; *File → Open Recent*; sketches saved as DXF (right-click a sketch in the Browser) and DXF or SVG drawings inserted as sketches (*Insert → Insert DXF / Insert SVG*); export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
 | **Parametric** | Sketch dimensions and feature values (an extrude's distance, a fillet's radius ...) are named model parameters (d1, d2 ...) usable in any expression; every step is in the timeline: double-click to change it and only it and the steps after it rebuild (the ones before are kept, so editing late features stays quick in long designs); drag features to reorder (a drop that would break a feature is refused); drag the history marker back to roll the design back and add features earlier, or right-click > Roll History Marker Here / Roll to End; suppress, delete, unlimited undo |
 | **Parameters** | User parameters and every feature's values in one table (*Modify → Change Parameters*); every value and sketch dimension takes an expression such as `width / 2 + 3 mm`, `sqrt(a^2 + b^2)` or `atan(h / w)`, and the model follows when a parameter changes; double-click a name to rename any parameter (its users follow), star favourites to list them first, and filter the table |
@@ -100,7 +100,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Construct** | Plane Through Two Edges, Plane Tangent to Face at Point, axis perpendicular at a point; picking axes and points in the canvas |
 | **Assemble** | As-Built Joints, Joint Origins, Rigid Groups, Motion Links, Motion Study, Contact Sets; separate component files |
 | **Configure** | Configurations (design variants in a table) |
-| **Inspect** | Minimum Radius, Accessibility, Isocurve analysis |
+| **Inspect** | Accessibility with shadowing (faces hidden behind others) |
 | **Insert** | Canvas, Decal |
 | **Select** | Freeform and paint selection, select through |
 | **Timeline** | Playback buttons (start / step / end), feature groups |

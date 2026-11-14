@@ -105,6 +105,12 @@ void MainWindow::buildUiCommands() {
       [this] { openAnalysis(2); });
   add("Inspect", "ui.curvature", "Curvature Comb Analysis", "curvature", "Teeth along edges show their curvature.", "",
       [this] { openAnalysis(3); });
+  add("Inspect", "ui.accessibility", "Accessibility Analysis", "accessibility",
+      "Green: faces a tool from the chosen direction can reach; red: faces turned away.", "", [this] { openAnalysis(4); });
+  add("Inspect", "ui.minimumRadius", "Minimum Radius Analysis", "min-radius",
+      "Red where the surface curves tighter than a radius (a cutter that size cannot reach).", "", [this] { openAnalysis(5); });
+  add("Inspect", "ui.isocurve", "Isocurve Analysis", "isocurve", "Shows the faces' surface lines (U and V).", "",
+      [this] { openAnalysis(6); });
   add("Insert", "ui.insert", "Insert Mesh / CAD File", "insert", "Adds bodies from a STEP, IGES, STL or BREP file.", "",
       [this] { insertFile(); });
   add("Insert", "ui.insertDxf", "Insert DXF", "insert-2d", "A new sketch from a DXF drawing (lines, arcs, polylines, splines).",
@@ -272,7 +278,8 @@ QDialog* MainWindow::openAnalysis(int kind) {
     return nullptr;
   }
   if (analysisPanel_) analysisPanel_->reject();
-  static const char* titles[] = {"ZEBRA ANALYSIS", "DRAFT ANALYSIS", "CURVATURE MAP ANALYSIS", "CURVATURE COMB ANALYSIS"};
+  static const char* titles[] = {"ZEBRA ANALYSIS", "DRAFT ANALYSIS", "CURVATURE MAP ANALYSIS", "CURVATURE COMB ANALYSIS",
+                                 "ACCESSIBILITY ANALYSIS", "MINIMUM RADIUS ANALYSIS", "ISOCURVE ANALYSIS"};
   auto* d = new QDialog(viewport_);
   d->setParent(viewport_, Qt::Widget);
   d->setProperty("panel", true);
@@ -361,6 +368,59 @@ QDialog* MainWindow::openAnalysis(int kind) {
       viewport_->setAnalysis(a);
     };
     connect(scale, &QSlider::valueChanged, d, apply);
+    apply();
+  } else if (kind == 4) {
+    auto* plane = new QComboBox;
+    plane->setObjectName(QStringLiteral("accessPlane"));
+    plane->addItems({QStringLiteral("XY"), QStringLiteral("XZ"), QStringLiteral("YZ")});
+    for (const auto& pl : session_.document().planes()) plane->addItem(qs(pl.name));
+    auto* flip = new QCheckBox(tr("Flip direction"));
+    form->addRow(tr("Direction (normal of)"), plane);
+    form->addRow(QString(), flip);
+    auto apply = [this, plane, flip] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::Accessibility;
+      try {
+        gp_Dir n = session_.document().planeFrame(plane->currentText().toStdString()).Direction();
+        if (flip->isChecked()) n.Reverse();
+        a.pull = n;
+      } catch (const std::exception&) {
+      }
+      viewport_->setAnalysis(a);
+    };
+    connect(plane, &QComboBox::currentIndexChanged, d, apply);
+    connect(flip, &QCheckBox::toggled, d, apply);
+    apply();
+  } else if (kind == 5) {
+    auto* radius = new QDoubleSpinBox;
+    radius->setObjectName(QStringLiteral("minRadius"));
+    const Unit u = lengthUnit();
+    radius->setRange(0.001, 1000);
+    radius->setDecimals(3);
+    radius->setValue(fromInternal(0.1, u));
+    radius->setSuffix(QStringLiteral(" ") + qs(session_.document().lengthUnit()));
+    form->addRow(tr("Minimum radius"), radius);
+    auto apply = [this, radius, u] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::MinimumRadius;
+      a.minRadius = toInternal(radius->value(), u);
+      viewport_->setAnalysis(a);
+    };
+    connect(radius, &QDoubleSpinBox::valueChanged, d, apply);
+    apply();
+  } else if (kind == 6) {
+    auto* lines = new QSpinBox;
+    lines->setObjectName(QStringLiteral("isoLines"));
+    lines->setRange(1, 50);
+    lines->setValue(8);
+    form->addRow(tr("Lines each way"), lines);
+    auto apply = [this, lines] {
+      AnalysisSettings a;
+      a.kind = AnalysisKind::Isocurve;
+      a.isoLines = lines->value();
+      viewport_->setAnalysis(a);
+    };
+    connect(lines, &QSpinBox::valueChanged, d, apply);
     apply();
   } else {
     auto* info = new QLabel(tr("Click edges in the canvas."));

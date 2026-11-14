@@ -1066,7 +1066,7 @@ void Viewport::rebuild() {
     applyStyle(s);
     shapes_[b.name] = s;
     // Under a surface analysis the coloured meshes stand in for the bodies.
-    if (!hidden_[b.name] && analysis_.kind == AnalysisKind::None) {
+    if (!hidden_[b.name] && (analysis_.kind == AnalysisKind::None || analysis_.kind == AnalysisKind::Isocurve)) {
       context_->Display(s, isWireframe(style_) ? AIS_WireFrame : AIS_Shaded, 0, false);
       if (selected.contains(QString::fromStdString(b.name))) context_->AddOrRemoveSelected(s, false);
       addEdgeOverlays(ov != overrides_.end() ? ov->second : b.shape);

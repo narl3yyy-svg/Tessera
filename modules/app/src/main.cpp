@@ -502,10 +502,10 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   QApplication::processEvents();
   if (w.sectionPanel() || w.viewport()->dragArrowActive()) return fail("section panel close");
   // Inspect analyses: each opens, shows, and Remove clears it.
-  for (int k = 0; k < 4; ++k) {
+  for (int k = 0; k < 7; ++k) {
     auto* panel = w.openAnalysis(k);
     if (!panel) return fail("analysis panel");
-    if (k < 3 && w.viewport()->analysis().kind == tsr::app::AnalysisKind::None) return fail("analysis not shown");
+    if (k != 3 && w.viewport()->analysis().kind == tsr::app::AnalysisKind::None) return fail("analysis not shown");
     if (auto* rm = panel->findChild<QAbstractButton*>(QStringLiteral("analysisRemove"))) rm->click();
     QApplication::processEvents();
     if (w.analysisPanel() || w.viewport()->analysis().kind != tsr::app::AnalysisKind::None) return fail("analysis remove");
