@@ -72,6 +72,9 @@ never needs the network.
 | Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it |
 | Snap while sketching | Points, midpoints (△), curves (○), body vertices/edges (◆ ◇, projected in purple), horizontal/vertical (H/V), tangent (T) and perpendicular (⟂) from the curve you start on, and alignment guides; grid snap is on by default (Sketch Palette > Snap) |
 | Tangent arc while drawing lines | Press on the last point of the line chain and drag; release to place the arc, then keep clicking for lines |
+| Shape a spline | Select a fit point spline (or one of its points): a handle shows at each point; drag a handle's end to set the direction and fullness, double-click it to free it |
+| Use body edges in a sketch | *Project / Include*: **Project** (P) flattens edges onto the sketch, **Intersect** takes where a body crosses it, **Include 3D Geometry** keeps edges where they are in space (all fixed, purple) |
+| Trim, break or offset any curve | **T** Trim / Break / **O** Offset work on lines, arcs, circles, ellipses, splines and conics |
 | Extrude a face of a body | *Extrude*, click the face (it joins; drag inwards to cut) |
 | Edit a feature | Double-click it in the timeline (or a sketch in the browser) |
 | Drive sizes from parameters | *Modify → Change Parameters* → **Add**; then type the name or an expression (`width / 2`) into any value or dimension |
@@ -79,8 +82,8 @@ never needs the network.
 | Marking menu | Right-click the canvas: Repeat, Undo, Sketch, Extrude, Hole, Press Pull, Fillet, Move/Copy in a ring, more below |
 
 **Shortcuts:** E Extrude · H Hole · Q Press Pull · F Fillet · M Move/Copy · I Measure · Delete · Ctrl+Z / Ctrl+Y.
-**In a sketch:** L Line · R Rectangle · C Circle · A Arc · P Point · D Dimension · T Trim · X Construction ·
-Q Select · Esc cancels.
+**In a sketch:** L Line · R Rectangle · C Circle · A Arc · D Dimension · T Trim · O Offset · P Project ·
+X Construction · Q Select · Enter finishes a spline · Esc cancels.
 
 ## Planned
 
