@@ -548,7 +548,7 @@ void MainWindow::buildRibbon() {
     auto* buttons = new QHBoxLayout;
     buttons->setSpacing(0);
     auto* menu = new QMenu(box);
-    const size_t maxButtons = panel == "Create" || panel == "Modify" ? 7 : 3;
+    const size_t maxButtons = panel == "Create" || panel == "Modify" ? 7 : panel == "Assemble" ? 4 : 3;
     size_t shown = 0;
     for (const Entry& e : it->second) {
       const QString tip = QStringLiteral("<b>%1</b>%2<br>%3")
