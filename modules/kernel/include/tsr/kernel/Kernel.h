@@ -203,6 +203,11 @@ TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
 TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
                    double angle);
 
+// Thicken: faces (of any body) made into a solid wall `thickness` thick,
+// grown along the faces' normals (negative: inward), or half each way when
+// `symmetric`.
+TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, bool symmetric);
+
 // Delete (faces): removes faces and lets their neighbours grow over the gap
 // (holes, fillets, chamfers, bosses ...), as the familiar Delete does.
 TopoDS_Shape deleteFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces);

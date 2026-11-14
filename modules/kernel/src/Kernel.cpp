@@ -49,6 +49,7 @@
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepOffset_MakeOffset.hxx>
+#include <BRepBuilderAPI_Copy.hxx>
 #include <BRepAlgoAPI_Defeaturing.hxx>
 #include <BRepAlgoAPI_Section.hxx>
 #include <BRepFeat_SplitShape.hxx>
@@ -1701,6 +1702,35 @@ TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
   });
   if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
     throw KernelError("Offset Face: could not move those faces that far (try a smaller distance)");
+  return result;
+}
+
+TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, bool symmetric) {
+  if (faces.empty()) throw KernelError("Thicken: select the faces to thicken");
+  if (std::abs(thickness) < 1e-9) throw KernelError("Thicken: the thickness must not be zero");
+  TopoDS_Shape result = guarded("Thicken", [&]() -> TopoDS_Shape {
+    // One shell of the faces (copies: the body they belong to stays as it is).
+    BRepBuilderAPI_Sewing sew(1e-6);
+    for (const auto& f : faces) sew.Add(BRepBuilderAPI_Copy(f).Shape());
+    sew.Perform();
+    TopoDS_Shape shell = sew.SewedShape();
+    double t = thickness;
+    if (symmetric) {
+      // Moved back by half, then thickened the whole way.
+      BRepOffsetAPI_MakeOffsetShape back;
+      back.PerformByJoin(shell, -thickness / 2, 1e-6, BRepOffset_Skin, false, false, GeomAbs_Intersection);
+      if (!back.IsDone()) return TopoDS_Shape();
+      shell = back.Shape();
+    }
+    BRepOffset_MakeOffset mo;
+    mo.Initialize(shell, t, 1e-6, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Intersection,
+                  Standard_True /*thickening*/);
+    mo.MakeOffsetShape();
+    if (!mo.IsDone()) return TopoDS_Shape();
+    return mo.Shape();
+  });
+  if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
+    throw KernelError("Thicken: those faces cannot be thickened that much (try less)");
   return result;
 }
 

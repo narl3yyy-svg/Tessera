@@ -2497,6 +2497,53 @@ private:
   CommandDef def_;
 };
 
+// Thicken: picked faces made into a solid wall (a new body, or joined / cut).
+class Thicken final : public Command {
+public:
+  Thicken() {
+    commonDef(def_, kCmdThicken, "Thicken", "Gives faces a thickness: a solid wall grown from them.", "thicken", "Create");
+    def_.inputs = {bodyInput(),
+                   {.id = "faces", .label = "Faces", .tooltip = "Click the faces to thicken.", .type = InputType::Faces,
+                    .defaultValue = std::string{}},
+                   {.id = "thickness", .label = "Thickness", .tooltip = "Along the faces' normals; negative: inward.",
+                    .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter},
+                   choice("direction", "Direction", {"One Side", "Symmetric"}, "Symmetric: half the thickness each way.")};
+    addOperationInputs(def_);
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
+    if (getString(in, "faces").empty()) return "Faces: click the faces to thicken";
+    if (std::abs(getReal(in, "thickness")) < 1e-9) return "Thickness: must not be zero";
+    return validateOperation(in, docOf(ctx));
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Faces: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    TopoDS_Shape tool;
+    try {
+      const auto faces = kernel::resolveFaces(doc.body(bodyName(in, doc))->shape, getString(in, "faces"));
+      tool = kernel::thicken(faces, getReal(in, "thickness"), getString(in, "direction") == "Symmetric");
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+    applyOperation(doc, in, tool, "Thicken");
+  }
+
+private:
+  CommandDef def_;
+};
+
 class Coil final : public Command {
 public:
   Coil() {
@@ -3157,6 +3204,7 @@ void registerDocCommands(CommandRegistry& registry) {
   // Last, so they sit in the MODIFY menu rather than taking ribbon buttons.
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Delete));
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Split));
+  registry.add(std::make_unique<Thicken>());
 }
 
 } // namespace tsr::doc
