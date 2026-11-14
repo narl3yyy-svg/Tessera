@@ -93,17 +93,20 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 
 | Area | Planned |
 |---|---|
-| **Sketch** | Midpoint Line; 3D sketches; Project to Surface; Extend of arcs and splines; curvature (G2) constraints |
+| **Sketch** | Midpoint Line; 3D sketches; Project to Surface; Extend of arcs and splines; curvature (G2) and polygon constraints; sketch fillets between arcs |
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, face patterns |
-| **Modify** | Replace Face, Split Face, Align, Appearance, Physical Material |
-| **Extrude** | To curved faces, Participant Bodies; drag arrows for Move |
-| **Construct** | Tangent Plane, Plane Through Points |
-| **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Contact Sets |
+| **Extrude** | To curved faces and whole bodies, Participant Bodies |
+| **Modify** | Variable-radius and setback fillets, Replace Face, Split Face, Silhouette Split, Delete (faces), Align, two-sided draft, Appearance, Physical Material, Compute All; drag arrows for Move/Copy |
+| **Construct** | Tangent Plane, Plane Through Points, axis perpendicular at a point; picking axes and points in the canvas |
+| **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Motion Study, Contact Sets; separate component files |
+| **Configure** | Configurations (design variants in a table) |
 | **Inspect** | Minimum Radius, Accessibility, Isocurve analysis |
 | **Insert** | SVG / DXF, Canvas, Decal |
+| **Select** | Freeform and paint selection, select through |
+| **Timeline** | Playback buttons (start / step / end), feature groups |
 | **Workspaces** | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |
-| **Display** | Environments, ground shadow; Appearance (materials on faces) |
-| **Files** | DXF export of sketches; recent files |
+| **Display** | Environments, ground shadow, layout grid; Appearance (materials on faces) |
+| **Files** | DXF export of sketches; recent files; compressed `.tsr` files |
 
 **Not planned:** cloud storage or collaboration, user accounts and logins, telemetry, electronics / PCB design.
 
@@ -138,9 +141,10 @@ build/modules/api/tessera-cli --help   # headless scripting
 
 Adding a tool, the test layout and the conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input,
-and 90 **reference parts** with known volumes, areas and sizes. See [docs/ORACLE.md](docs/ORACLE.md) for which
-pass today.
+Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input
+(88 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
+(71 pass today, 18 need tools that are still planned; see [docs/ORACLE.md](docs/ORACLE.md)). The build has no
+compiler warnings.
 
 ## License
 
