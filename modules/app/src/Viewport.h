@@ -85,6 +85,8 @@ public:
   static QStringList environmentNames();
   void setEnvironment(int index);
   int environment() const { return environment_; }
+  // Plane picking may also pick a body by a curved face ("body:<name>").
+  void setBodyPlanePicks(bool on) { bodyPlanePicks_ = on; }
 
   // The six visual styles of the familiar tool's Display Settings.
   // ShadedEdges is "Shaded with Visible Edges Only", the default.
@@ -287,6 +289,7 @@ protected:
 
 private:
   int environment_ = 0;
+  bool bodyPlanePicks_ = false;
   Handle(V3d_DirectionalLight) keyLight_, fillLight_;
   Handle(V3d_AmbientLight) ambientLight_;
 

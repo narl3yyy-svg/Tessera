@@ -501,8 +501,8 @@ public:
         choice("direction", "Direction", {"One Side", "Two Sides", "Symmetric"},
                "Symmetric: the distance both ways. Two Sides: a distance each way."),
         choice("extent", "Extent Type", {"Distance", "All", "To Object"},
-               "All: through everything. To Object: up to a flat face or a plane (click it)."),
-        {.id = "toObject", .label = "Object", .tooltip = "The flat face or plane to extrude up to: click it.",
+               "All: through everything. To Object: up to a plane or flat face, or a body (click a curved face)."),
+        {.id = "toObject", .label = "Object", .tooltip = "The plane, flat face or body to extrude up to: click it.",
          .type = InputType::Plane, .defaultValue = std::string{}, .optional = true, .visibleWhen = "extent=To Object"},
         {.id = "distance", .label = "Distance", .tooltip = "Negative extrudes the other way.",
          .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "extent=Distance"},
@@ -660,6 +660,20 @@ public:
       auto it = in.find(id);
       return it == in.end() ? std::string(fallback) : getString(in, id);
     };
+    if (str("extent", "Distance") == "To Object" && getString(in, "toObject").rfind("body:", 0) == 0) {
+      // Up to a body: wherever the profile first meets it (curved faces too).
+      const std::string name = getString(in, "toObject").substr(5);
+      const auto target = doc.body(name);
+      if (!target) throw CommandError("Object: body '" + name + "' does not exist");
+      TopoDS_Shape tool;
+      try {
+        tool = kernel::extrudeToBody(faces, {n.X(), n.Y(), n.Z()}, target->shape);
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+      applyOperation(doc, in, tool, "Extrude");
+      return;
+    }
     if (str("extent", "Distance") == "To Object") {
       gp_Ax3 target;
       try {

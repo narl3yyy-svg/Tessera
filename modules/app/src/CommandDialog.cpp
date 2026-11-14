@@ -208,7 +208,11 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           combo->addItem(QString::fromStdString(pl.name), QString::fromStdString(pl.name));
         if (auto p = std::get_if<std::string>(&cur); p && !p->empty()) {
           const QString name = QString::fromStdString(*p);
-          if (combo->findData(name) < 0) combo->addItem(name.startsWith(QLatin1String("custom:")) ? tr("Picked face") : name, name);
+          if (combo->findData(name) < 0)
+            combo->addItem(name.startsWith(QLatin1String("custom:")) ? tr("Picked face")
+                           : name.startsWith(QLatin1String("body:")) ? tr("Body %1").arg(name.mid(5))
+                                                                     : name,
+                           name);
           combo->setCurrentIndex(combo->findData(name));
         }
         connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {

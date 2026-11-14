@@ -1036,6 +1036,7 @@ CommandDialog* MainWindow::editFeature(int featureId) {
 }
 
 CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
+  const bool extrudeDialog = cmd->def().id == doc::kCmdExtrude;
   // Decided before the panel previews (a preview would count as using the sketch).
   std::pair<QString, QString> autoProfile;
   if (cmd->def().id == doc::kCmdExtrude) {
@@ -1097,6 +1098,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   refresh();
   updateProfilePicking();
   if (dlg->planeInputShown()) viewport_->setPlanePicking(true);   // click a plane or flat face
+  viewport_->setBodyPlanePicks(extrudeDialog);
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).
   syncPickedShapes();

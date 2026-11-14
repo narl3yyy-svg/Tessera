@@ -725,6 +725,15 @@ bool Viewport::handlePickSelection() {
     BRepAdaptor_Surface surf(face, true);
     context_->ClearSelected(false);
     if (surf.GetType() != GeomAbs_Plane) {
+      // Up to a body (Extrude To Object): a curved face stands for its body.
+      if (bodyPlanePicks_)
+        for (const auto& b : bodies_)
+          for (TopExp_Explorer x(b.shape, TopAbs_FACE); x.More(); x.Next())
+            if (x.Current().IsSame(face)) {
+              emit planePicked(QStringLiteral("body:") + QString::fromStdString(b.name),
+                               tr("body %1").arg(QString::fromStdString(b.display)));
+              return true;
+            }
       emit statusMessage(tr("That face is not flat; pick a flat face or an origin plane."));
       return true;
     }

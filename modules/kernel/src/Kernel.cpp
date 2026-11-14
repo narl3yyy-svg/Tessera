@@ -1467,6 +1467,64 @@ TopoDS_Shape sweep(const std::vector<TopoDS_Shape>& faces, const std::vector<Top
   return result;
 }
 
+TopoDS_Shape extrudeToBody(const std::vector<TopoDS_Shape>& faces, Vec3 dirv, const TopoDS_Shape& body) {
+  if (faces.empty()) throw KernelError("Extrude: no profile");
+  const gp_Dir dir(dirv.x, dirv.y, dirv.z);
+  Bnd_Box box;
+  BRepBndLib::Add(body, box);
+  for (const auto& f : faces) BRepBndLib::Add(f, box);
+  const double reach = 2 * std::sqrt(box.SquareExtent()) + 1;
+  TopoDS_Compound prisms;
+  BRep_Builder bb;
+  bb.MakeCompound(prisms);
+  double full = 0;
+  std::vector<gp_Pnt> probes;
+  for (const auto& f : faces) {
+    const TopoDS_Shape p = BRepPrimAPI_MakePrism(f, gp_Vec(dir) * reach).Shape();
+    bb.Add(prisms, p);
+    GProp_GProps g;
+    BRepGProp::VolumeProperties(p, g);
+    full += g.Mass();
+    // A point inside the profile (centre of its largest mesh triangle), a hair along.
+    BRepMesh_IncrementalMesh mesh(f, 0.01, false, 0.5, false);
+    TopLoc_Location loc;
+    const Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(TopoDS::Face(f), loc);
+    if (tri.IsNull()) continue;
+    double best = -1;
+    gp_Pnt c;
+    for (int t = 1; t <= tri->NbTriangles(); ++t) {
+      int a, b2, d;
+      tri->Triangle(t).Get(a, b2, d);
+      const gp_Pnt A = tri->Node(a).Transformed(loc), B = tri->Node(b2).Transformed(loc), D = tri->Node(d).Transformed(loc);
+      const double area = gp_Vec(A, B).Crossed(gp_Vec(A, D)).Magnitude();
+      if (area > best) best = area, c = gp_Pnt((A.XYZ() + B.XYZ() + D.XYZ()) / 3);
+    }
+    probes.push_back(c.Translated(gp_Vec(dir) * 1e-4));
+  }
+  BRepAlgoAPI_Cut cut(prisms, body);
+  if (!cut.IsDone()) throw KernelError("Extrude: could not run up to that body");
+  TopTools_ListOfShape keep;
+  double kept = 0;
+  for (TopExp_Explorer x(cut.Shape(), TopAbs_SOLID); x.More(); x.Next()) {
+    bool hit = false;
+    for (const auto& p : probes) {
+      BRepClass3d_SolidClassifier cls(x.Current(), p, 1e-6);
+      hit = hit || cls.State() == TopAbs_IN;
+    }
+    if (!hit) continue;
+    keep.Append(x.Current());
+    GProp_GProps g;
+    BRepGProp::VolumeProperties(x.Current(), g);
+    kept += g.Mass();
+  }
+  if (keep.IsEmpty()) throw KernelError("Extrude: the profile starts inside that body");
+  if (kept > full * (1 - 1e-9)) throw KernelError("Extrude: the profile does not reach that body in that direction");
+  TopoDS_Compound out;
+  bb.MakeCompound(out);
+  for (const auto& s2 : keep) bb.Add(out, s2);
+  return out;
+}
+
 TopoDS_Shape extrudeToPlane(const std::vector<TopoDS_Shape>& faces, Vec3 dirV, Vec3 originV, Vec3 normalV) {
   if (faces.empty()) throw KernelError("Extrude: no profile selected");
   gp_Dir dir(dirV.x, dirV.y, dirV.z);

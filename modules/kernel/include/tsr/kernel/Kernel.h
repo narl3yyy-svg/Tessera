@@ -168,6 +168,9 @@ TopoDS_Shape loft(const std::vector<TopoDS_Shape>& sections, bool ruled);
 // Extrude To Object: the faces (all in one plane, normal `dir`) extruded
 // until they reach the plane through `planeOrigin` with normal `planeNormal`
 // (tilted planes give a slanted end). Goes whichever way the plane is.
+// Extrude up to a body: the profiles run along `dir` until they first meet
+// `body` (its curved or flat faces, wherever they are hit first).
+TopoDS_Shape extrudeToBody(const std::vector<TopoDS_Shape>& faces, Vec3 dir, const TopoDS_Shape& body);
 TopoDS_Shape extrudeToPlane(const std::vector<TopoDS_Shape>& faces, Vec3 dir, Vec3 planeOrigin, Vec3 planeNormal);
 
 // Pipe / Coil sections.
