@@ -88,7 +88,18 @@ struct Body {
   std::string name;      // the name features use (generated on replay: Body1, Body2 ...)
   TopoDS_Shape shape;
   std::string display;   // what the person called it (Browser, API); name if never renamed
+  std::string color;     // Appearance: "#rrggbb", empty for the default grey
+  std::string material;  // Physical Material: a name from physicalMaterials(), empty for none
 };
+
+// Physical materials: name and density (g/cm^3).
+struct PhysicalMaterial {
+  std::string name;
+  double density = 1.0;
+  std::string color;   // the appearance it suggests ("#rrggbb")
+};
+const std::vector<PhysicalMaterial>& physicalMaterials();
+const PhysicalMaterial* findMaterial(const std::string& name);
 
 struct SketchRecord {
   std::string name;
@@ -282,6 +293,10 @@ public:
   // Sketches and features are renamed outright and every feature input that
   // refers to the old name is updated. All require a transaction.
   void renameBody(const std::string& name, const std::string& newName);
+  // Appearance and Physical Material of a body (kept by body name, outside
+  // the timeline, as in the familiar tool). Empty clears. Need a transaction.
+  void setBodyColor(const std::string& name, const std::string& color);
+  void setBodyMaterial(const std::string& name, const std::string& material);
   std::string bodyName(const std::string& nameOrAlias) const;   // the internal name
   void renameSketch(const std::string& name, const std::string& newName);
   void renameFeature(int id, const std::string& newName);

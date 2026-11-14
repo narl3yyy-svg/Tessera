@@ -192,6 +192,9 @@ private:
   void fillRecentMenu(QMenu* menu);
   void saveSketchDxf(const QString& sketchName);
   void insertDxf(bool svg = false);
+  std::vector<std::string> lookTargets() const;
+  void editAppearance();
+  void editMaterial();
   void runScript();
 
   doc::Session& session_;
@@ -216,6 +219,9 @@ private:
   std::vector<std::pair<int, QAbstractButton*>> toolButtons_;
   QAbstractButton* constructionButton_ = nullptr;
   std::vector<QShortcut*> sketchShortcuts_;
+  // Window-wide shortcuts; those on a sketch tool's key are off in sketch
+  // mode (two live shortcuts on one key make Qt run neither).
+  std::vector<QShortcut*> globalShortcuts_;
   std::map<std::string, bool> sketchVisibility_;   // user overrides from the browser
   std::vector<TopoDS_Shape> pickedEdges_;          // shown highlighted while picking
   std::map<std::string, bool> constructionVisibility_;

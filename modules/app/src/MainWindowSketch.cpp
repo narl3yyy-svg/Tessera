@@ -136,6 +136,9 @@ void MainWindow::enterSketchMode() {
   ribbon_->setCurrentIndex(0);
   for (int i = 1; i < ribbon_->count(); ++i) ribbon_->setTabEnabled(i, false);
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(true);
+  for (QShortcut* g : globalShortcuts_)
+    for (QShortcut* s : sketchShortcuts_)
+      if (g->key() == s->key()) g->setEnabled(false);
   timeline_->setEnabled(false);
   viewport_->setBodiesGhosted(true);
 
@@ -166,6 +169,7 @@ void MainWindow::enterSketchMode() {
 
 void MainWindow::exitSketchMode() {
   for (QShortcut* s : sketchShortcuts_) s->setEnabled(false);
+  for (QShortcut* g : globalShortcuts_) g->setEnabled(true);
   if (sketchTab_) {
     for (int i = 0; i < ribbon_->count(); ++i)
       if (ribbon_->widget(i)->isAncestorOf(sketchTab_)) {

@@ -43,6 +43,7 @@ constexpr int kComponentsTag = 8;
 constexpr int kBodyNamesTag = 9;
 constexpr int kNamedViewsTag = 10;
 constexpr int kFavoritesTag = 11;   // favourite parameters: "list" = "a,b,c"
+constexpr int kBodyLooksTag = 12;   // "color:<body>" = #rrggbb, "material:<body>" = name
 
 // A feature's model parameter names, stored as "distance=d5;taperAngle=d6".
 std::map<std::string, std::string> parseNames(const std::string& s) {
@@ -191,6 +192,7 @@ void Document::initLayout() {
   doc_->Main().FindChild(kBodyNamesTag, true);
   doc_->Main().FindChild(kNamedViewsTag, true);
   doc_->Main().FindChild(kFavoritesTag, true);
+  doc_->Main().FindChild(kBodyLooksTag, true);
 }
 
 std::vector<NamedView> Document::namedViews() const {
@@ -721,14 +723,66 @@ std::vector<Body> Document::bodies() const {
   std::vector<Body> out;
   Handle(TDataStd_NamedData) names;
   doc_->Main().FindChild(kBodyNamesTag, false).FindAttribute(TDataStd_NamedData::GetID(), names);
+  Handle(TDataStd_NamedData) looks;
+  const TDF_Label looksLabel = doc_->Main().FindChild(kBodyLooksTag, false);
+  if (!looksLabel.IsNull()) looksLabel.FindAttribute(TDataStd_NamedData::GetID(), looks);
   for (TDF_ChildIterator it(doc_->Main().FindChild(kBodiesTag, false)); it.More(); it.Next()) {
     Handle(TNaming_NamedShape) ns;
     if (!it.Value().FindAttribute(TNaming_NamedShape::GetID(), ns) || ns->IsEmpty()) continue;
     const std::string n = nameOf(it.Value());
     std::string shown = names.IsNull() ? std::string() : stringOf(names, ("show:" + n).c_str());
-    out.push_back({n, ns->Get(), shown.empty() ? n : shown});
+    Body b{n, ns->Get(), shown.empty() ? n : shown, {}, {}};
+    if (!looks.IsNull()) {
+      b.color = stringOf(looks, ("color:" + n).c_str());
+      b.material = stringOf(looks, ("material:" + n).c_str());
+    }
+    out.push_back(std::move(b));
   }
   return out;
+}
+
+const std::vector<PhysicalMaterial>& physicalMaterials() {
+  static const std::vector<PhysicalMaterial> list = {
+      {"Steel", 7.85, "#8c9198"},          {"Stainless Steel", 8.00, "#b8bcc2"}, {"Aluminum", 2.70, "#c9ced4"},
+      {"Brass", 8.50, "#c8a648"},          {"Copper", 8.96, "#c27a4e"},          {"Titanium", 4.43, "#8f8a85"},
+      {"Cast Iron", 7.20, "#5d6066"},      {"ABS Plastic", 1.04, "#e6e6e0"},     {"PLA", 1.24, "#f2f2ee"},
+      {"PETG", 1.27, "#d8e8ef"},           {"Nylon", 1.14, "#efe9dc"},           {"Polycarbonate", 1.20, "#dfe8f0"},
+      {"Rubber", 1.10, "#2e2e30"},         {"Glass", 2.50, "#cfe3ea"},           {"Oak", 0.75, "#a8763e"},
+      {"Pine", 0.50, "#d9b27a"},           {"Concrete", 2.40, "#a3a29c"},
+  };
+  return list;
+}
+
+const PhysicalMaterial* findMaterial(const std::string& name) {
+  for (const auto& m : physicalMaterials())
+    if (m.name == name) return &m;
+  return nullptr;
+}
+
+void Document::setBodyColor(const std::string& name, const std::string& color) {
+  requireTransaction("setBodyColor");
+  const std::string internal = bodyName(name);
+  if (!body(internal)) throw DocumentError("no body named '" + name + "'");
+  if (!color.empty()) {
+    const bool ok = color.size() == 7 && color[0] == '#' &&
+                    std::all_of(color.begin() + 1, color.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+    if (!ok) throw DocumentError("Appearance: a colour is written #rrggbb");
+  }
+  Handle(TDataStd_NamedData) nd;
+  const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, true);
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
+  nd->SetString(ext("color:" + internal), ext(color));
+}
+
+void Document::setBodyMaterial(const std::string& name, const std::string& material) {
+  requireTransaction("setBodyMaterial");
+  const std::string internal = bodyName(name);
+  if (!body(internal)) throw DocumentError("no body named '" + name + "'");
+  if (!material.empty() && !findMaterial(material)) throw DocumentError("Physical Material: no material named '" + material + "'");
+  Handle(TDataStd_NamedData) nd;
+  const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, true);
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
+  nd->SetString(ext("material:" + internal), ext(material));
 }
 
 std::string Document::bodyName(const std::string& nameOrAlias) const {

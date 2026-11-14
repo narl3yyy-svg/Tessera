@@ -798,6 +798,7 @@ void MainWindow::buildShortcuts() {
     auto* s = new QShortcut(k, this);
     s->setContext(Qt::WindowShortcut);
     connect(s, &QShortcut::activated, this, fn);
+    globalShortcuts_.push_back(s);
   };
   add(QKeySequence(Qt::Key_S), [this] { focusSearch(); });
   add(QKeySequence(Qt::Key_F6), [this] { viewport_->fitAll(); });

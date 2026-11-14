@@ -136,6 +136,24 @@ std::string Session::renameBody(const std::string& name, const std::string& newN
   return {};
 }
 
+std::string Session::setBodyLooks(const std::vector<std::string>& bodies, const std::string* color,
+                                  const std::string* material) {
+  if (doc_->hasOpenTransaction()) return "finish the current command first";
+  doc_->openTransaction(material ? "Physical Material" : "Appearance");
+  try {
+    for (const auto& b : bodies) {
+      if (color) doc_->setBodyColor(b, *color);
+      if (material) doc_->setBodyMaterial(b, *material);
+    }
+  } catch (const std::exception& e) {
+    doc_->abortTransaction();
+    return e.what();
+  }
+  doc_->commitTransaction();
+  notifyChanged();
+  return {};
+}
+
 std::string Session::renameSketch(const std::string& name, const std::string& newName) {
   auto err = historyEdit(*doc_, commands_, "Rename sketch", [&] { doc_->renameSketch(name, newName); });
   if (err.empty()) notifyChanged();

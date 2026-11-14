@@ -16,6 +16,7 @@
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -79,6 +80,10 @@ void MainWindow::buildUiCommands() {
   auto planned = [&](const char* panel, const char* id, const char* name, const char* icon, const char* shortcut = "") {
     add(panel, id, name, icon, "Planned: see docs/ROADMAP.md.", shortcut, nullptr);
   };
+  add("Modify", "ui.appearance", "Appearance", "appearance", "Colours the selected bodies (or every body).", "A",
+      [this] { editAppearance(); });
+  add("Modify", "ui.physicalMaterial", "Physical Material", "material",
+      "Gives the selected bodies (or every body) a material: its density gives their mass.", "", [this] { editMaterial(); });
   add("Modify", "ui.changeParameters", "Change Parameters", "parameters",
       "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
       [this] { showParameters(); });
@@ -133,6 +138,60 @@ void MainWindow::buildUiCommands() {
       [this] { setSelectionFilter({TopAbs_EDGE}); });
   add("Select", "ui.filterVertices", "Select Vertex Priority", "vertex", "A click picks vertices only.", "",
       [this] { setSelectionFilter({TopAbs_VERTEX}); });
+}
+
+// The bodies selected in the canvas, or every body when none is.
+std::vector<std::string> MainWindow::lookTargets() const {
+  std::vector<std::string> out;
+  for (const QString& b : viewport_->selectedBodies()) out.push_back(b.toStdString());
+  if (out.empty())
+    for (const auto& b : session_.document().bodies()) out.push_back(b.name);
+  return out;
+}
+
+void MainWindow::editAppearance() {
+  const auto targets = lookTargets();
+  if (targets.empty()) {
+    statusBar()->showMessage(tr("Appearance: there is no body yet."), 3000);
+    return;
+  }
+  QColor start(188, 194, 202);
+  if (const auto b = session_.document().body(targets.front()); b && !b->color.empty()) start = QColor(qs(b->color));
+  const QColor c = QColorDialog::getColor(start, this, tr("Appearance"));
+  if (!c.isValid()) return;
+  const std::string hex = c.name(QColor::HexRgb).toStdString();
+  if (auto err = session_.setBodyLooks(targets, &hex, nullptr); !err.empty()) statusBar()->showMessage(qs(err), 4000);
+}
+
+void MainWindow::editMaterial() {
+  const auto targets = lookTargets();
+  if (targets.empty()) {
+    statusBar()->showMessage(tr("Physical Material: there is no body yet."), 3000);
+    return;
+  }
+  QStringList names = {tr("(none)")};
+  for (const auto& m : doc::physicalMaterials())
+    names << QStringLiteral("%1  (%2 g/cm\u00b3)").arg(qs(m.name)).arg(m.density, 0, 'f', 2);
+  int current = 0;
+  if (const auto b = session_.document().body(targets.front()))
+    for (size_t i = 0; i < doc::physicalMaterials().size(); ++i)
+      if (doc::physicalMaterials()[i].name == b->material) current = static_cast<int>(i) + 1;
+  bool ok = false;
+  const QString pick = QInputDialog::getItem(this, tr("Physical Material"), tr("Material:"), names, current, false, &ok);
+  if (!ok) return;
+  const int idx = static_cast<int>(names.indexOf(pick));
+  const std::string material = idx <= 0 ? std::string() : doc::physicalMaterials()[idx - 1].name;
+  if (auto err = session_.setBodyLooks(targets, nullptr, &material); !err.empty()) {
+    statusBar()->showMessage(qs(err), 4000);
+    return;
+  }
+  // The material's look comes with it, unless the body was coloured already.
+  if (const auto* m = doc::findMaterial(material)) {
+    std::vector<std::string> plain;
+    for (const auto& t : targets)
+      if (const auto b = session_.document().body(t); b && b->color.empty()) plain.push_back(t);
+    if (!plain.empty()) (void)session_.setBodyLooks(plain, &m->color, nullptr);
+  }
 }
 
 // Drive Joints: pick a joint, move it with the slider (live preview), Play

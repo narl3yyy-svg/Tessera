@@ -116,6 +116,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_thicken.py)
   add_test(NAME api_rib_web
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_rib_web.py)
+  add_test(NAME api_appearance_material
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_appearance_material.py)
   add_test(NAME api_robustness
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_robustness.py)
   add_test(NAME api_incremental_replay

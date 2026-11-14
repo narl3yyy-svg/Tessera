@@ -370,6 +370,17 @@ void bindTsr(py::module_& m) {
     order.insert(order.begin() + position, id);
     if (auto err = activeSession().setTimeline(order, marker); !err.empty()) throw std::runtime_error(err);
   }, py::arg("name"), py::arg("position"), "Move a feature to another place in the timeline.");
+  m.def("set_appearance", [](const std::string& body, const std::string& color) {
+    if (auto err = activeSession().setBodyLooks({body}, &color, nullptr); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("body"), py::arg("color"), "A body's colour, \"#rrggbb\" (empty: the default).");
+  m.def("set_material", [](const std::string& body, const std::string& material) {
+    if (auto err = activeSession().setBodyLooks({body}, nullptr, &material); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("body"), py::arg("material"), "A body's physical material (empty: none).");
+  m.def("materials", [] {
+    std::vector<py::tuple> out;
+    for (const auto& m : doc::physicalMaterials()) out.push_back(py::make_tuple(m.name, m.density));
+    return out;
+  }, "The physical materials: (name, density in g/cm^3).");
   m.def("rename", [](const std::string& kind, const std::string& name, const std::string& newName) {
     std::string err;
     if (kind == "body") err = activeSession().renameBody(name, newName);
@@ -392,6 +403,12 @@ void bindTsr(py::module_& m) {
     d["volume"] = mp.volume;
     d["area"] = mp.area;
     d["center"] = py::make_tuple(mp.centerOfMass.x, mp.centerOfMass.y, mp.centerOfMass.z);
+    d["material"] = b->material;
+    d["color"] = b->color;
+    if (const auto* mat = doc::findMaterial(b->material)) {
+      d["density"] = mat->density;
+      d["mass"] = mp.volume * mat->density;   // grams (cm^3 x g/cm^3)
+    }
     d["faces"] = kernel::topologyCounts(b->shape).faces;
     d["patches"] = kernel::smoothPatchCount(b->shape);
     return d;

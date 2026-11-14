@@ -1064,6 +1064,17 @@ void Viewport::rebuild() {
     const auto ov = overrides_.find(b.name);
     Handle(AIS_Shape) s = new AIS_Shape(ov != overrides_.end() ? ov->second : b.shape);
     s->SetMaterial(bodyMaterial());
+    if (!b.color.empty()) {
+      // Appearance: the body's own colour, same finish.
+      const QColor q(QString::fromStdString(b.color));
+      if (q.isValid()) {
+        Graphic3d_MaterialAspect m = bodyMaterial();
+        const Quantity_Color base(q.redF(), q.greenF(), q.blueF(), Quantity_TOC_sRGB);
+        m.SetDiffuseColor(base);
+        m.SetAmbientColor(Quantity_Color(base.Rgb() * 0.45f));
+        s->SetMaterial(m);
+      }
+    }
     if (ghosted_) s->SetTransparency(0.78);
     if (sectionOn_ && !clip_.IsNull()) s->AddClipPlane(clip_);
     applyStyle(s);
