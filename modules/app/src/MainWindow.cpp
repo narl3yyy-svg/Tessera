@@ -1718,29 +1718,32 @@ bool MainWindow::maybeSave() {
   return session_.path() ? saveTo(qs(session_.path()->string())) : saveAs();
 }
 
-// Insert DXF: the drawing becomes a new sketch on a plane picked from a list
-// (the origin planes and construction planes).
-void MainWindow::insertDxf() {
+// Insert DXF / SVG: the drawing becomes a new sketch on a plane picked from a
+// list (the origin planes and construction planes).
+void MainWindow::insertDxf(bool svg) {
   if (editor_ || active_) {
     statusBar()->showMessage(tr("Finish the current command first."), 3000);
     return;
   }
-  const QString path = QFileDialog::getOpenFileName(this, tr("Insert DXF"), QString(), tr("DXF drawing (*.dxf)"));
+  const QString title = svg ? tr("Insert SVG") : tr("Insert DXF");
+  const QString path = QFileDialog::getOpenFileName(this, title, QString(),
+                                                    svg ? tr("SVG drawing (*.svg)") : tr("DXF drawing (*.dxf)"));
   if (path.isEmpty()) return;
   QStringList planes = {QStringLiteral("XY"), QStringLiteral("XZ"), QStringLiteral("YZ")};
   for (const auto& p : session_.document().planes()) planes << qs(p.name);
   bool ok = false;
-  const QString plane = QInputDialog::getItem(this, tr("Insert DXF"), tr("Sketch plane:"), planes, 0, false, &ok);
+  const QString plane = QInputDialog::getItem(this, title, tr("Sketch plane:"), planes, 0, false, &ok);
   if (!ok) return;
   try {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) throw std::runtime_error("cannot read " + path.toStdString());
-    const sketch::Sketch s = sketch::fromDxf(f.readAll().toStdString());
+    const std::string data = f.readAll().toStdString();
+    const sketch::Sketch s = svg ? sketch::fromSvg(data) : sketch::fromDxf(data);
     Inputs in{{"plane", plane.toStdString()}, {"data", s.toJson()}};
     if (auto err = session_.run(doc::kCmdSketch, in); !err.empty()) throw std::runtime_error(err);
     viewport_->fitAll();
   } catch (const std::exception& e) {
-    QMessageBox::critical(this, tr("Insert DXF"), QString::fromStdString(e.what()));
+    QMessageBox::critical(this, title, QString::fromStdString(e.what()));
   }
 }
 

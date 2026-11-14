@@ -5,7 +5,8 @@ add_library(tsr_sketch
   src/Solver.cpp
   src/SketchGeometry.cpp
   src/SketchOps.cpp
-  src/SketchCurves.cpp)
+  src/SketchCurves.cpp
+  src/SketchSvg.cpp)
 add_library(tsr::sketch ALIAS tsr_sketch)
 target_include_directories(tsr_sketch PUBLIC include ${OpenCASCADE_INCLUDE_DIR})
 target_link_libraries(tsr_sketch

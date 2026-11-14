@@ -284,11 +284,12 @@ void bindTsr(py::module_& m) {
     if (!f) throw std::runtime_error("cannot read " + path);
     std::stringstream ss;
     ss << f.rdbuf();
-    const sketch::Sketch s = sketch::fromDxf(ss.str(), scale);
+    const bool svg = path.size() > 4 && (path.substr(path.size() - 4) == ".svg" || path.substr(path.size() - 4) == ".SVG");
+    const sketch::Sketch s = svg ? sketch::fromSvg(ss.str(), scale) : sketch::fromDxf(ss.str(), scale);
     Inputs in{{"plane", plane}, {"data", s.toJson()}};
     if (auto err = activeSession().run(doc::kCmdSketch, in); !err.empty()) throw std::runtime_error(err);
   }, py::arg("path"), py::arg("plane") = "XY", py::arg("scale") = 1.0,
-     "Insert DXF: a new sketch on the plane from a DXF drawing.");
+     "Insert DXF / SVG (by the file's extension): a new sketch on the plane from the drawing.");
   m.def("export_sketch_dxf", [](const std::string& name, const std::string& path, bool construction) {
     const auto rec = activeSession().document().sketch(name);
     if (!rec) throw std::runtime_error("no sketch named '" + name + "'");

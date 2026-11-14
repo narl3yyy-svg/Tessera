@@ -75,6 +75,14 @@ std::string toDxf(const Sketch& s, bool construction = false);
 // are profiles. Throws SketchError when nothing can be read.
 Sketch fromDxf(const std::string& text, double scale = 1.0);
 
+// Reads an SVG drawing into sketch geometry: paths (every command; Beziers
+// become control point splines, arcs Beziers), line, rect (rounded too),
+// circle, ellipse, polyline and polygon, with group and element transforms.
+// Sizes from the root's width and viewBox (96 dpi without units); SVG's
+// downward y is turned upward. Text, clip paths and definitions are skipped.
+// Throws SketchError when nothing can be read.
+Sketch fromSvg(const std::string& text, double scale = 1.0);
+
 // Index of the profile containing sketch point (x, y), or -1.
 int profileAt(const std::vector<Profile>& ps, const gp_Ax3& frame, double x, double y);
 

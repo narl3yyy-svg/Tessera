@@ -109,7 +109,8 @@ void MainWindow::buildUiCommands() {
       [this] { insertFile(); });
   add("Insert", "ui.insertDxf", "Insert DXF", "insert-2d", "A new sketch from a DXF drawing (lines, arcs, polylines, splines).",
       "", [this] { insertDxf(); });
-  planned("Insert", "ui.insertSvg", "Insert SVG", "insert-2d");
+  add("Insert", "ui.insertSvg", "Insert SVG", "insert-2d", "A new sketch from an SVG drawing (paths, shapes; curves exact).",
+      "", [this] { insertDxf(true); });
   planned("Insert", "ui.canvas", "Canvas", "image");
   planned("Insert", "ui.decal", "Decal", "image");
   add("Select", "ui.select", "Select", "select",

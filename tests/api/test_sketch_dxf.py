@@ -73,3 +73,39 @@ try:
 except RuntimeError as e:
     assert "nothing" in str(e), e
 print("insert dxf: OK")
+
+# --- Insert SVG (100 x 50 mm page, viewBox in mm): a 40 x 20 rectangle with
+# 5 mm round corners, a circle of r 5, and a path with a cubic and an arc.
+svg = """<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm" viewBox="0 0 100 50">
+  <!-- a comment <rect> that must be ignored -->
+  <defs><rect id="hidden" width="99" height="99"/></defs>
+  <g transform="translate(10,10)">
+    <rect x="0" y="0" width="40" height="20" rx="5"/>
+    <circle cx="60" cy="10" r="5"/>
+  </g>
+  <path d="M 10 40 C 20 30, 30 30, 40 40 A 15 15 0 0 1 10 40 Z"/>
+  <text x="0" y="0">ignored</text>
+</svg>
+"""
+spath = os.path.join(tempfile.mkdtemp(), "d.svg")
+open(spath, "w").write(svg)
+tsr.new_document()
+tsr.insert_dxf(spath, "XY")
+sk = json.loads(tsr.sketch_data("Sketch1"))
+kinds = [e["type"] for e in sk["entities"]]
+assert kinds.count("circle") == 1 and kinds.count("line") == 4, kinds
+circle = [e for e in sk["entities"] if e["type"] == "circle"][0]
+assert abs(circle["r"] - 0.5) < 1e-9, circle
+c = sk["points"][circle["c"]]
+assert abs(c[0] - 7.0) < 1e-9 and abs(c[1] + 2.0) < 1e-9, c          # (70, -20) mm: y turned up
+tsr.run_command("tsr.feature.extrude", distance=1.0)
+vols = sorted(root.bRepBodies.item(i).volume for i in range(root.bRepBodies.count))
+rounded = 4 * 2 - (4 - math.pi) * 0.25                                   # 40 x 20 less the four corners
+disc = math.pi * 0.25
+# The path: a cubic bump of 150 mm^2 over its 30 mm chord and a half circle of
+# r 15 mm below it. Arcs become Beziers (within 0.03%); the circle stays exact.
+shape = (150 + math.pi * 15 * 15 / 2) / 100
+assert abs(vols[0] - disc) < 1e-9, vols
+assert abs(vols[1] - shape) < 1e-3 * shape and abs(vols[2] - rounded) < 1e-3 * rounded, (vols, shape, rounded)
+print("insert svg: OK")
