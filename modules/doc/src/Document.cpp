@@ -6,6 +6,8 @@
 #include <TDataStd_Integer.hxx>
 #include <TDataStd_Name.hxx>
 #include <TDataStd_NamedData.hxx>
+#include <TDataStd_DataMapOfStringString.hxx>
+#include <TDataStd_DataMapIteratorOfDataMapOfStringString.hxx>
 #include <TNaming_Builder.hxx>
 #include <TNaming_NamedShape.hxx>
 #include <Standard_Failure.hxx>
@@ -18,6 +20,7 @@
 #include "tsr/sketch/SketchGeometry.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cctype>
 #include <cmath>
 #include <functional>
@@ -389,21 +392,40 @@ std::vector<std::string> Document::parameterUsers(const std::string& name) const
   return out;
 }
 
-ExpressionEnv Document::expressionEnv() const {
-  ExpressionEnv env;
-  env.lengthUnit = parseUnit(lengthUnit()).value_or(Unit::Millimeter);
+ExpressionEnv Document::expressionEnv() const { return currentParams().env; }
+
+Document::ParamSet Document::paramSet(const std::vector<ModelParameter>& dims, const std::vector<UserParameter>& users,
+                                      const std::vector<ModelParameter>& valueParams) const {
+  ParamSet out;
+  out.env.lengthUnit = parseUnit(lengthUnit()).value_or(Unit::Millimeter);
   // Copy the values so the lookup does not walk OCAF per name.
   auto values = std::make_shared<std::map<std::string, Quantity>>();
-  for (const auto& p : userParameters())
+  auto text = [](double v) {
+    std::ostringstream os;
+    os.precision(17);
+    os << v;
+    return os.str();
+  };
+  for (const auto& p : users) {
     (*values)[p.name] = quantityOf(p.value, parseUnit(p.unit).value_or(Unit::None));
-  for (const auto& m : modelParameters())
-    if (!values->count(m.name)) (*values)[m.name] = quantityOf(m.value, m.unit);
-  env.lookup = [values](const std::string& n) -> std::optional<Quantity> {
+    out.text[p.name] = text(p.value);
+  }
+  for (const auto* list : {&dims, &valueParams})
+    for (const auto& m : *list)
+      if (!values->count(m.name)) {
+        (*values)[m.name] = quantityOf(m.value, m.unit);
+        out.text[m.name] = text(m.value);
+      }
+  out.env.lookup = [values](const std::string& n) -> std::optional<Quantity> {
     auto it = values->find(n);
     if (it == values->end()) return std::nullopt;
     return it->second;
   };
-  return env;
+  return out;
+}
+
+Document::ParamSet Document::currentParams() const {
+  return paramSet(sketchDimensions(sketches()), userParameters(), featureValueParameters());
 }
 
 double Document::evaluate(const std::string& text, Unit unit) const {
@@ -434,8 +456,15 @@ double Document::evaluate(const std::string& text, Unit unit, const std::map<std
 // Read from the computed sketches (their data holds each dimension's
 // evaluated value), so open, undo and redo need nothing extra.
 std::vector<ModelParameter> Document::modelParameters() const {
+  auto out = sketchDimensions(sketches());
+  auto values = featureValueParameters();
+  out.insert(out.end(), values.begin(), values.end());
+  return out;
+}
+
+std::vector<ModelParameter> Document::sketchDimensions(const std::vector<SketchRecord>& sketchList) {
   std::vector<ModelParameter> out;
-  for (const auto& rec : sketches()) {
+  for (const auto& rec : sketchList) {
     try {
       for (const auto& c : sketch::Sketch::fromJson(rec.data).constraints)
         if (!c.name.empty() && !c.driven && sketch::isDimension(c.type)) {
@@ -445,8 +474,13 @@ std::vector<ModelParameter> Document::modelParameters() const {
     } catch (const std::exception&) {
     }
   }
-  // Feature values (an extrude's distance, a fillet's radius ...): each
-  // shown value has its name, as in the familiar Parameters table.
+  return out;
+}
+
+// Feature values (an extrude's distance, a fillet's radius ...): each shown
+// value has its name, as in the familiar Parameters table.
+std::vector<ModelParameter> Document::featureValueParameters() const {
+  std::vector<ModelParameter> out;
   if (!registry_) return out;
   for (const auto& f : features()) {
     const Command* cmd = registry_->find(f.commandId);
@@ -650,7 +684,7 @@ void Document::reevaluateParameters() {
   }
 }
 
-void Document::evaluateFeatureExpressions(const Command& cmd, Inputs& in) const {
+void Document::evaluateFeatureExpressions(const Command& cmd, Inputs& in, const ExpressionEnv* env) const {
   const Inputs original = in;
   for (const auto& [k, v] : original) {
     if (k.size() < 2 || k[0] != '=') continue;
@@ -659,7 +693,16 @@ void Document::evaluateFeatureExpressions(const Command& cmd, Inputs& in) const 
     if (!text || !d || (d->type != InputType::Real && d->type != InputType::Integer)) continue;
     double x = 0;
     try {
-      x = evaluate(*text, d->unit);
+      if (env) {
+        const Unit expected = dimensionOf(d->unit) == Dimension::Length ? env->lengthUnit : d->unit;
+        try {
+          x = tsr::evaluateExpression(*text, expected, *env);
+        } catch (const ExpressionError& e) {
+          throw DocumentError(e.what());
+        }
+      } else {
+        x = evaluate(*text, d->unit);
+      }
     } catch (const DocumentError& e) {
       throw DocumentError(d->label + ": " + e.what());
     }
@@ -1163,6 +1206,22 @@ void Document::recordFeature(const Command& cmd, const Inputs& inputs) {
   nameFeatureParameters(l.Tag(), cmd, inputs);
   effects_[l.Tag()] = effectOf(txnBodies_, bodyShapes());
   effects_[l.Tag()].tools = pendingTools_;
+  // Added at the end of a timeline whose replay is remembered: remember this
+  // step too, so editing any feature later restores everything before it.
+  if (marker < 0 && registry_) {
+    const auto all = features();
+    const std::string context = replayContext();
+    if (!all.empty() && all.back().id == l.Tag() && replaySteps_.size() + 1 == all.size() &&
+        (replaySteps_.empty() || context == replayContext_)) {
+      replayContext_ = context;
+      std::optional<Inputs> evaluated;
+      std::string early;
+      ReplayStep step = captureStep();
+      step.key = replayKey(all.back(), currentParams(), evaluated, early);
+      step.effect = effects_[l.Tag()];
+      if (early.empty()) replaySteps_.push_back(std::move(step));
+    }
+  }
   if (marker >= 0) {
     order.insert(order.begin() + marker, l.Tag());
     setTimeline(order, marker + 1);
@@ -1227,6 +1286,82 @@ void Document::removeFeature(int id) {
   doc_->Main().FindChild(kFeaturesTag, false).FindChild(id, false).ForgetAllAttributes(true);
 }
 
+// What a feature is replayed with: its place, command, state, evaluated
+// inputs, and the values of every parameter its inputs name (sketch
+// dimension expressions read parameters directly, not through the inputs).
+std::string Document::replayKey(const Feature& f, const ParamSet& paramSet, std::optional<Inputs>& evaluated,
+                                std::string& early) const {
+  const auto& params = paramSet.text;
+  std::string k = std::to_string(f.id) + '|' + f.name + '|' + f.commandId + '|' + (f.suppressed ? 's' : '-') +
+                  (f.rolledBack ? 'r' : '-') + '|';
+  if (f.rolledBack || f.suppressed) return k;
+  const std::string raw = toJson(f.inputs).dump();
+  for (size_t a = 0; a < raw.size();) {
+    if (!(std::isalpha(static_cast<unsigned char>(raw[a])) || raw[a] == '_')) {
+      ++a;
+      continue;
+    }
+    size_t b = a;
+    while (b < raw.size() && (std::isalnum(static_cast<unsigned char>(raw[b])) || raw[b] == '_')) ++b;
+    if (auto it = params.find(raw.substr(a, b - a)); it != params.end()) k += it->first + '=' + it->second + ';';
+    a = b;
+  }
+  k += '|';
+  const Command* cmd = registry_ ? registry_->find(f.commandId) : nullptr;
+  if (!cmd) {
+    early = "unknown command '" + f.commandId + "'";
+  } else {
+    try {
+      Inputs in = f.inputs;
+      evaluateFeatureExpressions(*cmd, in, &paramSet.env);
+      k += toJson(in).dump();
+      evaluated = std::move(in);
+    } catch (const std::exception& e) {
+      early = e.what();
+    } catch (const Standard_Failure& e) {
+      early = std::string("geometry kernel failure: ") + e.GetMessageString();
+    }
+  }
+  return k + '!' + early;
+}
+
+// Everything a replay reads besides what the keys hold and what earlier
+// features made: the units and body names.
+std::string Document::replayContext() const {
+  std::ostringstream os;
+  os.precision(17);
+  os << lengthUnit() << '\n';
+  Handle(TDataStd_NamedData) names;
+  if (doc_->Main().FindChild(kBodyNamesTag, false).FindAttribute(TDataStd_NamedData::GetID(), names)) {
+    std::map<std::string, std::string> sorted;
+    for (TDataStd_DataMapIteratorOfDataMapOfStringString it(names->GetStringsContainer()); it.More(); it.Next())
+      sorted[utf8(it.Key())] = utf8(it.Value());
+    for (const auto& [k, v] : sorted) os << "n " << k << '=' << v << '\n';
+  }
+  return os.str();
+}
+
+Document::ReplayStep Document::captureStep() const {
+  ReplayStep s;
+  for (const auto& b : bodies()) s.bodies.emplace_back(b.name, b.shape);
+  s.sketches = sketches();
+  s.planes = planes();
+  s.axes = axes();
+  s.points = points();
+  s.components = components();
+  s.dims = sketchDimensions(s.sketches);
+  return s;
+}
+
+void Document::restoreStep(const ReplayStep& s) {
+  for (const auto& [name, shape] : s.bodies) addBody(name, shape);
+  for (const auto& r : s.sketches) setSketch(r);
+  for (const auto& p : s.planes) setPlane(p);
+  for (const auto& a : s.axes) setAxis(a);
+  for (const auto& p : s.points) setPoint(p);
+  for (const auto& c : s.components) setComponent(c);
+}
+
 void Document::recompute(const CommandRegistry& registry) {
   requireTransaction("recompute");
   for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag, kAxesTag, kPointsTag, kComponentsTag})
@@ -1240,21 +1375,56 @@ void Document::recompute(const CommandRegistry& registry) {
     ~Done() { flag = false; }
   } done{replaying_};
   effects_.clear();
-  for (const Feature& f : features()) {
-    std::string error;
+
+  // What each feature will be replayed with. Expressions are evaluated
+  // first: a parameter change shows in the inputs, so the key changes.
+  const std::vector<Feature> fs = features();
+  std::vector<std::optional<Inputs>> evaluated(fs.size());
+  std::vector<std::string> keys(fs.size()), early(fs.size());
+
+  // The longest run of unchanged features from the start is restored. Each
+  // key is worked out with the sketches as the step before it left them.
+  const std::string context = replayContext();
+  size_t reuse = 0;
+  const char* full = std::getenv("TSR_FULL_REPLAY");
+  if (context == replayContext_ && !(full && *full && *full != '0')) {
+    const std::vector<ModelParameter> none;
+    const auto users = userParameters();
+    const auto values = featureValueParameters();
+    while (reuse < fs.size() && reuse < replaySteps_.size()) {
+      keys[reuse] = replayKey(fs[reuse], paramSet(reuse == 0 ? none : replaySteps_[reuse - 1].dims, users, values),
+                              evaluated[reuse], early[reuse]);
+      if (replaySteps_[reuse].key != keys[reuse]) break;
+      ++reuse;
+    }
+  }
+  replayContext_ = context;
+  replaySteps_.resize(reuse);
+  if (reuse > 0) restoreStep(replaySteps_[reuse - 1]);
+
+  for (size_t i = 0; i < fs.size(); ++i) {
+    const Feature& f = fs[i];
+    Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
+    if (evaluated[i] && *evaluated[i] != f.inputs) nd->SetString("inputs", ext(toJson(*evaluated[i]).dump()));
+    if (i < reuse) {
+      effects_[f.id] = replaySteps_[i].effect;
+      if (!f.rolledBack && stringOf(nd, "error") != replaySteps_[i].error) nd->SetString("error", ext(replaySteps_[i].error));
+      continue;
+    }
+    // Worked out now, with the sketches the features before it made.
+    evaluated[i].reset();
+    early[i].clear();
+    keys[i] = replayKey(f, currentParams(), evaluated[i], early[i]);
+    if (evaluated[i] && *evaluated[i] != f.inputs) nd->SetString("inputs", ext(toJson(*evaluated[i]).dump()));
+    std::string error = early[i];
     pendingTools_.clear();
     if (f.rolledBack) {   // after the history marker
       effects_[f.id] = FeatureEffect{};
-      continue;
-    }
-    const auto before = bodyShapes();
-    if (!f.suppressed) {
-      if (const Command* cmd = registry.find(f.commandId)) {
+    } else {
+      const auto before = bodyShapes();
+      if (!f.suppressed && error.empty()) {
         try {
-          Inputs in = f.inputs;
-          evaluateFeatureExpressions(*cmd, in);
-          if (in != f.inputs) featureData(doc_, f.id)->SetString("inputs", ext(toJson(in).dump()));
-          cmd->apply(in, *this);
+          registry.find(f.commandId)->apply(*evaluated[i], *this);
         } catch (const std::exception& e) {
           error = e.what();
         } catch (const Standard_Failure& e) {
@@ -1262,15 +1432,19 @@ void Document::recompute(const CommandRegistry& registry) {
         } catch (...) {
           error = "geometry kernel failure";
         }
-      } else {
-        error = "unknown command '" + f.commandId + "'";
       }
+      effects_[f.id] = error.empty() ? effectOf(before, bodyShapes()) : FeatureEffect{};
+      if (error.empty()) effects_[f.id].tools = pendingTools_;
+      if (stringOf(nd, "error") != error) nd->SetString("error", ext(error));
     }
-    effects_[f.id] = error.empty() ? effectOf(before, bodyShapes()) : FeatureEffect{};
-    if (error.empty()) effects_[f.id].tools = pendingTools_;
-    Handle(TDataStd_NamedData) nd = featureData(doc_, f.id);
-    if (stringOf(nd, "error") != error) nd->SetString("error", ext(error));
+    ReplayStep step = captureStep();
+    step.key = keys[i];
+    step.effect = effects_[f.id];
+    step.error = error;
+    replaySteps_.push_back(std::move(step));
   }
+  lastReused_ = static_cast<int>(reuse);
+  lastReplayed_ = static_cast<int>(fs.size() - reuse);
 }
 
 std::string Document::ocafBytes() const {

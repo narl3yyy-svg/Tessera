@@ -24,7 +24,14 @@ app (Qt)  ──►  api (Python)  ──►  doc  ──►  sketch  ──► 
 2. The ribbon button, the in-canvas panel, the Python call `tsr.run_command(id, ...)` and undo are all generated
    from that definition.
 3. Feature commands (`CommandDef::feature`) are recorded in the timeline with their inputs. Editing a feature
-   replaces its inputs and **recompute** replays the whole timeline, so later features follow.
+   replaces its inputs and **recompute** replays the timeline, so later features follow. Each feature's replay
+   leaves a remembered step (bodies, sketches, planes, axes, points, components, its effect and error) under a key
+   made of its id, name, command, state, evaluated inputs and the values of the parameters its inputs name;
+   recompute restores the longest unchanged run of steps and replays from the first changed feature. A feature
+   added at the end records its step too. Anything else a command may read (units, body names) is part of a
+   shared context that, when it changes, makes everything replay. `TSR_FULL_REPLAY=1` turns reuse off;
+   `tsr.last_replay()` tells how much the last recompute restored, and `tests/api/test_incremental_replay.py`
+   checks every kind of edit against a full replay. A command's result must depend only on those things.
    A Real/Integer input given as text (`"width / 2"`) is evaluated against the user parameters and the text is kept
    under the key `=<input id>`; recompute evaluates it again before replaying the feature, and sketch dimensions
    keep theirs in the sketch JSON (`expr`). Changing a parameter re-evaluates all parameters (cycles are rejected)

@@ -18,7 +18,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P1-1 | Primitives are placed by typed X/Y/Z and an axis choice, not by clicking a sketch plane and point in the canvas | Sketching and in-canvas manipulators not built yet | P2 (sketch) |
 | P1-2 | Z is up and the grid is the XY plane; there is no Y-up option | Simplicity | P2 (preferences) |
 | P1-3 | Timeline has the history marker and drag-to-reorder, but no playback buttons (start / step / end) and no feature groups | P1 scope | P2 |
-| P1-4 | Recompute replays every feature (no dependency tracking) and body references are by name, not topological naming | P1 scope | P3 (topological naming) |
+| P1-4 | ~~Recompute replays every feature~~ Partly closed: an edit replays from the first changed feature on (what the features before it made is restored from memory; a design just opened replays fully once). Features after the changed one still all replay, even ones that do not depend on it (no dependency tracking), and body references are by name, not topological naming | P1 scope | P3 (topological naming) |
 | P1-5 | Body visibility is view state, not saved in the document | P1 scope | P2 |
 | P1-6 | The 3D view needs X11/XWayland (OCCT's Kubuntu build uses GLX); the app forces `QT_QPA_PLATFORM=xcb` on Wayland | Distro OCCT build | when OCCT is built with EGL |
 | P1-7 | ~~Right click opens a plain context menu~~ Closed: a radial marking menu with the full menu below it | | closed |

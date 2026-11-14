@@ -120,6 +120,8 @@ void bindTsr(py::module_& m) {
     return out;
   }, "The design history (timeline), oldest first.");
 
+  m.def("last_replay", [] { return activeSession().document().lastReplay(); },
+        "The last recompute: (features restored from memory, features replayed).");
   m.def("edit_feature", [](int id, const py::kwargs& kwargs) {
     Inputs in;
     for (auto [k, v] : kwargs) in[k.cast<std::string>()] = fromPy(v);

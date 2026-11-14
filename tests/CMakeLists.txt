@@ -108,6 +108,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sketch_curves.py)
   add_test(NAME api_robustness
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_robustness.py)
+  add_test(NAME api_incremental_replay
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_incremental_replay.py)
 endif()
 
 if(TSR_WITH_QT)

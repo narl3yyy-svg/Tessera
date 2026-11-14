@@ -247,7 +247,15 @@ public:
   void removeFeature(int id);
   // Rebuilds every body by replaying the features in order. A feature that
   // fails keeps its error and the replay continues. Requires a transaction.
+  //
+  // Features before the first one that changed since the last recompute
+  // (inputs, order, suppression, history marker) are not replayed: what they
+  // left behind is restored from memory. Anything else a replay reads (user
+  // and model parameters, units, body names, feature names) differing makes
+  // it replay everything. TSR_FULL_REPLAY=1 in the environment turns reuse off.
   void recompute(const CommandRegistry& registry);
+  // The last recompute: features restored from memory and features replayed.
+  std::pair<int, int> lastReplay() const { return {lastReused_, lastReplayed_}; }
 
   // What a feature did to the bodies: each body it changed, before and after
   // (a null shape: not there). Known for features replayed or made since the
@@ -299,12 +307,51 @@ private:
   void requireTransaction(const char* what) const;
   void reevaluateParameters();
   // Evaluates the "=<id>" expressions of a feature's inputs into their values.
-  void evaluateFeatureExpressions(const Command& cmd, Inputs& in) const;
+  // `env`: the parameters to evaluate with (default: the document's now).
+  void evaluateFeatureExpressions(const Command& cmd, Inputs& in, const ExpressionEnv* env = nullptr) const;
+  // Model parameters in two parts: named sketch dimensions (from the given
+  // sketches) and feature values (from the features' inputs).
+  static std::vector<ModelParameter> sketchDimensions(const std::vector<SketchRecord>& sketches);
+  std::vector<ModelParameter> featureValueParameters() const;
+  // The parameters as a replay sees them: by name as text (for keys) and as
+  // an expression environment. User parameters win over model ones.
+  struct ParamSet {
+    std::map<std::string, std::string> text;
+    ExpressionEnv env;
+  };
+  ParamSet paramSet(const std::vector<ModelParameter>& dims, const std::vector<UserParameter>& users,
+                    const std::vector<ModelParameter>& values) const;
   void nameFeatureParameters(int featureId, const Command& cmd, const Inputs& inputs);
 
   std::map<std::string, TopoDS_Shape> bodyShapes() const;
   static FeatureEffect effectOf(const std::map<std::string, TopoDS_Shape>& before,
                                 const std::map<std::string, TopoDS_Shape>& after);
+
+  // What each feature's replay left behind, in timeline order, and the key
+  // that says whether it can be reused (in memory only).
+  struct ReplayStep {
+    std::string key;
+    std::vector<std::pair<std::string, TopoDS_Shape>> bodies;
+    std::vector<SketchRecord> sketches;
+    std::vector<ConstructionPlane> planes;
+    std::vector<ConstructionAxis> axes;
+    std::vector<ConstructionPoint> points;
+    std::vector<Component> components;
+    std::vector<ModelParameter> dims;   // the sketches' named dimensions
+    FeatureEffect effect;
+    std::string error;
+  };
+  std::string replayContext() const;
+  // A feature's replay key, with the parameters as they stand just before
+  // it replays.
+  std::string replayKey(const Feature& f, const ParamSet& params, std::optional<Inputs>& evaluated,
+                        std::string& early) const;
+  ParamSet currentParams() const;
+  ReplayStep captureStep() const;
+  void restoreStep(const ReplayStep& step);
+  std::string replayContext_;
+  std::vector<ReplayStep> replaySteps_;
+  int lastReused_ = 0, lastReplayed_ = 0;
 
   Handle(TDocStd_Document) doc_;
   bool modified_ = false;
