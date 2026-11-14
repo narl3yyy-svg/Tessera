@@ -342,9 +342,9 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/DocCommands.h": {
-    "mtime": 1794628398.5316572,
-    "seen": 1794628788.6494129,
-    "ast_hash": "9dc80524f7fcd28521415f6df8a2fc90",
+    "mtime": 1794631008.228499,
+    "seen": 1794631298.6763396,
+    "ast_hash": "cc8cc7f93dd88cdcb36c586d9bcd26f6",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794630640.1098218,
-    "seen": 1794630945.7902038,
-    "ast_hash": "479394819ebb0b0e5dea3475d196c93e",
+    "mtime": 1794631008.2324986,
+    "seen": 1794631298.6763449,
+    "ast_hash": "5e645d57dedc5be8701c94bd3e6665a4",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794630730.7120135,
-    "seen": 1794630945.790723,
-    "ast_hash": "2ef6d3794db729d606da49d11648464a",
+    "mtime": 1794631082.421423,
+    "seen": 1794631298.6768315,
+    "ast_hash": "180b53dc080a20c38fea731840f2798d",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1938,9 +1938,9 @@
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794630605.3869028,
-    "seen": 1794630612.5222654,
-    "ast_hash": "2c849572d22d0113531ecbf56690c3fd",
+    "mtime": 1794630969.7488158,
+    "seen": 1794631298.6768374,
+    "ast_hash": "cfbbcffb97e8a6258c6d5e089cbdc799",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794630605.3869028,
-    "seen": 1794630612.5222678,
-    "ast_hash": "f6342eba4f1c6e06ce5f00453c53b245",
+    "mtime": 1794631082.421423,
+    "seen": 1794631298.6768417,
+    "ast_hash": "9f371d05e529863295481e88a8a0254b",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -2352,9 +2352,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_construct_planes.py": {
-    "mtime": 1794625385.7273643,
-    "seen": 1794625698.9105062,
-    "ast_hash": "835c180127d06e64cf703110423355ec",
+    "mtime": 1794631008.2892497,
+    "seen": 1794631298.676395,
+    "ast_hash": "b06b3f0238656febe54b626f7158ed9a",
     "semantic_hash": ""
   },
   "tests/api/test_delete_split_face.py": {

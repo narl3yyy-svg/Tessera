@@ -45,3 +45,28 @@ try:
 except RuntimeError as e:
     assert "cylindrical" in str(e), e
 print("construct planes: OK")
+
+# --- Plane Through Two Edges, Plane Tangent to Face at Point, Axis
+# Perpendicular at Point, on a 20 mm cube.
+tsr.new_document()
+cmd("tsr.primitive.box", length=2.0, width=2.0, height=2.0)
+# The top front edge and the bottom back edge: the diagonal plane again.
+cmd("tsr.construct.planeTwoEdges", body="Body1", edges="1,0,2;1,2,0")
+cmd("tsr.feature.splitBody", body="Body1", plane="Plane1")
+assert vols() == [4.0, 4.0], vols()
+try:
+    cmd("tsr.construct.planeTwoEdges", body="Body2", edges="1,0,2;0,1,0")
+except RuntimeError as e:
+    assert "plane" in str(e) or "Edges" in str(e), e
+tsr.new_document()
+cmd("tsr.primitive.cylinder", diameter=2.0, height=2.0)
+# A plane touching the side at a top-rim vertex: a disc on it sits outside.
+cmd("tsr.construct.planeFacePoint", body="Body1", faces="1,0,1", vertices="1,0,2")
+cmd("tsr.sketch.create", plane="Plane1", data=json.dumps(disc))
+cmd("tsr.feature.extrude", distance=0.1, operation="New Body")
+lo, hi = tsr.bounding_box("Body2")
+assert abs(lo[0] - 1.0) < 1e-6 and abs(hi[0] - 1.1) < 1e-6, (lo, hi)
+# The axis square to the top face through the same vertex: straight up.
+cmd("tsr.construct.axisNormalAtPoint", body="Body1", faces="0,0,2", vertices="1,0,2")
+assert [f["name"] for f in tsr.features()][-1] == "Axis1"
+print("construct planes 2: OK")

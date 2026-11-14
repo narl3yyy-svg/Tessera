@@ -17,6 +17,8 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <Standard_Failure.hxx>
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepLProp_SLProps.hxx>
+#include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepTools.hxx>
 #include <gp.hxx>
@@ -2068,7 +2070,8 @@ private:
 class ConstructAxisPoint final : public Command {
 public:
   enum class Kind { AxisCylinder, AxisEdge, AxisTwoPoints, AxisTwoPlanes, PointVertex, PointTwoEdges, PointThreePlanes,
-                    PointCenter, PointEdgePlane, PlaneThreePoints, PlaneTangent };
+                    PointCenter, PointEdgePlane, PlaneThreePoints, PlaneTangent, PlaneTwoEdges, PlaneFacePoint,
+                    AxisNormalAtPoint };
   explicit ConstructAxisPoint(Kind kind) : kind_(kind) {
     struct Info {
       const char *id, *name, *tip, *icon;
@@ -2086,6 +2089,9 @@ public:
         {kCmdPlaneThreePoints, "Plane Through Three Points", "Through three vertices.", "plane"},
         {kCmdPlaneTangent, "Tangent Plane",
          "Tangent to a cylindrical face, turned round it by an angle from a reference plane's direction.", "plane"},
+        {kCmdPlaneTwoEdges, "Plane Through Two Edges", "Through two straight edges that lie in one plane.", "plane"},
+        {kCmdPlaneFacePoint, "Plane Tangent to Face at Point", "Touches a face where a vertex on it is.", "plane"},
+        {kCmdAxisNormalAtPoint, "Axis Perpendicular at Point", "Through a vertex, square to the face it is on.", "axis"},
     };
     const Info& info = infos[static_cast<int>(kind)];
     commonDef(def_, info.id, info.name, info.tip, info.icon, "Construct");
@@ -2112,6 +2118,9 @@ public:
       case Kind::AxisTwoPoints:
       case Kind::PlaneThreePoints:
       case Kind::PointVertex: def_.inputs.insert(def_.inputs.end(), {bodyInput(), vertices()}); break;
+      case Kind::PlaneTwoEdges: def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges()}); break;
+      case Kind::PlaneFacePoint:
+      case Kind::AxisNormalAtPoint: def_.inputs.insert(def_.inputs.end(), {bodyInput(), faces(), vertices()}); break;
       case Kind::PlaneTangent:
         def_.inputs.insert(def_.inputs.end(),
                            {bodyInput(), faces(), planeChoice("Reference: the plane's normal sets where angle 0 is."),
@@ -2136,8 +2145,11 @@ public:
   }
   const CommandDef& def() const override { return def_; }
 
-  bool isAxis() const { return kind_ <= Kind::AxisTwoPlanes; }
-  bool isPlane() const { return kind_ >= Kind::PlaneThreePoints; }
+  bool isAxis() const { return kind_ <= Kind::AxisTwoPlanes || kind_ == Kind::AxisNormalAtPoint; }
+  bool isPlane() const {
+    return kind_ == Kind::PlaneThreePoints || kind_ == Kind::PlaneTangent || kind_ == Kind::PlaneTwoEdges ||
+           kind_ == Kind::PlaneFacePoint;
+  }
   bool usesBody() const { return kind_ != Kind::AxisTwoPlanes && kind_ != Kind::PointThreePlanes; }
 
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
@@ -2242,6 +2254,10 @@ private:
           default: throw CommandError("Face: pick a cylindrical, conical or toroidal face");
         }
       }
+      case Kind::AxisNormalAtPoint: {
+        const auto [p, n] = faceNormalAt(doc, in);
+        return gp_Ax1(p, n);
+      }
       case Kind::AxisEdge: {
         BRepAdaptor_Curve c(TopoDS::Edge(edgesOf(doc, in, 1).front()));
         const gp_Pnt mid = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
@@ -2337,7 +2353,49 @@ private:
     throw CommandError("not a point");
   }
 
+  // The face's point nearest the picked vertex, and its outward normal there.
+  std::pair<gp_Pnt, gp_Dir> faceNormalAt(const Document& doc, const Inputs& in) const {
+    const std::string refs = getString(in, "faces");
+    if (refs.empty()) throw CommandError("Face: click a face");
+    TopoDS_Shape f;
+    try {
+      f = kernel::resolveFaces(body(doc, in), refs).front();
+    } catch (const kernel::KernelError& err) {
+      throw CommandError(std::string("Face: ") + err.what());
+    }
+    const gp_Pnt v = verticesOf(doc, in, 1).front();
+    const TopoDS_Face face = TopoDS::Face(f);
+    const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
+    GeomAPI_ProjectPointOnSurf proj(v, surf);
+    if (proj.NbPoints() == 0) throw CommandError("Vertices: the point is not on that face");
+    double u = 0, w = 0;
+    proj.LowerDistanceParameters(u, w);
+    if (proj.LowerDistance() > 1e-4) throw CommandError("Vertices: pick a vertex on that face");
+    BRepAdaptor_Surface s(face);
+    BRepLProp_SLProps props(s, u, w, 1, 1e-7);
+    if (!props.IsNormalDefined()) throw CommandError("Face: no normal at that point");
+    gp_Dir n = props.Normal();
+    if (face.Orientation() == TopAbs_REVERSED) n.Reverse();
+    return {proj.NearestPoint(), n};
+  }
+
   gp_Ax3 planeFrameOf(const Document& doc, const Inputs& in) const {
+    if (kind_ == Kind::PlaneFacePoint) {
+      const auto [p, n] = faceNormalAt(doc, in);
+      return gp_Ax3(p, n);
+    }
+    if (kind_ == Kind::PlaneTwoEdges) {
+      const auto e = edgesOf(doc, in, 2);
+      BRepAdaptor_Curve c1(TopoDS::Edge(e[0])), c2(TopoDS::Edge(e[1]));
+      if (c1.GetType() != GeomAbs_Line || c2.GetType() != GeomAbs_Line) throw CommandError("Edges: pick two straight edges");
+      const gp_Lin l1 = c1.Line(), l2 = c2.Line();
+      gp_Vec n = gp_Vec(l1.Direction()).Crossed(gp_Vec(l2.Direction()));
+      if (n.Magnitude() < 1e-9) n = gp_Vec(l1.Direction()).Crossed(gp_Vec(l1.Location(), l2.Location()));   // parallel
+      if (n.Magnitude() < 1e-9) throw CommandError("Edges: the two edges lie on one line");
+      if (std::abs(gp_Vec(l1.Location(), l2.Location()).Dot(n.Normalized())) > 1e-6)
+        throw CommandError("Edges: the two edges do not lie in one plane");
+      return gp_Ax3(l1.Location(), gp_Dir(n), l1.Direction());
+    }
     if (kind_ == Kind::PlaneThreePoints) {
       const auto p = verticesOf(doc, in, 3);
       if (p.size() < 3) throw CommandError("Vertices: click three vertices");
@@ -3266,7 +3324,7 @@ void registerDocCommands(CommandRegistry& registry) {
   using CAP = ConstructAxisPoint::Kind;
   for (CAP k : {CAP::AxisCylinder, CAP::AxisEdge, CAP::AxisTwoPoints, CAP::AxisTwoPlanes, CAP::PointVertex,
                 CAP::PointTwoEdges, CAP::PointThreePlanes, CAP::PointCenter, CAP::PointEdgePlane, CAP::PlaneThreePoints,
-                CAP::PlaneTangent})
+                CAP::PlaneTangent, CAP::PlaneTwoEdges, CAP::PlaneFacePoint, CAP::AxisNormalAtPoint})
     registry.add(std::make_unique<ConstructAxisPoint>(k));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));
