@@ -91,7 +91,6 @@ void MainWindow::buildUiCommands() {
   add("Modify", "ui.changeParameters", "Change Parameters", "parameters",
       "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
       [this] { showParameters(); });
-  planned("Assemble", "ui.asBuiltJoint", "As-Built Joint", "joint", "Shift+J");
   planned("Assemble", "ui.jointOrigin", "Joint Origin", "joint-origin");
   planned("Assemble", "ui.rigidGroup", "Rigid Group", "rigid");
   add("Assemble", "ui.driveJoints", "Drive Joints", "motion", "Moves a joint through its range; Play animates it.", "",
@@ -207,7 +206,7 @@ void MainWindow::driveJoints() {
   }
   std::vector<doc::Feature> joints;
   for (const auto& f : session_.document().features())
-    if (f.commandId == doc::kCmdJoint && !f.suppressed) joints.push_back(f);
+    if ((f.commandId == doc::kCmdJoint || f.commandId == doc::kCmdAsBuiltJoint) && !f.suppressed) joints.push_back(f);
   if (joints.empty()) {
     statusBar()->showMessage(tr("Drive Joints: there is no joint yet (Assemble > Joint)."), 4000);
     return;

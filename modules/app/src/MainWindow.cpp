@@ -1551,7 +1551,7 @@ void MainWindow::refreshBrowser(const QString& docName) {
   {
     std::vector<std::pair<int, std::string>> joints;
     for (const auto& f : d.features())
-      if (f.commandId == doc::kCmdJoint) joints.emplace_back(f.id, f.name);
+      if (f.commandId == doc::kCmdJoint || f.commandId == doc::kCmdAsBuiltJoint) joints.emplace_back(f.id, f.name);
     if (!joints.empty()) {
       auto* folder = new QTreeWidgetItem(root, {tr("Joints (%1)").arg(joints.size())});
       folder->setIcon(0, icon(QStringLiteral("joint")));

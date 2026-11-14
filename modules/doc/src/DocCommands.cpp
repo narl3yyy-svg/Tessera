@@ -3110,10 +3110,18 @@ JointPick jointOrigin(const Document& doc, const std::string& spec, const char* 
 
 class Joint final : public Command {
 public:
-  Joint() {
-    commonDef(def_, kCmdJoint, "Joint", "Positions a component on another and sets how it may move: click a face, "
-              "edge or point on the part that moves, then on the part it attaches to.", "joint", "Assemble");
-    def_.shortcut = "J";
+  // asBuilt: the familiar As-Built Joint: the parts stay where they are; the
+  // second pick only gives the joint's origin and axis (on the other part).
+  explicit Joint(bool asBuilt = false) : asBuilt_(asBuilt) {
+    if (asBuilt) {
+      commonDef(def_, kCmdAsBuiltJoint, "As-Built Joint", "Joins two components where they are now: click the part "
+                "that moves, then a face, edge or point on the other part where the joint's axis is.", "joint", "Assemble");
+      def_.shortcut = "Shift+J";
+    } else {
+      commonDef(def_, kCmdJoint, "Joint", "Positions a component on another and sets how it may move: click a face, "
+                "edge or point on the part that moves, then on the part it attaches to.", "joint", "Assemble");
+      def_.shortcut = "J";
+    }
     def_.inputs = {
         {.id = "origin1", .label = "Component 1", .tooltip = "The part that moves: click a face, edge or point.",
          .type = InputType::JointOrigin, .defaultValue = std::string{}},
@@ -3154,6 +3162,12 @@ public:
         {.id = "slideMax", .label = "Maximum", .tooltip = {}, .type = InputType::Real, .defaultValue = 1.0,
          .unit = Unit::Millimeter, .visibleWhen = "slideLimits=true"},
     };
+    if (asBuilt) {
+      std::erase_if(def_.inputs, [](const InputDef& d) { return d.id == "angle" || d.id == "offset" || d.id == "flip"; });
+      def_.inputs[0].tooltip = "The part that moves: click it (a face, edge or point).";
+      def_.inputs[1].label = "Position";
+      def_.inputs[1].tooltip = "On the other part: the joint's origin and axis (a face's normal, an edge's line).";
+    }
   }
   const CommandDef& def() const override { return def_; }
   // Only input checks here: the picked geometry is found in apply(), where
@@ -3200,7 +3214,7 @@ public:
   }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
-    const auto [moving, trsf] = motion(doc, in);
+    const auto [moving, trsf] = motion(doc, in, asBuilt_);
     const auto comp = doc.component(moving);
     for (const auto& name : comp->bodies) {
       const auto b = doc.body(name);
@@ -3210,6 +3224,7 @@ public:
   }
 
 private:
+  bool asBuilt_ = false;
   static double real(const Inputs& in, const char* id) { return in.count(id) ? getReal(in, id) : 0.0; }
   static bool flag(const Inputs& in, const char* id) {
     const auto it = in.find(id);
@@ -3223,7 +3238,7 @@ private:
     return flag(in, on) ? std::clamp(v, real(in, lo), real(in, hi)) : v;
   }
   // The component that moves, and how.
-  static std::pair<std::string, gp_Trsf> motion(const Document& doc, const Inputs& in) {
+  static std::pair<std::string, gp_Trsf> motion(const Document& doc, const Inputs& in, bool asBuilt) {
     const JointPick a = jointOrigin(doc, getString(in, "origin1"), "Component 1");
     const JointPick b = jointOrigin(doc, getString(in, "origin2"), "Component 2");
     const auto c1 = doc.componentOfBody(a.body);
@@ -3233,8 +3248,8 @@ private:
     const gp_Ax3& f2 = b.frame;
     const bool flip = in.count("flip") && getString(in, "flip") == "Yes";
     const gp_Ax3 target(f2.Location(), flip ? f2.Direction() : f2.Direction().Reversed(), f2.XDirection());
-    gp_Trsf place;
-    place.SetDisplacement(a.frame, target);
+    gp_Trsf place;   // as built: where it is
+    if (!asBuilt) place.SetDisplacement(a.frame, target);
     const std::string type = getString(in, "type");
     const bool turns = type == "Revolute" || type == "Cylindrical" || type == "Pin-Slot" || type == "Planar" || type == "Ball";
     const double rotation = turns ? limited(in, "rotation", "rotationLimits", "rotationMin", "rotationMax") : 0.0;
@@ -3360,6 +3375,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Thicken>());
   registry.add(std::make_unique<RibWeb>(false));
   registry.add(std::make_unique<RibWeb>(true));
+  registry.add(std::make_unique<Joint>(true));
 }
 
 } // namespace tsr::doc

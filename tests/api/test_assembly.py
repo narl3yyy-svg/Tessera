@@ -106,3 +106,21 @@ tsr.edit_feature(j["id"], type="Slider", rotationLimits=False, slide=1.0, slideL
 lo, hi = tsr.bounding_box("Body2")
 assert abs(lo[2] - 1.3) < 1e-6, (lo, hi)
 print("joint types and limits: OK")
+
+# --- As-Built Joint: the block stays where it is, and turns about the plate's
+# top-right vertical edge.
+tsr.new_document()
+cmd("tsr.primitive.box", length=4.0, width=4.0, height=1.0)
+cmd("tsr.primitive.box", length=1.0, width=1.0, height=1.0, x=5.0, z=0.0)
+cmd("tsr.assemble.newComponent", name="Plate", bodies="Body1")
+cmd("tsr.assemble.newComponent", name="Block", bodies="Body2")
+cmd("tsr.assemble.asBuiltJoint", origin1="Body2|face|5.5,0.5,1", origin2="Body1|face|2,2,1", type="Revolute")
+j = tsr.features()[-1]
+assert j["error"] == "" and j["command"] == "tsr.assemble.asBuiltJoint", j
+lo, hi = tsr.bounding_box("Body2")
+assert abs(lo[0] - 5) < 1e-6 and abs(hi[0] - 6) < 1e-6 and abs(lo[2]) < 1e-6, (lo, hi)   # not moved
+# Turned 180 degrees about the plate's top centre (2, 2): x 5..6 goes to -2..-1.
+tsr.edit_feature(j["id"], rotation=math.pi)
+lo, hi = tsr.bounding_box("Body2")
+assert abs(lo[0] + 2) < 1e-6 and abs(hi[0] + 1) < 1e-6 and abs(lo[1] - 3) < 1e-6, (lo, hi)
+print("as-built joint: OK")
