@@ -193,6 +193,21 @@ void MainWindow::driveJoints() {
     if (type == "Rigid") value->setText(tr("A rigid joint does not move."));
     st->start = std::get<double>(in.at(st->input));
     const QSignalBlocker b(slider);
+    // Motion limits, when the joint has them, bound the slider.
+    auto on = [&](const char* id) {
+      const auto it = in.find(id);
+      return it != in.end() && std::holds_alternative<bool>(it->second) && std::get<bool>(it->second);
+    };
+    auto val = [&](const char* id) {
+      const auto it = in.find(id);
+      return it != in.end() && std::holds_alternative<double>(it->second) ? std::get<double>(it->second) : 0.0;
+    };
+    auto tick = [&](double v) {
+      return static_cast<int>(std::lround(st->input == "slide" ? fromInternal(v, u) * 10 : v * 1800.0 / 3.14159265358979323846));
+    };
+    if (st->input == "slide" && on("slideLimits")) slider->setRange(tick(val("slideMin")), tick(val("slideMax")));
+    else if (st->input == "rotation" && on("rotationLimits")) slider->setRange(tick(val("rotationMin")), tick(val("rotationMax")));
+    else slider->setRange(-3600, 3600);
     slider->setValue(static_cast<int>(std::lround(
         st->input == "slide" ? fromInternal(st->start, u) * 10 : st->start * 1800.0 / 3.14159265358979323846)));
   };

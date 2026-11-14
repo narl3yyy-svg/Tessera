@@ -2919,17 +2919,40 @@ public:
          .type = InputType::JointOrigin, .defaultValue = std::string{}},
         {.id = "origin2", .label = "Component 2", .tooltip = "The part it attaches to: click a face, edge or point.",
          .type = InputType::JointOrigin, .defaultValue = std::string{}},
-        choice("type", "Type", {"Rigid", "Revolute", "Slider", "Cylindrical"},
-               "Rigid: fixed. Revolute: turns about the joint axis. Slider: moves along it. Cylindrical: both."),
+        choice("type", "Type", {"Rigid", "Revolute", "Slider", "Cylindrical", "Pin-Slot", "Planar", "Ball"},
+               "Rigid: fixed. Revolute: turns about the joint axis. Slider: moves along it. Cylindrical: both. "
+               "Pin-Slot: turns about it and slides across (the joint's X). Planar: slides in the face, turns about "
+               "its normal. Ball: turns every way about the joint origin."),
         {.id = "angle", .label = "Angle", .tooltip = "Turns component 1 about the joint axis.", .type = InputType::Real,
          .defaultValue = 0.0, .unit = Unit::Degree},
         {.id = "offset", .label = "Offset", .tooltip = "Gap between the two origins along the joint axis.",
          .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter},
         choice("flip", "Flip", {"No", "Yes"}, "Yes: component 1 faces the other way."),
         {.id = "rotation", .label = "Rotation", .tooltip = "The joint's current turn (Drive Joints changes it).",
-         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Degree, .visibleWhen = "type=Revolute|Cylindrical"},
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Degree,
+         .visibleWhen = "type=Revolute|Cylindrical|Pin-Slot|Planar|Ball"},
         {.id = "slide", .label = "Slide", .tooltip = "The joint's current travel (Drive Joints changes it).",
-         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "type=Slider|Cylindrical"},
+         .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Millimeter,
+         .visibleWhen = "type=Slider|Cylindrical|Pin-Slot|Planar"},
+        {.id = "slide2", .label = "Slide 2", .tooltip = "Planar: travel along the joint's Y.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Millimeter, .visibleWhen = "type=Planar"},
+        {.id = "pitch", .label = "Pitch", .tooltip = "Ball: turn about the joint's X.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree, .visibleWhen = "type=Ball"},
+        {.id = "yaw", .label = "Yaw", .tooltip = "Ball: turn about the joint's Y.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree, .visibleWhen = "type=Ball"},
+        // Limits, as the familiar joint's Motion Limits: the motion stops there.
+        {.id = "rotationLimits", .label = "Rotation Limits", .tooltip = "Keep the turn between a minimum and a maximum.",
+         .type = InputType::Bool, .defaultValue = false, .visibleWhen = "type=Revolute|Cylindrical|Pin-Slot|Planar|Ball"},
+        {.id = "rotationMin", .label = "Minimum", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
+         .unit = Unit::Degree, .visibleWhen = "rotationLimits=true"},
+        {.id = "rotationMax", .label = "Maximum", .tooltip = {}, .type = InputType::Real, .defaultValue = 1.5707963267948966,
+         .unit = Unit::Degree, .visibleWhen = "rotationLimits=true"},
+        {.id = "slideLimits", .label = "Slide Limits", .tooltip = "Keep the travel between a minimum and a maximum.",
+         .type = InputType::Bool, .defaultValue = false, .visibleWhen = "type=Slider|Cylindrical|Pin-Slot|Planar"},
+        {.id = "slideMin", .label = "Minimum", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
+         .unit = Unit::Millimeter, .visibleWhen = "slideLimits=true"},
+        {.id = "slideMax", .label = "Maximum", .tooltip = {}, .type = InputType::Real, .defaultValue = 1.0,
+         .unit = Unit::Millimeter, .visibleWhen = "slideLimits=true"},
     };
   }
   const CommandDef& def() const override { return def_; }
@@ -2950,6 +2973,10 @@ public:
     const auto c1 = doc.componentOfBody(b1);
     if (!c1) return "Component 1: " + b1 + " is not in a component (use New Component first)";
     if (doc.componentOfBody(b2) == c1) return "Component 2: pick a different component";
+    if (flag(in, "rotationLimits") && real(in, "rotationMin") > real(in, "rotationMax"))
+      return "Rotation Limits: the minimum is above the maximum";
+    if (flag(in, "slideLimits") && real(in, "slideMin") > real(in, "slideMax"))
+      return "Slide Limits: the minimum is above the maximum";
     return {};
   }
   // Face and edge picks become full signatures, so a replay after the parts
@@ -2984,6 +3011,17 @@ public:
 
 private:
   static double real(const Inputs& in, const char* id) { return in.count(id) ? getReal(in, id) : 0.0; }
+  static bool flag(const Inputs& in, const char* id) {
+    const auto it = in.find(id);
+    if (it == in.end()) return false;
+    if (const auto* b = std::get_if<bool>(&it->second)) return *b;
+    return false;
+  }
+  // A drive value held inside its limits, when they are on.
+  static double limited(const Inputs& in, const char* value, const char* on, const char* lo, const char* hi) {
+    const double v = real(in, value);
+    return flag(in, on) ? std::clamp(v, real(in, lo), real(in, hi)) : v;
+  }
   // The component that moves, and how.
   static std::pair<std::string, gp_Trsf> motion(const Document& doc, const Inputs& in) {
     const JointPick a = jointOrigin(doc, getString(in, "origin1"), "Component 1");
@@ -2998,12 +3036,27 @@ private:
     gp_Trsf place;
     place.SetDisplacement(a.frame, target);
     const std::string type = getString(in, "type");
-    double turn = real(in, "angle"), along = real(in, "offset");
-    if (type == "Revolute" || type == "Cylindrical") turn += real(in, "rotation");
-    if (type == "Slider" || type == "Cylindrical") along += real(in, "slide");
+    const bool turns = type == "Revolute" || type == "Cylindrical" || type == "Pin-Slot" || type == "Planar" || type == "Ball";
+    const double rotation = turns ? limited(in, "rotation", "rotationLimits", "rotationMin", "rotationMax") : 0.0;
+    auto slid = [&](const char* id) { return limited(in, id, "slideLimits", "slideMin", "slideMax"); };
+    double turn = real(in, "angle") + rotation, along = real(in, "offset");
+    // Travel in the joint's own frame: along its axis (Z, away from
+    // component 2) and across it (X, Y of the picked origin).
+    gp_Vec shift(0, 0, 0);
+    if (type == "Slider" || type == "Cylindrical") along += slid("slide");
+    if (type == "Pin-Slot" || type == "Planar") shift += gp_Vec(f2.XDirection()) * slid("slide");
+    if (type == "Planar") shift += gp_Vec(f2.YDirection()) * slid("slide2");
     gp_Trsf rot, move;
     rot.SetRotation(gp_Ax1(f2.Location(), target.Direction()), turn);
-    move.SetTranslation(gp_Vec(f2.Direction()) * along);   // away from component 2
+    if (type == "Ball") {
+      // Pitch about the joint's X, then yaw about its Y, then the roll above.
+      gp_Trsf pitch, yaw;
+      pitch.SetRotation(gp_Ax1(f2.Location(), f2.XDirection()), real(in, "pitch"));
+      yaw.SetRotation(gp_Ax1(f2.Location(), f2.YDirection()), real(in, "yaw"));
+      rot.Multiply(yaw);
+      rot.Multiply(pitch);
+    }
+    move.SetTranslation(gp_Vec(f2.Direction()) * along + shift);   // away from component 2
     gp_Trsf total = move;
     total.Multiply(rot);
     total.Multiply(place);

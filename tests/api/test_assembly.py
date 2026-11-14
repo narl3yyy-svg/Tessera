@@ -65,3 +65,44 @@ except RuntimeError as e:
 else:
     raise AssertionError("moved a body that is not in a component")
 print("api assembly: OK")
+
+# --- Pin-Slot, Planar and Ball joints, and motion limits (a fresh design).
+tsr.new_document()
+cmd("tsr.primitive.box", length=4.0, width=4.0, height=1.0)
+cmd("tsr.primitive.box", length=1.0, width=2.0, height=3.0, x=10.0, y=10.0)
+cmd("tsr.assemble.newComponent", name="Plate", bodies="Body1")
+cmd("tsr.assemble.newComponent", name="Block", bodies="Body2")
+cmd("tsr.assemble.joint", origin1="Body2|face|10.5,11,0", origin2="Body1|face|2,2,1", type="Pin-Slot", slide=0.5)
+j = tsr.features()[-1]
+assert j["error"] == "", j
+lo, hi = tsr.bounding_box("Body2")
+moved = [round(v, 6) for v in lo + hi]
+# Slid 5 mm across the plate (along the joint's X), still standing on it.
+assert abs(moved[2] - 1) < 1e-6 and abs(moved[5] - 4) < 1e-6, moved
+assert abs((moved[0] + moved[3]) / 2 - 2) > 0.4 or abs((moved[1] + moved[4]) / 2 - 2) > 0.4, moved
+# Planar: two slides and a turn, still on the plate.
+tsr.edit_feature(j["id"], type="Planar", slide=0.3, slide2=0.4, rotation=math.pi / 2)
+lo, hi = tsr.bounding_box("Body2")
+assert abs(lo[2] - 1) < 1e-6 and abs(hi[2] - 4) < 1e-6, (lo, hi)
+cx, cy = (lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2
+assert abs(math.hypot(cx - 2, cy - 2) - 0.5) < 1e-6, (cx, cy)          # 3-4-5: half a centimetre from the centre
+assert abs((hi[0] - lo[0]) - 2) < 1e-6 and abs((hi[1] - lo[1]) - 1) < 1e-6, (lo, hi)   # turned 90 degrees
+# Ball: pitched 90 degrees about the joint's X: the 30 mm tall block lies down.
+tsr.edit_feature(j["id"], type="Ball", rotation=0.0, pitch=math.pi / 2)
+lo, hi = tsr.bounding_box("Body2")
+assert abs((hi[2] - lo[2]) - min(1.0, 2.0)) < 1e-6 or abs((hi[2] - lo[2]) - 2.0) < 1e-6, (lo, hi)
+# Limits: a revolute turn of 120 degrees held to at most 90.
+tsr.edit_feature(j["id"], type="Revolute", pitch=0.0, rotation=math.radians(120), rotationLimits=True,
+                 rotationMin=0.0, rotationMax=math.pi / 2)
+lo, hi = tsr.bounding_box("Body2")
+assert abs((hi[0] - lo[0]) - 2) < 1e-6 and abs((hi[1] - lo[1]) - 1) < 1e-6, (lo, hi)   # stopped at 90
+try:
+    tsr.edit_feature(j["id"], rotationMin=1.0, rotationMax=0.5)
+    raise AssertionError("min above max accepted")
+except RuntimeError as e:
+    assert "minimum" in str(e), e
+# A slider limited to 3 mm.
+tsr.edit_feature(j["id"], type="Slider", rotationLimits=False, slide=1.0, slideLimits=True, slideMin=0.0, slideMax=0.3)
+lo, hi = tsr.bounding_box("Body2")
+assert abs(lo[2] - 1.3) < 1e-6, (lo, hi)
+print("joint types and limits: OK")
