@@ -187,6 +187,10 @@ private:
   bool saveAs();
   bool saveTo(const QString& path);
   void openFile();
+  void openPath(const QString& path);
+  void noteRecent(const QString& path);
+  void fillRecentMenu(QMenu* menu);
+  void saveSketchDxf(const QString& sketchName);
   void runScript();
 
   doc::Session& session_;

@@ -49,4 +49,4 @@ Tracked against the menus people know. Done = usable today.
 
 **Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear ✅ · Symmetry ✅ · Curvature · Polygon; Sketch Palette ✅ (feature options, linetype, Look At, grid, snap, slice, show profiles/points/dimensions/constraints/construction)
 
-**File and settings**: Document units ✅ · Export (STEP, IGES, STL, 3MF, OBJ, BREP) ✅ · 3D Print ✅ · Capture Image ✅ · Preferences: navigation presets, zoom direction, orbit type, camera ✅ · Grid settings and snap ✅ · Named Views · Incremental Move · Design history import/export
+**File and settings**: Document units ✅ · Recent designs ✅ · Sketch to DXF ✅ · Export (STEP, IGES, STL, 3MF, OBJ, BREP) ✅ · 3D Print ✅ · Capture Image ✅ · Preferences: navigation presets, zoom direction, orbit type, camera ✅ · Grid settings and snap ✅ · Named Views · Incremental Move · Design history import/export

@@ -35,6 +35,7 @@
 #include <QComboBox>
 #include <QCompleter>
 #include <QDockWidget>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -390,6 +391,9 @@ void MainWindow::buildAppBar() {
                       });
   fileMenu->addAction(QIcon::fromTheme(QStringLiteral("document-open")), tr("&Open…"), QKeySequence::Open, this,
                       [this] { openFile(); });
+  auto* recent = fileMenu->addMenu(QIcon::fromTheme(QStringLiteral("document-open-recent")), tr("Open &Recent"));
+  recent->setObjectName(QStringLiteral("file.recent"));
+  connect(recent, &QMenu::aboutToShow, this, [this, recent] { fillRecentMenu(recent); });
   QAction* save = fileMenu->addAction(icon(QStringLiteral("save")), tr("&Save"),
                                       QKeySequence::Save, this, [this] {
                                         if (session_.path()) saveTo(qs(session_.path()->string()));
@@ -1340,6 +1344,7 @@ void MainWindow::showBrowserMenu(const QPoint& pos) {
       if (f.commandId == doc::kCmdSketch && qs(f.name) == sketch) {
         const int id = f.id;
         m.addAction(icon(QStringLiteral("sketch")), tr("Edit Sketch"), this, [this, id] { editSketch(id); });
+        m.addAction(icon(QStringLiteral("export")), tr("Save As DXF…"), this, [this, sketch] { saveSketchDxf(sketch); });
         break;
       }
   if (it->flags() & Qt::ItemIsUserCheckable) {
@@ -1713,6 +1718,61 @@ bool MainWindow::maybeSave() {
   return session_.path() ? saveTo(qs(session_.path()->string())) : saveAs();
 }
 
+void MainWindow::saveSketchDxf(const QString& name) {
+  const auto rec = session_.document().sketch(name.toStdString());
+  if (!rec) return;
+  QString path = QFileDialog::getSaveFileName(this, tr("Save Sketch As DXF"), name + QStringLiteral(".dxf"),
+                                              tr("DXF drawing (*.dxf)"));
+  if (path.isEmpty()) return;
+  if (!path.endsWith(QStringLiteral(".dxf"), Qt::CaseInsensitive)) path += QStringLiteral(".dxf");
+  try {
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) throw std::runtime_error("cannot write " + path.toStdString());
+    f.write(QByteArray::fromStdString(sketch::toDxf(sketch::Sketch::fromJson(rec->data))));
+    statusBar()->showMessage(tr("Saved %1").arg(path), 3000);
+  } catch (const std::exception& e) {
+    QMessageBox::critical(this, tr("Save failed"), QString::fromStdString(e.what()));
+  }
+}
+
+// Recent designs: newest first, at most ten, kept in the settings.
+void MainWindow::noteRecent(const QString& path) {
+  QSettings st;
+  QStringList list = st.value(QStringLiteral("files/recent")).toStringList();
+  const QString abs = QFileInfo(path).absoluteFilePath();
+  list.removeAll(abs);
+  list.prepend(abs);
+  while (list.size() > 10) list.removeLast();
+  st.setValue(QStringLiteral("files/recent"), list);
+}
+
+void MainWindow::fillRecentMenu(QMenu* menu) {
+  menu->clear();
+  const QStringList list = QSettings().value(QStringLiteral("files/recent")).toStringList();
+  for (const QString& p : list) {
+    if (!QFileInfo::exists(p)) continue;
+    QAction* a = menu->addAction(QFileInfo(p).fileName(), this, [this, p] { openPath(p); });
+    a->setToolTip(p);
+    a->setStatusTip(p);
+  }
+  if (menu->isEmpty()) menu->addAction(tr("(none yet)"))->setEnabled(false);
+  else {
+    menu->addSeparator();
+    menu->addAction(tr("Clear List"), this, [] { QSettings().remove(QStringLiteral("files/recent")); });
+  }
+}
+
+void MainWindow::openPath(const QString& path) {
+  if (!maybeSave()) return;
+  try {
+    session_.open(path.toStdString());
+    noteRecent(path);
+    viewport_->fitAll();
+  } catch (const std::exception& e) {
+    QMessageBox::critical(this, tr("Open failed"), QString::fromStdString(e.what()));
+  }
+}
+
 bool MainWindow::saveAs() {
   QString path = QFileDialog::getSaveFileName(this, tr("Save Design"), QString(), kFilter);
   if (path.isEmpty()) return false;
@@ -1723,6 +1783,7 @@ bool MainWindow::saveAs() {
 bool MainWindow::saveTo(const QString& path) {
   try {
     session_.save(path.toStdString());
+    noteRecent(path);
     statusBar()->showMessage(tr("Saved %1").arg(path), 3000);
     return true;
   } catch (const std::exception& e) {
@@ -1737,6 +1798,7 @@ void MainWindow::openFile() {
   if (path.isEmpty()) return;
   try {
     session_.open(path.toStdString());
+    noteRecent(path);
     viewport_->fitAll();
   } catch (const std::exception& e) {
     QMessageBox::critical(this, tr("Open failed"), QString::fromStdString(e.what()));

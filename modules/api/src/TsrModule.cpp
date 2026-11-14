@@ -16,6 +16,7 @@
 #include <TopoDS_Shape.hxx>
 
 #include <algorithm>
+#include <fstream>
 #include <array>
 #include <pybind11/stl.h>
 
@@ -277,6 +278,14 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("entity"), py::arg("distance"),
      "Offset the chain through an entity (cm; closed chains: positive is outward); returns the new sketch JSON.");
+  m.def("export_sketch_dxf", [](const std::string& name, const std::string& path, bool construction) {
+    const auto rec = activeSession().document().sketch(name);
+    if (!rec) throw std::runtime_error("no sketch named '" + name + "'");
+    std::ofstream f(path, std::ios::binary);
+    if (!f) throw std::runtime_error("cannot write " + path);
+    f << sketch::toDxf(sketch::Sketch::fromJson(rec->data), construction);
+  }, py::arg("sketch"), py::arg("path"), py::arg("construction") = false,
+     "Save a sketch as a DXF drawing (millimetres, R12).");
   m.def("sketch_trim", [](const std::string& data, int entity, double x, double y, bool breakOnly) {
     sketch::Sketch s = sketch::Sketch::fromJson(data);
     if (auto err = sketch::trimCurve(s, entity, x, y, breakOnly); !err.empty()) throw std::runtime_error(err);

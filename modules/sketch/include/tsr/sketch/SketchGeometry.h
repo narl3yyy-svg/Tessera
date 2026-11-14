@@ -62,6 +62,12 @@ std::vector<SplineHandle> splineHandles(const Sketch& s, int entity);
 // Returns how many curves were added.
 int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>& edges);
 
+// The sketch as a DXF drawing (AutoCAD R12 text, which every CAD and laser /
+// CNC program reads), in millimetres, in the sketch's own coordinates:
+// lines, circles and arcs exactly, other curves and text outlines as
+// polylines. Construction geometry goes on its own layer when asked.
+std::string toDxf(const Sketch& s, bool construction = false);
+
 // Index of the profile containing sketch point (x, y), or -1.
 int profileAt(const std::vector<Profile>& ps, const gp_Ax3& frame, double x, double y);
 

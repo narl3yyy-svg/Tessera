@@ -505,4 +505,109 @@ std::vector<SplineHandle> splineHandles(const Sketch& s, int entity) {
   return out;
 }
 
+std::string toDxf(const Sketch& s, bool construction) {
+  const double mm = 10.0;   // internal cm
+  std::ostringstream o;
+  o.precision(10);
+  auto pair = [&](int code, const std::string& v) { o << code << '\n' << v << '\n'; };
+  auto num = [&](int code, double v) { o << code << '\n' << v << '\n'; };
+  pair(0, "SECTION");
+  pair(2, "HEADER");
+  pair(9, "$ACADVER");
+  pair(1, "AC1009");
+  pair(9, "$INSUNITS");
+  pair(70, "4");   // millimetres
+  pair(0, "ENDSEC");
+  pair(0, "SECTION");
+  pair(2, "ENTITIES");
+  const gp_Ax3 xy(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0));
+  auto P = [&](int i) { return s.points.at(i); };
+  auto polyline = [&](const std::vector<std::pair<double, double>>& pts, const char* layer, bool closed) {
+    if (pts.size() < 2) return;
+    pair(0, "POLYLINE");
+    pair(8, layer);
+    pair(66, "1");
+    pair(70, closed ? "1" : "0");
+    for (const auto& [x, y] : pts) {
+      pair(0, "VERTEX");
+      pair(8, layer);
+      num(10, x * mm);
+      num(20, y * mm);
+      num(30, 0);
+    }
+    pair(0, "SEQEND");
+    pair(8, layer);
+  };
+  auto sampled = [&](const TopoDS_Shape& edge, std::vector<std::pair<double, double>>& pts) {
+    BRepAdaptor_Curve c(TopoDS::Edge(edge));
+    const double a = c.FirstParameter(), b = c.LastParameter();
+    const int n = 96;
+    for (int k = 0; k <= n; ++k) {
+      const gp_Pnt q = c.Value(a + (b - a) * k / n);
+      pts.emplace_back(q.X(), q.Y());
+    }
+  };
+  for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
+    const Entity& e = s.entities[i];
+    if (e.construction && !construction) continue;
+    if (e.included) continue;   // 3D reference geometry is not part of the drawing
+    const char* layer = e.construction ? "CONSTRUCTION" : "0";
+    switch (e.type) {
+      case EntityType::Line:
+        pair(0, "LINE");
+        pair(8, layer);
+        num(10, P(e.a).x * mm);
+        num(20, P(e.a).y * mm);
+        num(30, 0);
+        num(11, P(e.b).x * mm);
+        num(21, P(e.b).y * mm);
+        num(31, 0);
+        break;
+      case EntityType::Circle:
+        pair(0, "CIRCLE");
+        pair(8, layer);
+        num(10, P(e.center).x * mm);
+        num(20, P(e.center).y * mm);
+        num(30, 0);
+        num(40, e.radius * mm);
+        break;
+      case EntityType::Arc: {
+        const Point c = P(e.center);
+        const double deg = 180.0 / 3.14159265358979323846;
+        pair(0, "ARC");
+        pair(8, layer);
+        num(10, c.x * mm);
+        num(20, c.y * mm);
+        num(30, 0);
+        num(40, e.radius * mm);
+        num(50, std::atan2(P(e.a).y - c.y, P(e.a).x - c.x) * deg);   // anticlockwise from start to end
+        num(51, std::atan2(P(e.b).y - c.y, P(e.b).x - c.x) * deg);
+        break;
+      }
+      default: {
+        const TopoDS_Shape edge = curve(s, xy, i);
+        if (edge.IsNull()) break;
+        std::vector<std::pair<double, double>> pts;
+        sampled(edge, pts);
+        const bool closed = pts.size() > 2 && std::hypot(pts.front().first - pts.back().first,
+                                                         pts.front().second - pts.back().second) < 1e-9;
+        if (closed) pts.pop_back();
+        polyline(pts, layer, closed);
+      }
+    }
+  }
+  for (int i = 0; i < static_cast<int>(s.texts.size()); ++i) {
+    const TopoDS_Shape t = textShape(s, xy, i);
+    if (t.IsNull()) continue;
+    for (TopExp_Explorer x(t, TopAbs_EDGE); x.More(); x.Next()) {
+      std::vector<std::pair<double, double>> pts;
+      sampled(x.Current(), pts);
+      polyline(pts, "TEXT", false);
+    }
+  }
+  pair(0, "ENDSEC");
+  pair(0, "EOF");
+  return o.str();
+}
+
 } // namespace tsr::sketch

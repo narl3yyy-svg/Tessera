@@ -110,6 +110,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_construct_planes.py)
   add_test(NAME api_delete_split_face
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_delete_split_face.py)
+  add_test(NAME api_sketch_dxf
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sketch_dxf.py)
   add_test(NAME api_robustness
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_robustness.py)
   add_test(NAME api_incremental_replay
