@@ -62,3 +62,20 @@ except RuntimeError as e:
 else:
     raise AssertionError("oversized fillet accepted")
 print("api fillet/chamfer/revolve: OK")
+
+# --- Variable radius: 2 mm at one end of a 40 mm edge, 6 mm at the other.
+# Material removed: about (1 - pi/4) times the integral of r^2 along it.
+import math as _m
+tsr.new_document()
+tsr.run_command("tsr.primitive.box", length=4.0, width=4.0, height=2.0)
+tsr.run_command("tsr.feature.fillet", edges="2,0,2", radius=0.2, radiusType="Variable", endRadius=0.6)
+f = tsr.features()[-1]
+assert f["error"] == "", f
+removed = 32 - tsr.mass_properties("Body1")["volume"]
+approx = 4 * (0.2 ** 2 + 0.2 * 0.6 + 0.6 ** 2) / 3 * (1 - _m.pi / 4)
+assert 4 * 0.2 ** 2 * (1 - _m.pi / 4) < removed < 4 * 0.6 ** 2 * (1 - _m.pi / 4), removed
+assert abs(removed - approx) < 0.05 * approx, (removed, approx)
+# Back to constant: the end radius is ignored.
+tsr.edit_feature(f["id"], radiusType="Constant")
+assert abs(32 - tsr.mass_properties("Body1")["volume"] - 4 * 0.04 * (1 - _m.pi / 4)) < 1e-6
+print("variable fillet: OK")

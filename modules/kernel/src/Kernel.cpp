@@ -933,6 +933,25 @@ TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& 
   return r;
 }
 
+TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double start, double end) {
+  requirePositive(start, "fillet start radius");
+  requirePositive(end, "fillet end radius");
+  if (edges.empty()) throw KernelError("Fillet: select at least one edge");
+  TopoDS_Shape r;
+  try {
+    r = guarded("Fillet", [&]() -> TopoDS_Shape {
+      BRepFilletAPI_MakeFillet mk(shape);
+      for (const auto& e : edges) mk.Add(start, end, TopoDS::Edge(e));
+      mk.Build();
+      return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
+    });
+  } catch (const KernelError& e) {
+    throw KernelError(std::string("Fillet: those radii are too large for the selected edges (") + e.what() + ")");
+  }
+  if (!isValid(r)) throw KernelError("Fillet: those radii are too large for the selected edges");
+  return r;
+}
+
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance) {
   requirePositive(distance, "chamfer distance");
   if (edges.empty()) throw KernelError("Chamfer: select at least one edge");

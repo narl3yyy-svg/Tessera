@@ -1,7 +1,7 @@
 # Graph Report - tessera  (2026-11-13)
 
 ## Corpus Check
-- 386 files · ~254,026 words
+- 386 files · ~254,395 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 56 file(s) not represented in the graph (top: .drive 48, (none) 5, .cmake 1)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f361f7e1`
+- Built from commit: `ce5ff282`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -632,6 +632,6 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Icons.cpp` be split into smaller, more focused modules?**
   _Cohesion score 0.05337690631808279 - nodes in this community are weakly interconnected._
 - **Why does `SketchEditor` connect `SketchEditor` to `.updatePreview`, `.setTool`, `ParameterCompleter`, `Constraint`, `Viewport`, `PlaneEdges`, `ViewportArrow.cpp`, `Snap`, `Unit`, `Kind`, `Display`, `optional`, `Pick`, `SketchEditor.cpp`, `Entity`, `Session`, `ReplayStep`?**
-  _High betweenness centrality (0.088) - this node is a cross-community bridge._
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
 - **Should `Session.cpp` be split into smaller, more focused modules?**
   _Cohesion score 0.06954997077732321 - nodes in this community are weakly interconnected._

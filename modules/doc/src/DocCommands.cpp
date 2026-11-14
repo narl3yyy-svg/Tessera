@@ -914,6 +914,15 @@ public:
          .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0, .max = std::nullopt,
          .minExclusive = true},
     };
+    if (f) {
+      // The familiar fillet's Radius Type: constant, or changing from start to end.
+      def_.inputs.insert(def_.inputs.begin() + 2,
+                         choice("radiusType", "Radius Type", {"Constant", "Variable"},
+                                "Variable: the radius changes from the start of each edge to its end."));
+      def_.inputs.push_back({.id = "endRadius", .label = "End Radius", .tooltip = "The radius at each edge's end.",
+                             .type = InputType::Real, .defaultValue = 0.2, .unit = Unit::Millimeter, .min = 0.0,
+                             .max = std::nullopt, .minExclusive = true, .visibleWhen = "radiusType=Variable"});
+    }
     if (!f) {
       // The familiar Chamfer Type; the panel shows its two extra fields.
       def_.inputs.insert(def_.inputs.begin() + 2,
@@ -972,7 +981,10 @@ public:
       const auto edges = kernel::resolveEdges(body->shape, getString(in, "edges"));
       TopoDS_Shape result;
       if (kind_ == Kind::Fillet) {
-        result = kernel::fillet(body->shape, edges, getReal(in, "radius"));
+        if (in.count("radiusType") && getString(in, "radiusType") == "Variable")
+          result = kernel::fillet(body->shape, edges, getReal(in, "radius"), getReal(in, "endRadius"));
+        else
+          result = kernel::fillet(body->shape, edges, getReal(in, "radius"));
       } else {
         // Chamfers made before the Chamfer Type existed are equal distance.
         std::string type = "Equal Distance";

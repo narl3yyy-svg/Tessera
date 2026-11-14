@@ -84,6 +84,9 @@ std::vector<TopoDS_Shape> resolveVertices(const TopoDS_Shape& body, const std::s
 // Rounds / bevels edges (tangent-continuous neighbours are included). Throws
 // KernelError, e.g. when the size does not fit the adjacent faces.
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double radius);
+// Variable radius: `start` at each edge's start, `end` at its end, changing
+// smoothly between.
+TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double start, double end);
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance);
 // Unequal chamfers, as in the familiar Chamfer types. TwoDistances: `first`
 // along one face of each edge, `second` along the other. DistanceAngle:
