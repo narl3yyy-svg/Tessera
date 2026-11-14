@@ -7,6 +7,7 @@ add_library(tsr_core
   src/Log.cpp)
 add_library(tsr::core ALIAS tsr_core)
 target_include_directories(tsr_core PUBLIC include)
-target_link_libraries(tsr_core PUBLIC nlohmann_json::nlohmann_json)
+find_package(ZLIB REQUIRED)
+target_link_libraries(tsr_core PUBLIC nlohmann_json::nlohmann_json PRIVATE ZLIB::ZLIB)
 target_compile_definitions(tsr_core PUBLIC TSR_VERSION_STRING="${TSR_VERSION_STRING}")
 set_target_properties(tsr_core PROPERTIES POSITION_INDEPENDENT_CODE ON)

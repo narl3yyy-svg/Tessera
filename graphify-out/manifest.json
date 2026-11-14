@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "modules/api/src/TsrModule.cpp": {
-    "mtime": 1794629612.4846032,
-    "seen": 1794629991.5616524,
-    "ast_hash": "247e2e297a8ce2c49e4c1ab438b2a8b9",
+    "mtime": 1794630062.201509,
+    "seen": 1794630612.5219462,
+    "ast_hash": "548fdd032261c41e1c9cbd311fd78f21",
     "semantic_hash": ""
   },
   "modules/api/src/cli_main.cpp": {
@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794629612.4871297,
-    "seen": 1794629991.5616562,
-    "ast_hash": "cec2ab36899b94461d1fa98cfafa5705",
+    "mtime": 1794630062.2053018,
+    "seen": 1794630612.5219498,
+    "ast_hash": "8c6059db3da5266961431e70de718f34",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794629657.6750271,
-    "seen": 1794629991.561658,
-    "ast_hash": "cc0a342ee2befa259e891f1414b2afc3",
+    "mtime": 1794630062.203293,
+    "seen": 1794630612.5219514,
+    "ast_hash": "67924643ea5d20790a9c35e4793c5d7b",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -150,9 +150,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
-    "mtime": 1794629612.486113,
-    "seen": 1794629991.5616612,
-    "ast_hash": "6f13ea3893148d6af1bd1171da305524",
+    "mtime": 1794630062.2042978,
+    "seen": 1794630612.5219553,
+    "ast_hash": "390f41c062a609e6189898905bae7d23",
     "semantic_hash": ""
   },
   "modules/app/src/MarkingMenu.cpp": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
-    "mtime": 1794629224.1108127,
-    "seen": 1794629538.927627,
-    "ast_hash": "5472f8a38248ed7b71c3d981e60d4b9c",
+    "mtime": 1794630074.8810453,
+    "seen": 1794630612.521973,
+    "ast_hash": "1901a7f1f3d1d0724507350d28cb49c9",
     "semantic_hash": ""
   },
   "modules/core/include/tsr/core/Command.h": {
@@ -336,9 +336,9 @@
     "semantic_hash": ""
   },
   "modules/core/src/Zip.cpp": {
-    "mtime": 1794389694.8519497,
-    "seen": 1794532264.6008663,
-    "ast_hash": "ccacf144a6fd3ea274fe5e8bfaa5a6af",
+    "mtime": 1794630062.2005079,
+    "seen": 1794630612.521984,
+    "ast_hash": "dc763342a4ecbab2d63597d5712db541",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/DocCommands.h": {
@@ -348,15 +348,15 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
-    "mtime": 1794629612.4819586,
-    "seen": 1794629991.56169,
-    "ast_hash": "89349d5bd230946407f30e41a6c03c29",
+    "mtime": 1794630062.2005079,
+    "seen": 1794630612.5219858,
+    "ast_hash": "3094d75a70eb03747f8a91e92a411923",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Session.h": {
-    "mtime": 1794629612.4839585,
-    "seen": 1794629991.5616908,
-    "ast_hash": "0d3d119a2ff6534b33f2028aca285368",
+    "mtime": 1794630062.201509,
+    "seen": 1794630612.5219865,
+    "ast_hash": "cb15e37d26dc49968096fe093bb7cd01",
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
@@ -366,9 +366,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
-    "mtime": 1794629612.4839585,
-    "seen": 1794629991.5616927,
-    "ast_hash": "d9d83273fbf162037435dbe92049055d",
+    "mtime": 1794630062.201509,
+    "seen": 1794630612.5219884,
+    "ast_hash": "e5c91d5f5d5e742c57e6a64024f592aa",
     "semantic_hash": ""
   },
   "modules/doc/src/OcafApp.h": {
@@ -378,9 +378,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/Session.cpp": {
-    "mtime": 1794629612.4846032,
-    "seen": 1794629991.5616941,
-    "ast_hash": "2abc3e6a0e2427b9332802da342112da",
+    "mtime": 1794630384.4493608,
+    "seen": 1794630612.52199,
+    "ast_hash": "fad7856c8ceb613c0a4fcc182bf0a3b8",
     "semantic_hash": ""
   },
   "modules/doc/src/TsrFile.cpp": {
@@ -1896,9 +1896,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_zip.cpp": {
-    "mtime": 1794390023.5109732,
-    "seen": 1794532264.6010432,
-    "ast_hash": "6c0727d363d22833674f9ae2d8468887",
+    "mtime": 1794630074.7170148,
+    "seen": 1794630612.5222595,
+    "ast_hash": "aa82216a1a8604971e63e14cf23b8e68",
     "semantic_hash": ""
   },
   "uninstall.sh": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794629774.5383172,
-    "seen": 1794629991.5619586,
-    "ast_hash": "29eee9bdfcd6a54a4e6b19825980ca86",
+    "mtime": 1794630605.3869028,
+    "seen": 1794630612.522262,
+    "ast_hash": "2f81774f29b1fa40245afc4e76359300",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1938,9 +1938,9 @@
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794627715.6117911,
-    "seen": 1794627930.1282005,
-    "ast_hash": "eb492e309f55181d55f7ee9c0f725b8a",
+    "mtime": 1794630605.3869028,
+    "seen": 1794630612.5222654,
+    "ast_hash": "2c849572d22d0113531ecbf56690c3fd",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794629774.5383172,
-    "seen": 1794629991.5619645,
-    "ast_hash": "7dffc8eaaf26a504a02ed2f82f2195be",
+    "mtime": 1794630605.3869028,
+    "seen": 1794630612.5222678,
+    "ast_hash": "f6342eba4f1c6e06ce5f00453c53b245",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1974,9 +1974,9 @@
     "semantic_hash": ""
   },
   "modules/core/CMakeLists.txt": {
-    "mtime": 1794446927.6535068,
-    "seen": 1794532264.6010518,
-    "ast_hash": "88e8fc7104f2eb2cda1f06f7ec76b3e2",
+    "mtime": 1794630062.2005079,
+    "seen": 1794630612.5222702,
+    "ast_hash": "5f749e541d903d1f952dfca6b6fc9a6e",
     "semantic_hash": ""
   },
   "modules/doc/CMakeLists.txt": {
@@ -2340,9 +2340,9 @@
     "semantic_hash": ""
   },
   "tests/api/test_incremental_replay.py": {
-    "mtime": 1794621173.9772508,
-    "seen": 1794622773.8170278,
-    "ast_hash": "8e173a22bdeb7d50aebdb87f52b22181",
+    "mtime": 1794630074.8795373,
+    "seen": 1794630612.5220263,
+    "ast_hash": "9d02dd184a10988f10e92a45d1579791",
     "semantic_hash": ""
   },
   "tests/live/midpoint_line_check.py": {

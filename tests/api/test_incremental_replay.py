@@ -81,4 +81,7 @@ tsr.undo()
 tsr.edit_feature(fid("Cylinder1"), height=2.5)
 r = tsr.last_replay()
 assert r[0] == 4, r
+# Compute All replays everything, reusing nothing.
+tsr.compute_all()
+assert tsr.last_replay()[0] == 0, tsr.last_replay()
 print("incremental replay: OK")

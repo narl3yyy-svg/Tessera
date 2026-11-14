@@ -231,9 +231,37 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
       updateDragArrow();
     }
   });
+  // Playback, as the familiar timeline: to the start, a step back, a step
+  // forward, to the end (they move the history marker).
+  auto* timelineBox = new QWidget;
+  auto* timelineRow = new QHBoxLayout(timelineBox);
+  timelineRow->setContentsMargins(0, 0, 0, 0);
+  timelineRow->setSpacing(1);
+  const std::pair<const char*, const char*> steps[] = {{"timeline.start", "\u23EE"}, {"timeline.back", "\u23F4"},
+                                                       {"timeline.forward", "\u23F5"}, {"timeline.end", "\u23ED"}};
+  const char* tips[] = {QT_TR_NOOP("Go to the start"), QT_TR_NOOP("Step back"), QT_TR_NOOP("Step forward"),
+                        QT_TR_NOOP("Go to the end")};
+  for (int i = 0; i < 4; ++i) {
+    auto* b = new QToolButton;
+    b->setObjectName(QString::fromLatin1(steps[i].first));
+    b->setText(QString::fromUtf8(steps[i].second));
+    b->setToolTip(tr(tips[i]));
+    b->setAutoRaise(true);
+    b->setFixedSize(24, 40);
+    connect(b, &QToolButton::clicked, this, [this, i] {
+      if (editor_ || active_) return;
+      const int total = static_cast<int>(session_.document().features().size());
+      const int now = session_.document().historyMarker();
+      const int to = i == 0 ? 0 : i == 1 ? std::max(0, now - 1) : i == 2 ? std::min(total, now + 1) : total;
+      if (to == now) return;
+      if (auto err = session_.rollHistory(to); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+    });
+    timelineRow->addWidget(b);
+  }
+  timelineRow->addWidget(timeline_, 1);
   auto* timelineDock = new QDockWidget(tr("TIMELINE"));
   timelineDock->setObjectName(QStringLiteral("timelineDock"));
-  timelineDock->setWidget(timeline_);
+  timelineDock->setWidget(timelineBox);
   timelineDock->setFeatures(QDockWidget::DockWidgetMovable);
   addDockWidget(Qt::BottomDockWidgetArea, timelineDock);
 

@@ -65,3 +65,19 @@ TEST(zip_rejects_bad_names) {
   CHECK_THROWS(zip::write(tmp("tsr_zip_bad.zip"), {{"/abs", "x"}}));
   CHECK_THROWS(zip::write(tmp("tsr_zip_bad.zip"), {{"", "x"}}));
 }
+
+TEST(zip_deflates_when_smaller) {
+  // A long, repetitive member (as an OCAF document is) is stored deflated:
+  // the file is far smaller than its data and reads back exactly.
+  std::string text;
+  for (int i = 0; i < 20000; ++i) text += "<Attribute id=\"" + std::to_string(i % 37) + "\"/>\n";
+  const std::vector<zip::Entry> in = {{"document/ocaf.xbf", text}, {"tiny", "ab"}};
+  const auto p = tmp("tsr_zip_deflate.zip");
+  zip::write(p, in);
+  CHECK(fs::file_size(p) < text.size() / 5);
+  const auto out = zip::read(p);
+  CHECK_EQ(out.size(), in.size());
+  CHECK(out[0].data == text);
+  CHECK(out[1].data == "ab");
+  fs::remove(p);
+}

@@ -218,6 +218,20 @@ std::string Session::setTimeline(const std::vector<int>& order, int marker) {
   return err;
 }
 
+std::string Session::computeAll() {
+  if (doc_->hasOpenTransaction()) return "finish the current command first";
+  doc_->openTransaction("Compute All");
+  try {
+    doc_->recompute(commands_, true);   // once, nothing reused
+  } catch (const std::exception& e) {
+    doc_->abortTransaction();
+    return e.what();
+  }
+  doc_->commitTransaction();
+  notifyChanged();
+  return {};
+}
+
 std::string Session::rollHistory(int marker) {
   std::vector<int> order;
   for (const auto& f : doc_->features()) order.push_back(f.id);

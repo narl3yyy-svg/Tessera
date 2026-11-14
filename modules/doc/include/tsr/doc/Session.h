@@ -43,6 +43,8 @@ public:
   // are replayed). Refused if a feature would break. rollHistory keeps the order.
   std::string setTimeline(const std::vector<int>& order, int marker);
   std::string rollHistory(int marker);
+  // Compute All: replays every feature from the start (nothing reused).
+  std::string computeAll();
   // Renames (one undo step each); empty on success, else why not.
   std::string renameBody(const std::string& name, const std::string& newName);
   // Appearance / Physical Material of bodies: one undo step each call.

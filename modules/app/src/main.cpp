@@ -501,6 +501,16 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   w.sectionPanel()->accept();
   QApplication::processEvents();
   if (w.sectionPanel() || w.viewport()->dragArrowActive()) return fail("section panel close");
+  // Timeline playback: to the start rolls everything back, to the end replays.
+  if (!s.document().features().empty()) {
+    auto* start = w.findChild<QToolButton*>(QStringLiteral("timeline.start"));
+    auto* end = w.findChild<QToolButton*>(QStringLiteral("timeline.end"));
+    if (!start || !end) return fail("timeline playback buttons");
+    start->click();
+    if (s.document().historyMarker() != 0) return fail("timeline start");
+    end->click();
+    if (s.document().historyMarker() != static_cast<int>(s.document().features().size())) return fail("timeline end");
+  }
   // Display > Environment: a preset applies and is remembered.
   if (auto* env = w.findChild<QAction*>(QStringLiteral("environment2"))) {
     env->trigger();

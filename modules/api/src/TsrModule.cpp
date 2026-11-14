@@ -122,6 +122,9 @@ void bindTsr(py::module_& m) {
     return out;
   }, "The design history (timeline), oldest first.");
 
+  m.def("compute_all", [] {
+    if (auto err = activeSession().computeAll(); !err.empty()) throw std::runtime_error(err);
+  }, "Compute All: replay every feature from the start.");
   m.def("last_replay", [] { return activeSession().document().lastReplay(); },
         "The last recompute: (features restored from memory, features replayed).");
   m.def("edit_feature", [](int id, const py::kwargs& kwargs) {

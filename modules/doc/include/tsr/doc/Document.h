@@ -264,7 +264,7 @@ public:
   // left behind is restored from memory. Anything else a replay reads (user
   // and model parameters, units, body names, feature names) differing makes
   // it replay everything. TSR_FULL_REPLAY=1 in the environment turns reuse off.
-  void recompute(const CommandRegistry& registry);
+  void recompute(const CommandRegistry& registry, bool full = false);
   // The last recompute: features restored from memory and features replayed.
   std::pair<int, int> lastReplay() const { return {lastReused_, lastReplayed_}; }
 

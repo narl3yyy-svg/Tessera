@@ -1416,7 +1416,7 @@ void Document::restoreStep(const ReplayStep& s) {
   for (const auto& c : s.components) setComponent(c);
 }
 
-void Document::recompute(const CommandRegistry& registry) {
+void Document::recompute(const CommandRegistry& registry, bool fullReplay) {
   requireTransaction("recompute");
   for (int tag : {kBodiesTag, kSketchesTag, kPlanesTag, kAxesTag, kPointsTag, kComponentsTag})
     for (TDF_ChildIterator it(doc_->Main().FindChild(tag, false)); it.More(); it.Next())
@@ -1441,7 +1441,7 @@ void Document::recompute(const CommandRegistry& registry) {
   const std::string context = replayContext();
   size_t reuse = 0;
   const char* full = std::getenv("TSR_FULL_REPLAY");
-  if (context == replayContext_ && !(full && *full && *full != '0')) {
+  if (!fullReplay && context == replayContext_ && !(full && *full && *full != '0')) {
     const std::vector<ModelParameter> none;
     const auto users = userParameters();
     const auto values = featureValueParameters();

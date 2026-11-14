@@ -5,6 +5,8 @@
 #include <iterator>
 #include <limits>
 
+#include <zlib.h>
+
 namespace tsr::zip {
 
 namespace {
@@ -40,6 +42,39 @@ std::uint16_t get16(const std::string& b, std::size_t off) {
   return static_cast<std::uint16_t>(static_cast<unsigned char>(b[off]) |
                                     (static_cast<unsigned char>(b[off + 1]) << 8));
 }
+// Raw deflate (ZIP method 8); empty if it would not be smaller.
+std::string deflateRaw(const std::string& in) {
+  if (in.size() < 64) return {};
+  z_stream zs{};
+  if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 9, Z_DEFAULT_STRATEGY) != Z_OK) return {};
+  std::string out(deflateBound(&zs, static_cast<uLong>(in.size())), '\0');
+  zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(in.data()));
+  zs.avail_in = static_cast<uInt>(in.size());
+  zs.next_out = reinterpret_cast<Bytef*>(out.data());
+  zs.avail_out = static_cast<uInt>(out.size());
+  const int r = deflate(&zs, Z_FINISH);
+  const std::size_t n = zs.total_out;
+  deflateEnd(&zs);
+  if (r != Z_STREAM_END || n >= in.size()) return {};
+  out.resize(n);
+  return out;
+}
+
+std::string inflateRaw(const std::string& in, std::size_t size, const std::string& name) {
+  std::string out(size, '\0');
+  z_stream zs{};
+  if (inflateInit2(&zs, -MAX_WBITS) != Z_OK) throw ZipError(name + ": cannot decompress");
+  zs.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(in.data()));
+  zs.avail_in = static_cast<uInt>(in.size());
+  zs.next_out = reinterpret_cast<Bytef*>(out.data());
+  zs.avail_out = static_cast<uInt>(out.size());
+  const int r = inflate(&zs, Z_FINISH);
+  const std::size_t n = zs.total_out;
+  inflateEnd(&zs);
+  if (r != Z_STREAM_END || n != size) throw ZipError(name + ": corrupt compressed data");
+  return out;
+}
+
 std::uint32_t get32(const std::string& b, std::size_t off) {
   if (off + 4 > b.size()) throw ZipError("truncated archive");
   std::uint32_t v = 0;
@@ -68,16 +103,22 @@ void write(const std::filesystem::path& path, const std::vector<Entry>& entries)
     const auto size = static_cast<std::uint32_t>(e.data.size());
     const auto offset = static_cast<std::uint32_t>(out.size());
     const auto nameLen = static_cast<std::uint16_t>(e.name.size());
+    // Deflated when that is smaller (STORED otherwise).
+    const std::string packed = deflateRaw(e.data);
+    const bool deflated = !packed.empty();
+    const std::string& body = deflated ? packed : e.data;
+    const auto csize = static_cast<std::uint32_t>(body.size());
+    const std::uint16_t method = deflated ? 8 : 0;
 
-    put32(out, kLocalSig); put16(out, 20); put16(out, kFlagUtf8); put16(out, 0);
+    put32(out, kLocalSig); put16(out, 20); put16(out, kFlagUtf8); put16(out, method);
     put16(out, kDosTime); put16(out, kDosDate);
-    put32(out, crc); put32(out, size); put32(out, size);
+    put32(out, crc); put32(out, csize); put32(out, size);
     put16(out, nameLen); put16(out, 0);
-    out += e.name; out += e.data;
+    out += e.name; out += body;
 
     put32(central, kCentralSig); put16(central, 20); put16(central, 20);
-    put16(central, kFlagUtf8); put16(central, 0); put16(central, kDosTime); put16(central, kDosDate);
-    put32(central, crc); put32(central, size); put32(central, size);
+    put16(central, kFlagUtf8); put16(central, method); put16(central, kDosTime); put16(central, kDosDate);
+    put32(central, crc); put32(central, csize); put32(central, size);
     put16(central, nameLen); put16(central, 0); put16(central, 0);
     put16(central, 0); put16(central, 0); put32(central, 0); put32(central, offset);
     central += e.name;
@@ -134,12 +175,13 @@ std::vector<Entry> read(const std::filesystem::path& path) {
     p += 46u + nlen + xlen + clen;
 
     if (flags & 0x0001) throw ZipError(e.name + ": encrypted members not supported");
-    if (method != 0) throw ZipError(e.name + ": compression method " + std::to_string(method) + " not supported");
-    if (csize != usize) throw ZipError(e.name + ": size mismatch");
+    if (method != 0 && method != 8)
+      throw ZipError(e.name + ": compression method " + std::to_string(method) + " not supported");
+    if (method == 0 && csize != usize) throw ZipError(e.name + ": size mismatch");
     if (get32(b, local) != kLocalSig) throw ZipError(e.name + ": bad local header");
     const std::size_t data = local + 30u + get16(b, local + 26) + get16(b, local + 28);
     if (data + csize > b.size()) throw ZipError(e.name + ": truncated data");
-    e.data = b.substr(data, csize);
+    e.data = method == 8 ? inflateRaw(b.substr(data, csize), usize, e.name) : b.substr(data, csize);
     if (crc32(e.data.data(), e.data.size()) != crc) throw ZipError(e.name + ": CRC mismatch");
     entries.push_back(std::move(e));
   }

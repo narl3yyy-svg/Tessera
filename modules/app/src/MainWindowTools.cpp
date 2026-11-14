@@ -84,6 +84,10 @@ void MainWindow::buildUiCommands() {
       [this] { editAppearance(); });
   add("Modify", "ui.physicalMaterial", "Physical Material", "material",
       "Gives the selected bodies (or every body) a material: its density gives their mass.", "", [this] { editMaterial(); });
+  add("Modify", "ui.computeAll", "Compute All", "compute", "Rebuilds every feature from the start.", "Ctrl+B", [this] {
+    if (auto err = session_.computeAll(); !err.empty()) statusBar()->showMessage(qs(err), 5000);
+    else statusBar()->showMessage(tr("Computed all features."), 3000);
+  });
   add("Modify", "ui.changeParameters", "Change Parameters", "parameters",
       "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
       [this] { showParameters(); });
