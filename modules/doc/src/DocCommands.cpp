@@ -457,7 +457,7 @@ std::vector<TopoDS_Wire> openChains(const sketch::Sketch& sk, const gp_Ax3& fram
   Handle(TopTools_HSequenceOfShape) edges = new TopTools_HSequenceOfShape;
   for (int i = 0; i < static_cast<int>(sk.entities.size()); ++i) {
     const auto& e = sk.entities[i];
-    if (e.construction || e.type == sketch::EntityType::Circle) continue;
+    if (e.construction || e.included || e.type == sketch::EntityType::Circle) continue;
     if (e.type == sketch::EntityType::Spline && e.fit.size() > 2 && e.fit.front() == e.fit.back()) continue;
     const TopoDS_Shape c = sketch::curve(sk, frame, i);
     if (!c.IsNull()) edges->Append(c);
@@ -2544,6 +2544,75 @@ private:
   CommandDef def_;
 };
 
+// Rib and Web: thin supports grown from a sketch's open curves to the body.
+class RibWeb final : public Command {
+public:
+  explicit RibWeb(bool web) : web_(web) {
+    if (web)
+      commonDef(def_, kCmdWeb, "Web", "Walls standing on a sketch's open curves, up to the body (or a depth).", "web", "Create");
+    else
+      commonDef(def_, kCmdRib, "Rib", "A thin support in the sketch plane, from an open curve out to the body.", "rib", "Create");
+    def_.inputs = {
+        {.id = "sketch", .label = "Sketch", .tooltip = "Its open curves are used. Empty: the most recent sketch.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+        bodyInput(),
+        {.id = "thickness", .label = "Thickness", .tooltip = web ? "Across the curves." : "Across the sketch plane (half each side).",
+         .type = InputType::Real, .defaultValue = 0.2, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true},
+    };
+    if (web) def_.inputs.push_back(choice("location", "Thickness Location", {"Center", "Side 1", "Side 2"},
+                                          "Which side of the curves the wall lies on."));
+    def_.inputs.push_back(choice("extent", "Depth", {"To Next", "Distance"}, "To Next: until the walls meet the body."));
+    def_.inputs.push_back({.id = "depth", .label = "Distance", .tooltip = {}, .type = InputType::Real, .defaultValue = 1.0,
+                           .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true, .visibleWhen = "extent=Distance"});
+    def_.inputs.push_back(choice("flip", "Flip Direction", {"No", "Yes"}, "Yes: grow the other way."));
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (!sketchFor(docOf(ctx), getString(in, "sketch"))) return "Sketch: draw the curves first";
+    return checkBody(in, docOf(ctx));
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "sketch").empty())
+      if (const auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+    defaultBody(in, doc);
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = sketchFor(doc, getString(in, "sketch"));
+    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+    const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
+    std::vector<TopoDS_Shape> wires;
+    try {
+      for (const auto& w : openChains(sketch::Sketch::fromJson(rec->data), frame)) wires.push_back(w);
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(e.what());
+    }
+    if (wires.empty()) throw CommandError("Sketch: " + rec->name + " has no open curves");
+    const std::string name = bodyName(in, doc);
+    const gp_Dir n = frame.Direction();
+    const double depth = getString(in, "extent") == "Distance" ? getReal(in, "depth") : 0.0;
+    const bool flip = getString(in, "flip") == "Yes";
+    try {
+      const TopoDS_Shape shape = doc.body(name)->shape;
+      if (web_) {
+        const std::string loc = getString(in, "location");
+        const auto side = loc == "Side 1" ? kernel::WallSide::Side1 : loc == "Side 2" ? kernel::WallSide::Side2
+                                                                                      : kernel::WallSide::Center;
+        doc.replaceBody(name, kernel::web(shape, wires, {n.X(), n.Y(), n.Z()}, side, getReal(in, "thickness"), depth, flip));
+      } else {
+        doc.replaceBody(name, kernel::rib(shape, wires, {n.X(), n.Y(), n.Z()}, getReal(in, "thickness"), depth, flip));
+      }
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  bool web_;
+  CommandDef def_;
+};
+
 class Coil final : public Command {
 public:
   Coil() {
@@ -3205,6 +3274,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Delete));
   registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Split));
   registry.add(std::make_unique<Thicken>());
+  registry.add(std::make_unique<RibWeb>(false));
+  registry.add(std::make_unique<RibWeb>(true));
 }
 
 } // namespace tsr::doc

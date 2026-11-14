@@ -49,6 +49,9 @@
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepOffset_MakeOffset.hxx>
+#include <BRep_Builder.hxx>
+#include <TopoDS_Compound.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepAlgoAPI_Defeaturing.hxx>
 #include <BRepAlgoAPI_Section.hxx>
@@ -1169,6 +1172,160 @@ TopoDS_Shape openWallBand(const TopoDS_Shape& wireShape, Vec3 nv, WallSide side,
   });
   if (band.IsNull() || !isValid(band)) throw KernelError("Thin Extrude: could not make a wall along these curves");
   return band;
+}
+
+namespace {
+
+// A wire's free ends run on straight by `length` (lines and the tangent of
+// curves), so a wall drawn short of a face still reaches it.
+TopoDS_Wire extendedWire(const TopoDS_Wire& w, double length) {
+  TopoDS_Vertex v1, v2;
+  TopExp::Vertices(w, v1, v2);
+  if (v1.IsNull() || v2.IsNull() || BRep_Tool::Pnt(v1).Distance(BRep_Tool::Pnt(v2)) < 1e-9) return w;   // closed
+  auto outward = [&](const TopoDS_Vertex& v, gp_Pnt& p, gp_Vec& d) {
+    for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next()) {
+      const TopoDS_Edge e = TopoDS::Edge(x.Current());
+      TopoDS_Vertex a, b;
+      TopExp::Vertices(e, a, b);
+      if (!a.IsSame(v) && !b.IsSame(v)) continue;
+      BRepAdaptor_Curve c(e);
+      const double t = BRep_Tool::Parameter(v, e);
+      c.D1(t, p, d);
+      if (d.Magnitude() < 1e-12) return false;
+      d.Normalize();
+      if (std::abs(t - c.FirstParameter()) < std::abs(t - c.LastParameter())) d.Reverse();   // away from the edge
+      return true;
+    }
+    return false;
+  };
+  gp_Pnt p1, p2;
+  gp_Vec d1, d2;
+  if (!outward(v1, p1, d1) || !outward(v2, p2, d2)) return w;
+  // One straight edge: one longer edge (three collinear edges leave the
+  // plane of an offset undefined).
+  int count = 0;
+  TopoDS_Edge only;
+  for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next(), ++count) only = TopoDS::Edge(x.Current());
+  if (count == 1 && BRepAdaptor_Curve(only).GetType() == GeomAbs_Line)
+    return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(p1.Translated(d1 * length), p2.Translated(d2 * length)).Edge()).Wire();
+  BRepBuilderAPI_MakeWire mw;
+  mw.Add(BRepBuilderAPI_MakeEdge(p1.Translated(d1 * length), p1).Edge());
+  mw.Add(w);
+  mw.Add(BRepBuilderAPI_MakeEdge(p2, p2.Translated(d2 * length)).Edge());
+  return mw.IsDone() ? mw.Wire() : w;
+}
+
+double reachOf(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& wires) {
+  Bnd_Box b;
+  BRepBndLib::Add(body, b);
+  for (const auto& w : wires) BRepBndLib::Add(w, b);
+  if (b.IsVoid()) return 100;
+  return 2 * std::sqrt(b.SquareExtent()) + 1;
+}
+
+// The pieces of `tool` outside `body` that hold `probe`, joined to body.
+TopoDS_Shape joinReaching(const TopoDS_Shape& body, const TopoDS_Shape& tool, const std::vector<gp_Pnt>& probes,
+                          const char* what) {
+  BRepAlgoAPI_Cut cut(tool, body);
+  if (!cut.IsDone()) throw KernelError(std::string(what) + ": could not fit the walls to the body");
+  TopTools_ListOfShape keep;
+  for (TopExp_Explorer x(cut.Shape(), TopAbs_SOLID); x.More(); x.Next()) {
+    bool hit = false;
+    for (const auto& p : probes) {
+      BRepClass3d_SolidClassifier cls(x.Current(), p, 1e-6);
+      hit = hit || cls.State() == TopAbs_IN || cls.State() == TopAbs_ON;
+    }
+    if (hit) keep.Append(x.Current());
+  }
+  if (keep.IsEmpty()) throw KernelError(std::string(what) + ": the curves do not lead to the body (draw them inside it)");
+  TopTools_ListOfShape args;
+  args.Append(body);
+  BRepAlgoAPI_Fuse fuse;
+  fuse.SetArguments(args);
+  fuse.SetTools(keep);
+  fuse.Build();
+  if (!fuse.IsDone()) throw KernelError(std::string(what) + ": could not join the walls to the body");
+  ShapeUpgrade_UnifySameDomain unify(fuse.Shape(), true, true, false);
+  unify.Build();
+  return unify.Shape();
+}
+
+// Points along the middle of each original curve (before extending).
+std::vector<gp_Pnt> curveMiddles(const std::vector<TopoDS_Shape>& wires) {
+  std::vector<gp_Pnt> out;
+  for (const auto& w : wires)
+    for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next()) {
+      BRepAdaptor_Curve c(TopoDS::Edge(x.Current()));
+      out.push_back(c.Value((c.FirstParameter() + c.LastParameter()) / 2));
+    }
+  return out;
+}
+
+} // namespace
+
+TopoDS_Shape web(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& wires, Vec3 nv, WallSide side,
+                 double thickness, double depth, bool flip) {
+  requirePositive(thickness, "web thickness");
+  if (wires.empty()) throw KernelError("Web: the sketch has no open curves");
+  const double reach = reachOf(body, wires);
+  gp_Dir n(nv.x, nv.y, nv.z);
+  if (flip) n.Reverse();
+  const double up = depth > 0 ? depth : reach;
+  TopoDS_Compound walls;
+  BRep_Builder bb;
+  bb.MakeCompound(walls);
+  for (const auto& w : wires) {
+    const TopoDS_Shape band = openWallBand(extendedWire(TopoDS::Wire(w), reach), nv, side, thickness);
+    bb.Add(walls, BRepPrimAPI_MakePrism(band, gp_Vec(n) * up).Shape());
+  }
+  // Probes: just above each curve's middle, across the wall's middle.
+  const gp_Dir nUp(nv.x, nv.y, nv.z);
+  std::vector<gp_Pnt> probes;
+  for (const auto& w : wires) {
+    for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next()) {
+      BRepAdaptor_Curve c(TopoDS::Edge(x.Current()));
+      gp_Pnt p;
+      gp_Vec d;
+      c.D1((c.FirstParameter() + c.LastParameter()) / 2, p, d);
+      if (d.Magnitude() < 1e-12) continue;
+      // Side 1 is left of the direction (n up): across = n x d.
+      gp_Vec across = gp_Vec(nUp).Crossed(d).Normalized();
+      const double off = side == WallSide::Side1 ? thickness / 2 : side == WallSide::Side2 ? -thickness / 2 : 0;
+      probes.push_back(p.Translated(across * off + gp_Vec(n) * std::min(up / 2, thickness / 4 + 1e-4)));
+    }
+  }
+  return joinReaching(body, walls, probes, "Web");
+}
+
+TopoDS_Shape rib(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& wires, Vec3 nv, double thickness,
+                 double depth, bool flip) {
+  requirePositive(thickness, "rib thickness");
+  if (wires.empty()) throw KernelError("Rib: the sketch has no open curves");
+  const double reach = reachOf(body, wires);
+  const gp_Dir n(nv.x, nv.y, nv.z);
+  TopoDS_Compound slabs;
+  BRep_Builder bb;
+  bb.MakeCompound(slabs);
+  std::vector<gp_Pnt> probes;
+  for (const auto& wShape : wires) {
+    const TopoDS_Wire w = TopoDS::Wire(wShape);
+    TopoDS_Vertex v1, v2;
+    TopExp::Vertices(w, v1, v2);
+    const gp_Vec chord(BRep_Tool::Pnt(v1), BRep_Tool::Pnt(v2));
+    if (chord.Magnitude() < 1e-9) throw KernelError("Rib: draw an open curve (its ends apart)");
+    // In the plane, away from the curve: left of its direction (right with flip).
+    gp_Vec grow = gp_Vec(n).Crossed(chord).Normalized();
+    if (flip) grow.Reverse();
+    const double along = depth > 0 ? depth : reach;
+    const TopoDS_Shape sheet = BRepPrimAPI_MakePrism(extendedWire(w, reach), grow * along).Shape();
+    TopoDS_Shape slab = BRepPrimAPI_MakePrism(sheet, gp_Vec(n) * thickness).Shape();
+    gp_Trsf down;
+    down.SetTranslation(gp_Vec(n) * (-thickness / 2));
+    slab = BRepBuilderAPI_Transform(slab, down, true).Shape();
+    bb.Add(slabs, slab);
+    for (const auto& p : curveMiddles({wShape})) probes.push_back(p.Translated(grow * std::min(along / 2, 1e-3)));
+  }
+  return joinReaching(body, slabs, probes, "Rib");
 }
 
 TopoDS_Shape extrudeEx(const std::vector<TopoDS_Shape>& faces, Vec3 dir, double forward, double back, double taper,

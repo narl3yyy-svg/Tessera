@@ -98,6 +98,19 @@ std::vector<TopoDS_Shape> wallBand(const TopoDS_Shape& face, WallSide side, doub
 // The same for an open chain of curves in a plane with normal n: Side 1 is
 // to the left of the curve's direction (n up), Side 2 to the right.
 TopoDS_Shape openWallBand(const TopoDS_Shape& wire, Vec3 n, WallSide side, double thickness);
+// Rib / Web: thin walls grown from open curves (wires in a plane with
+// normal n) until they meet `body`, joined to it. The curves' free ends run
+// on straight until they meet the body too.
+//   Web: the walls stand on the curves (thickness across them, `side` as
+//   Thin Extrude) and rise along n (-n when `flip`) by `depth`, or to the
+//   body when depth <= 0.
+//   Rib: the wall is `thickness` thick across the sketch plane (half each
+//   side) and grows in the plane, away from the curves to the left of the
+//   first curve's direction (right when `flip`), by `depth` or to the body.
+TopoDS_Shape web(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& wires, Vec3 n, WallSide side,
+                 double thickness, double depth, bool flip);
+TopoDS_Shape rib(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& wires, Vec3 n, double thickness,
+                 double depth, bool flip);
 TopoDS_Shape chamferEx(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, ChamferType type,
                        double first, double second, bool flip);
 
