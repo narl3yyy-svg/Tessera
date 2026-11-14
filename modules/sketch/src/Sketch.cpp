@@ -151,6 +151,12 @@ int Sketch::addEllipse(int center, int axisEnd, double otherRadius, bool constru
   return static_cast<int>(entities.size()) - 1;
 }
 
+int Sketch::addEllipticalArc(int center, int axisEnd, double otherRadius, int start, int end, bool construction) {
+  const int id = addEllipse(center, axisEnd, otherRadius, construction);
+  entities[id].fit = {start, end};
+  return id;
+}
+
 int Sketch::addText(int point, const std::string& text, double height, double angle, const std::string& font) {
   Text t;
   t.point = point;
@@ -174,7 +180,11 @@ std::vector<int> Sketch::entityPoints(int id) const {
     case EntityType::Circle: return {e.center};
     case EntityType::Arc: return {e.center, e.a, e.b};
     case EntityType::Spline: return e.fit;
-    case EntityType::Ellipse: return {e.center, e.a};
+    case EntityType::Ellipse: {
+      std::vector<int> v = {e.center, e.a};
+      v.insert(v.end(), e.fit.begin(), e.fit.end());
+      return v;
+    }
   }
   return {};
 }
@@ -290,8 +300,14 @@ void Sketch::checkIndices() const {
           throw SketchError("a conic needs a start, a vertex and an end, and rho between 0 and 1");
         for (int p : e.fit) pt(p, true);
         break;
-      case EntityType::Ellipse: pt(e.center, true); pt(e.a, true); break;
+      case EntityType::Ellipse:
+        pt(e.center, true);
+        pt(e.a, true);
+        if (!e.fit.empty() && e.fit.size() != 2) throw SketchError("an elliptical arc needs a start and an end");
+        for (int p : e.fit) pt(p, true);
+        break;
     }
+    if (!e.handles.empty() && e.handles.size() != e.fit.size()) throw SketchError("spline handles do not match its points");
   }
   for (const auto& c : constraints) {
     for (int p : c.points) pt(p, true);
@@ -303,14 +319,22 @@ void Sketch::checkIndices() const {
 std::string Sketch::toJson() const {
   nlohmann::json j;
   auto& pts = j["points"] = nlohmann::json::array();
-  for (const auto& p : points) pts.push_back({p.x, p.y});
+  for (const auto& p : points) {
+    if (p.z != 0) pts.push_back({p.x, p.y, p.z});
+    else pts.push_back({p.x, p.y});
+  }
   auto& ents = j["entities"] = nlohmann::json::array();
   for (const auto& e : entities) {
     nlohmann::json je;
     je["type"] = entityTypeName(e.type);
     if (e.projected) je["projected"] = true;
+    if (e.included) je["included"] = true;
     if (e.type == EntityType::Spline) {
       je["fit"] = e.fit;
+      if (!e.handles.empty()) {
+        auto& hs = je["handles"] = nlohmann::json::array();
+        for (const auto& h : e.handles) hs.push_back({h.x, h.y});
+      }
       if (e.kind == SplineKind::Control) je["kind"] = "control";
       if (e.kind == SplineKind::Conic) {
         je["kind"] = "conic";
@@ -325,6 +349,7 @@ std::string Sketch::toJson() const {
       je["c"] = e.center;
       je["r"] = e.radius;
     }
+    if (e.isEllipticalArc()) je["ends"] = e.fit;
     if (e.construction) je["construction"] = true;
     ents.push_back(je);
   }
@@ -372,9 +397,9 @@ Sketch Sketch::fromJson(const std::string& text) {
   if (!j.is_object()) throw SketchError("sketch data is not valid JSON");
   try {
     s.points.clear();
-    for (const auto& p : j.value("points", nlohmann::json::array())) s.points.push_back({p.at(0).get<double>(), p.at(1).get<double>()});
+    for (const auto& p : j.value("points", nlohmann::json::array())) s.points.push_back({p.at(0).get<double>(), p.at(1).get<double>(), p.size() > 2 ? p.at(2).get<double>() : 0.0});
     if (s.points.empty()) s.points.push_back({0, 0});
-    s.points[0] = {0, 0}; // the origin never moves
+    s.points[0] = {0, 0, 0}; // the origin never moves
     for (const auto& je : j.value("entities", nlohmann::json::array())) {
       Entity e;
       const std::string t = je.at("type").get<std::string>();
@@ -400,6 +425,10 @@ Sketch Sketch::fromJson(const std::string& text) {
       e.radius = je.value("r", je.value("rho", 0.0));
       e.construction = je.value("construction", false);
       e.projected = je.value("projected", false);
+      e.included = je.value("included", false);
+      if (e.type == EntityType::Ellipse && je.contains("ends")) e.fit = je["ends"].get<std::vector<int>>();
+      if (e.type == EntityType::Spline && je.contains("handles"))
+        for (const auto& h : je["handles"]) e.handles.push_back({h.at(0).get<double>(), h.at(1).get<double>()});
       s.entities.push_back(e);
     }
     for (const auto& jt : j.value("texts", nlohmann::json::array())) {

@@ -43,6 +43,7 @@ public:
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
     RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc, ControlSpline, Conic, TextOnPath,
+    Include3D,
   };
 
   // featureId < 0: a new sketch named `name`.
@@ -218,6 +219,21 @@ private:
   int projectSegment(const std::array<double, 4>& g);
   int projectArc(const std::array<double, 5>& g);
   void projectAt(const QPointF& widgetPos);
+  // Include 3D Geometry: the clicked body edge (or a face's edges) kept in 3D.
+  void includeAt(const QPointF& widgetPos);
+  // The visible body edge nearest the widget position (within 8 pixels), or null.
+  TopoDS_Edge bodyEdgeNear(const QPointF& widgetPos) const;
+  // Spline tangent handles: shown on selected fit point splines (or ones with
+  // a selected fit point); drag a handle's end to set it, double-click to
+  // free it.
+  struct HandleHit {
+    int spline = -1, index = -1;
+    bool back = false;   // the end behind the point
+  };
+  bool showsHandles(int spline) const;
+  HandleHit handleAt(double x, double y) const;
+  void moveHandle(const HandleHit& h, double x, double y);
+  HandleHit dragHandle_;
   void evaluateConstraintPicks();
   void applyToSelection(const std::vector<Hit>& selected);
   static bool isConstraintTool(Tool t);

@@ -6,7 +6,12 @@
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Io.h"
 #include "tsr/kernel/Kernel.h"
+#include "tsr/sketch/SketchGeometry.h"
 #include "tsr/sketch/SketchOps.h"
+
+#include <TopExp.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TopoDS.hxx>
 
 #include <TopoDS_Shape.hxx>
 
@@ -270,6 +275,48 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("entity"), py::arg("distance"),
      "Offset the chain through an entity (cm; closed chains: positive is outward); returns the new sketch JSON.");
+  m.def("sketch_trim", [](const std::string& data, int entity, double x, double y, bool breakOnly) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::trimCurve(s, entity, x, y, breakOnly); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("entity"), py::arg("x"), py::arg("y"), py::arg("break_only") = false,
+     "Trim (or Break) a spline, conic or ellipse at the point (x, y) (cm) up to the nearest crossings.");
+  m.def("sketch_crossings", [](const std::string& data, int entity) {
+    std::vector<std::pair<double, double>> out;
+    for (const auto& p : sketch::crossings(sketch::Sketch::fromJson(data), entity)) out.emplace_back(p.x, p.y);
+    return out;
+  }, py::arg("data"), py::arg("entity"), "Where other curves cross an entity (cm).");
+  m.def("sketch_spline_handle", [](const std::string& data, int spline, int index, double tx, double ty) {
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (auto err = sketch::setSplineHandle(s, spline, index, tx, ty); !err.empty()) throw std::runtime_error(err);
+    return s.toJson();
+  }, py::arg("data"), py::arg("spline"), py::arg("index"), py::arg("tx"), py::arg("ty"),
+     "Set a fit point spline's tangent handle (derivative; 1 = natural speed; (0, 0) frees it).");
+  m.def("sketch_spline_handles", [](const std::string& data, int spline) {
+    std::vector<py::tuple> out;
+    for (const auto& h : sketch::splineHandles(sketch::Sketch::fromJson(data), spline))
+      out.push_back(py::make_tuple(h.index, h.x, h.y, h.tx, h.ty, h.set));
+    return out;
+  }, py::arg("data"), py::arg("spline"), "Tangent handles: (index, x, y, tx, ty, set) per fit point.");
+  m.def("sketch_include", [](const std::string& data, const std::string& plane, const std::string& body,
+                             const std::vector<int>& edges, double offset) {
+    const auto b = activeSession().document().body(body);
+    if (!b) throw std::runtime_error("no body named '" + body + "'");
+    TopTools_IndexedMapOfShape map;
+    TopExp::MapShapes(b->shape, TopAbs_EDGE, map);
+    std::vector<TopoDS_Edge> picked;
+    if (edges.empty())
+      for (int i = 1; i <= map.Extent(); ++i) picked.push_back(TopoDS::Edge(map(i)));
+    for (int i : edges) {
+      if (i < 0 || i >= map.Extent()) throw std::runtime_error("the body has no edge " + std::to_string(i));
+      picked.push_back(TopoDS::Edge(map(i + 1)));
+    }
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (sketch::includeEdges(s, sketch::planeFrame(plane, offset), picked) == 0)
+      throw std::runtime_error("Include 3D Geometry: nothing to include");
+    return s.toJson();
+  }, py::arg("data"), py::arg("plane"), py::arg("body"), py::arg("edges") = std::vector<int>{}, py::arg("offset") = 0.0,
+     "Include 3D Geometry: a body's edges (all, or by index) in the sketch, as they are in space.");
 
   m.def("bounding_box", [](const std::string& name) {
     const auto b = activeSession().document().body(name);

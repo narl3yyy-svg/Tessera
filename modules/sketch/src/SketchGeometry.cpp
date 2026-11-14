@@ -12,6 +12,10 @@
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GC_MakeArcOfCircle.hxx>
+#include <GC_MakeArcOfEllipse.hxx>
+#include <TColStd_HArray1OfBoolean.hxx>
+#include <TColgp_Array1OfVec.hxx>
+#include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <GeomAPI_Interpolate.hxx>
 #include <NCollection_UtfIterator.hxx>
 #include <BRepAdaptor_Curve.hxx>
@@ -91,7 +95,11 @@ void toSketch(const gp_Ax3& f, const gp_Pnt& p, double& x, double& y) {
 
 TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
   const Entity& e = s.entities.at(id);
-  auto P = [&](int i) { return toWorld(f, s.points.at(i).x, s.points.at(i).y); };
+  // Included 3D geometry stands `z` above the plane.
+  auto P = [&](int i) {
+    const Point& q = s.points.at(i);
+    return toWorld(f, q.x, q.y).Translated(gp_Vec(f.Direction()) * q.z);
+  };
   try {
     switch (e.type) {
       case EntityType::Line: {
@@ -119,6 +127,12 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         gp_Dir major(gp_Vec(c, a));
         if (A < B) major = f.Direction().Crossed(major);
         const gp_Elips el(gp_Ax2(c, f.Direction(), major), std::max(A, B), std::min(A, B));
+        if (e.isEllipticalArc()) {
+          if (P(e.fit[0]).Distance(P(e.fit[1])) < 1e-7) return {};
+          GC_MakeArcOfEllipse arc(el, P(e.fit[0]), P(e.fit[1]), true);
+          if (!arc.IsDone()) return {};
+          return BRepBuilderAPI_MakeEdge(arc.Value()).Edge();
+        }
         return BRepBuilderAPI_MakeEdge(el).Edge();
       }
       case EntityType::Spline: {
@@ -155,19 +169,46 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
           }
           return BRepBuilderAPI_MakeEdge(Handle(Geom_BSplineCurve)(new Geom_BSplineCurve(poles, knots, mults, deg))).Edge();
         }
-        // Fit points, without repeats; a closed spline is periodic.
+        // Fit points, without repeats; a closed spline is periodic. Tangent
+        // handles that are set fix the derivative there (chord-length
+        // parameters, so length 1 is the natural speed).
         const bool closed = e.fit.size() > 2 && e.fit.front() == e.fit.back();
         std::vector<gp_Pnt> pts;
+        std::vector<gp_Vec> tans;
+        bool anyTangent = false;
         for (size_t i = 0; i < e.fit.size() - (closed ? 1 : 0); ++i) {
           const gp_Pnt p = P(e.fit[i]);
-          if (pts.empty() || pts.back().Distance(p) > 1e-7) pts.push_back(p);
+          gp_Vec t(0, 0, 0);
+          if (i < e.handles.size()) t = gp_Vec(f.XDirection()) * e.handles[i].x + gp_Vec(f.YDirection()) * e.handles[i].y;
+          if (pts.empty() || pts.back().Distance(p) > 1e-7) {
+            pts.push_back(p);
+            tans.push_back(t);
+            anyTangent = anyTangent || t.Magnitude() > 1e-9;
+          }
         }
-        if (closed && pts.size() > 1 && pts.back().Distance(pts.front()) < 1e-7) pts.pop_back();
+        if (closed && pts.size() > 1 && pts.back().Distance(pts.front()) < 1e-7) {
+          pts.pop_back();
+          tans.pop_back();
+        }
         if (pts.size() < 2) return {};
-        if (pts.size() == 2 && !closed) return BRepBuilderAPI_MakeEdge(pts[0], pts[1]).Edge();
+        if (pts.size() == 2 && !closed && !anyTangent) return BRepBuilderAPI_MakeEdge(pts[0], pts[1]).Edge();
         if (closed && pts.size() < 3) return {};
-        Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, static_cast<int>(pts.size()));
-        for (size_t i = 0; i < pts.size(); ++i) arr->SetValue(static_cast<int>(i) + 1, pts[i]);
+        const int n = static_cast<int>(pts.size());
+        Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, n);
+        for (int i = 0; i < n; ++i) arr->SetValue(i + 1, pts[i]);
+        if (anyTangent) {
+          TColgp_Array1OfVec tv(1, n);
+          Handle(TColStd_HArray1OfBoolean) flags = new TColStd_HArray1OfBoolean(1, n);
+          for (int i = 0; i < n; ++i) {
+            const bool set = tans[i].Magnitude() > 1e-9;
+            tv.SetValue(i + 1, set ? tans[i] : gp_Vec(1, 0, 0));
+            flags->SetValue(i + 1, set);
+          }
+          GeomAPI_Interpolate withTangents(arr, closed, 1e-7);
+          withTangents.Load(tv, flags, false);
+          withTangents.Perform();
+          if (withTangents.IsDone()) return BRepBuilderAPI_MakeEdge(withTangents.Curve()).Edge();
+        }
         GeomAPI_Interpolate interp(arr, closed, 1e-7);
         interp.Perform();
         if (!interp.IsDone()) return {};
@@ -180,12 +221,13 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
 }
 
 namespace {
-TopoDS_Shape entityCurves(const Sketch& s, const gp_Ax3& f, bool construction) {
+TopoDS_Shape entityCurves(const Sketch& s, const gp_Ax3& f, bool construction, bool planarOnly = false) {
   TopoDS_Compound c;
   BRep_Builder b;
   b.MakeCompound(c);
   for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
     if (s.entities[i].construction != construction) continue;
+    if (planarOnly && s.entities[i].included) continue;   // 3D reference geometry bounds no profile
     const TopoDS_Shape e = curve(s, f, i);
     if (!e.IsNull()) b.Add(c, e);
   }
@@ -326,7 +368,7 @@ std::vector<Profile> profiles(const Sketch& s, const gp_Ax3& f) {
       if (p.area > 1e-9 && interiorPoint(p.face, f, p.x, p.y)) out.push_back(p);
     }
   }
-  const TopoDS_Shape edges = entityCurves(s, f, false);
+  const TopoDS_Shape edges = entityCurves(s, f, false, true);
   if (!TopExp_Explorer(edges, TopAbs_EDGE).More()) {
     std::stable_sort(out.begin(), out.end(), [](const Profile& a, const Profile& b) { return a.area > b.area; });
     return out;
@@ -406,6 +448,61 @@ int profileAt(const std::vector<Profile>& ps, const gp_Ax3& f, double x, double 
     if (cls.State() == TopAbs_IN && (best < 0 || ps[i].area < ps[best].area)) best = i;
   }
   return best;
+}
+
+std::vector<SplineHandle> splineHandles(const Sketch& s, int entity) {
+  std::vector<SplineHandle> out;
+  if (entity < 0 || entity >= static_cast<int>(s.entities.size())) return out;
+  const Entity& e = s.entities[entity];
+  if (e.type != EntityType::Spline || e.kind != SplineKind::Fit) return out;
+  const gp_Ax3 xy(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0));
+  const TopoDS_Shape sh = curve(s, xy, entity);
+  if (sh.IsNull()) return out;
+  double t0 = 0, t1 = 0;
+  const Handle(Geom_Curve) gc = BRep_Tool::Curve(TopoDS::Edge(sh), t0, t1);
+  if (gc.IsNull()) return out;
+  const bool closed = e.fit.size() > 2 && e.fit.front() == e.fit.back();
+  const int n = static_cast<int>(e.fit.size()) - (closed ? 1 : 0);
+  for (int i = 0; i < n; ++i) {
+    SplineHandle h;
+    h.index = i;
+    const Point& q = s.points.at(e.fit[i]);
+    h.x = q.x;
+    h.y = q.y;
+    // Drawn a third of the shorter neighbouring chord long, as a Bezier handle.
+    double arm = 1e300;
+    for (int j : {i - 1, i + 1}) {
+      const int k = closed ? (j + n) % n : j;
+      if (k < 0 || k >= static_cast<int>(e.fit.size())) continue;
+      const Point& o = s.points.at(e.fit[k]);
+      const double d = std::hypot(o.x - q.x, o.y - q.y);
+      if (d > 1e-9) arm = std::min(arm, d / 3);
+    }
+    h.arm = arm < 1e299 ? arm : 1.0;
+    h.set = i < static_cast<int>(e.handles.size()) && std::hypot(e.handles[i].x, e.handles[i].y) > 1e-9;
+    if (h.set) {
+      h.tx = e.handles[i].x;
+      h.ty = e.handles[i].y;
+    } else {
+      // The direction the curve runs there.
+      try {
+        GeomAPI_ProjectPointOnCurve proj(gp_Pnt(q.x, q.y, 0), gc, t0, t1);
+        if (proj.NbPoints() > 0) {
+          gp_Pnt p;
+          gp_Vec d;
+          gc->D1(proj.LowerDistanceParameter(), p, d);
+          const double m = d.Magnitude();
+          if (m > 1e-12) {
+            h.tx = d.X() / m;
+            h.ty = d.Y() / m;
+          }
+        }
+      } catch (const Standard_Failure&) {
+      }
+    }
+    out.push_back(h);
+  }
+  return out;
 }
 
 } // namespace tsr::sketch

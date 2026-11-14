@@ -38,6 +38,27 @@ std::vector<ChainSegment> chainOf(const Sketch& s, int entity, bool* closed = nu
 // `created` receives the new entities.
 std::string offsetChain(Sketch& s, int entity, double distance, std::vector<int>* created = nullptr);
 
+// A parallel copy of a spline, conic or ellipse `distance` sideways (closed
+// curves: positive is outward; open ones: to the right of their direction),
+// as a fit point spline through points along it. offsetChain calls it for
+// those curves. Returns empty on success, else why not.
+std::string offsetCurve(Sketch& s, int entity, double distance, std::vector<int>* created = nullptr);
+
+// Where other curves cross `entity` (only `other`, if given), in sketch
+// coordinates, seen along the sketch normal.
+std::vector<Point> crossings(const Sketch& s, int entity, int other = -1);
+
+// Trim (or Break, keeping every piece) of a spline, conic or ellipse at the
+// point clicked, up to the nearest crossings either side. Ellipses become
+// elliptical arcs; spline pieces are fit point splines that keep the
+// original's points and its directions at the cuts. With nothing crossing,
+// Trim removes the curve. Returns empty on success, else why not.
+std::string trimCurve(Sketch& s, int entity, double x, double y, bool breakOnly = false);
+
+// Sets a fit point spline's tangent handle at fit point `index` (tx, ty: the
+// curve's derivative there, 1 = the natural speed; (0, 0) frees it).
+std::string setSplineHandle(Sketch& s, int spline, int index, double tx, double ty);
+
 // Bevels the corner where two lines meet: both lines are shortened by
 // `distance` and joined by a new line. Line length dimensions on the two are
 // dropped. Returns empty on success (lineOut: the new line), else why not.

@@ -12,7 +12,12 @@
 //   Spline  fit = points the curve passes through, in order (a = first,
 //           b = last; closed when first == last)
 //   Ellipse center, a = the end of one axis (its direction and half
-//           length), radius = the other half axis (b = -1)
+//           length), radius = the other half axis (b = -1); an elliptical
+//           arc also has fit = {start, end}, running counter-clockwise
+//
+// Included 3D geometry (Include 3D Geometry) keeps body edges as they are in
+// space: its points carry a height `z` above the sketch plane. It is fixed,
+// drawn like projected geometry and never part of a profile.
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -27,6 +32,7 @@ public:
 
 struct Point {
   double x = 0, y = 0;
+  double z = 0;   // height above the sketch plane (included 3D geometry only; the solver ignores it)
 };
 
 enum class EntityType { Line, Circle, Arc, Spline, Ellipse };
@@ -43,8 +49,15 @@ struct Entity {
   double radius = 0;      // circle, arc
   bool construction = false;
   bool projected = false;   // copied from a body edge (drawn purple, its points fixed)
-  std::vector<int> fit;   // spline fit points
+  bool included = false;    // Include 3D Geometry: a body edge kept in 3D (also `projected`)
+  std::vector<int> fit;   // spline fit points; an elliptical arc's start and end
   SplineKind kind = SplineKind::Fit;   // splines: what `fit` holds
+  // Fit point splines: a tangent handle per fit point (same order as `fit`).
+  // (0, 0) leaves the direction to the curve; otherwise the curve's
+  // derivative there, 1 being the natural speed (length 1 = unchanged
+  // fullness). Empty: no handles set.
+  std::vector<Point> handles;
+  bool isEllipticalArc() const { return type == EntityType::Ellipse && fit.size() == 2; }
 };
 
 enum class ConstraintType {
@@ -138,6 +151,8 @@ public:
   // rho in (0, 1): below 0.5 an ellipse's arc, 0.5 a parabola, above a hyperbola.
   int addConic(int start, int vertex, int end, double rho, bool construction = false);
   int addEllipse(int center, int axisEnd, double otherRadius, bool construction = false);
+  // An elliptical arc: the ellipse's part from `start` to `end`, counter-clockwise.
+  int addEllipticalArc(int center, int axisEnd, double otherRadius, int start, int end, bool construction = false);
   int addText(int point, const std::string& text, double height, double angle = 0, const std::string& font = {});
   int addConstraint(Constraint c);   // no solving; see SolveResult / addConstraintChecked
 

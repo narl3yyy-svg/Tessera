@@ -3,6 +3,7 @@
 // its profiles (the closed regions the curves enclose).
 #include "tsr/sketch/Sketch.h"
 
+#include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <gp_Ax3.hxx>
@@ -39,6 +40,27 @@ struct Profile {
 // such region (a circle inside a rectangle gives the ring and the disc).
 // Ordered by decreasing area.
 std::vector<Profile> profiles(const Sketch& s, const gp_Ax3& frame);
+
+// A fit point spline's tangent handles, one per fit point (a closed spline's
+// repeated end once): where it sits, its direction (tx, ty) as the curve's
+// derivative there (1 = the natural speed; a handle not set shows the
+// curve's own unit direction), and `arm`, how long a handle of length 1 is
+// drawn (cm). Empty for other curves.
+struct SplineHandle {
+  int index = 0;   // into the spline's fit points
+  double x = 0, y = 0;
+  double tx = 1, ty = 0;
+  double arm = 1;
+  bool set = false;
+};
+std::vector<SplineHandle> splineHandles(const Sketch& s, int entity);
+
+// Include 3D Geometry: body edges copied into the sketch as they are in
+// space (points keep their height above the plane), fixed and marked
+// projected + included. Lines and circles / arcs parallel to the plane stay
+// exact; other curves become fit point splines through points along them.
+// Returns how many curves were added.
+int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>& edges);
 
 // Index of the profile containing sketch point (x, y), or -1.
 int profileAt(const std::vector<Profile>& ps, const gp_Ax3& frame, double x, double y);

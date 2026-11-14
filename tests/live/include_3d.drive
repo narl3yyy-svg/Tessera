@@ -1,0 +1,22 @@
+# Live: SKETCH > Project / Include > Include 3D Geometry on XY under a box:
+# click the top face's left edge, then inside the top face. The edges come in
+# as they are in space (20 mm up), not flattened onto the sketch plane.
+waitfor tsr.sketch.create
+bdclick Origin
+wait 300
+brclick XY
+wait 400
+key Down
+key Return
+waitfor sketch.line
+wait 600
+vclick 0.05 0.95
+menu sketch.group-project sketch.include-3d
+wait 300
+wclick 0 15 20                # left edge of the top face
+wait 300
+wclick 20 15 20               # inside the top face
+wait 300
+shot /tmp/live_include_3d.png
+click palette.finish
+wait 800

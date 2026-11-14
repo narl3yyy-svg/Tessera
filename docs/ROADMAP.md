@@ -45,7 +45,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
 
-**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ · Midpoint Line · 3-Point Rectangle ✅ · 2-Point / 3-Point / Tangent circles ✅ · 3-Point / Tangent arcs ✅ · Ellipse ✅ · Spline ✅ (fit point, control point) · Conic ✅ · Text ✅ (point, box, path) · Mirror ✅ · Circular/Rectangular Pattern ✅ · Project ✅ / Intersect ✅ / Include · Fillet ✅ · Chamfer ✅ · Offset ✅ · Extend ✅ · Break ✅ · Sketch Scale ✅ · Move/Copy ✅
+**Sketch**: Line ✅ · Rectangle ✅ · Circle ✅ · Arc ✅ · Point ✅ · Construction ✅ · Dimension ✅ · on-canvas size boxes (Tab / Enter) ✅ · Center Rectangle ✅ · Polygon ✅ · Slot ✅ · Trim ✅ (lines, arcs, circles, ellipses, splines, conics) · Midpoint Line · 3-Point Rectangle ✅ · 2-Point / 3-Point / Tangent circles ✅ · 3-Point / Tangent arcs ✅ · Ellipse ✅ · Spline ✅ (fit point, control point, tangent handles) · Conic ✅ · Text ✅ (point, box, path) · Mirror ✅ · Circular/Rectangular Pattern ✅ · Project ✅ / Intersect ✅ / Include 3D Geometry ✅ · Project to Surface · 3D Sketch · Fillet ✅ · Chamfer ✅ · Offset ✅ (chains, ellipses, splines) · Extend ✅ (lines) · Break ✅ · Sketch Scale ✅ · Move/Copy ✅
 
 **Sketch constraints**: Horizontal/Vertical ✅ · Coincident ✅ · Tangent ✅ · Equal ✅ · Parallel ✅ · Perpendicular ✅ · Fix ✅ · Midpoint ✅ · Concentric ✅ · Collinear ✅ · Symmetry ✅ · Curvature · Polygon; Sketch Palette ✅ (feature options, linetype, Look At, grid, snap, slice, show profiles/points/dimensions/constraints/construction)
 

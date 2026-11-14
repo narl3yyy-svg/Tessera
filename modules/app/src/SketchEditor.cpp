@@ -211,9 +211,10 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Arc: emit message(tr("Arc: click the centre, the start, then the end (counter-clockwise).")); break;
     case Tool::Point: emit message(tr("Point: click to place points.")); break;
     case Tool::Project: emit message(tr("Project: click body edges to copy them into the sketch, or inside a face for all its edges.")); break;
+    case Tool::Include3D: emit message(tr("Include 3D Geometry: click body edges to bring them in as they are in space, or inside a face for all its edges.")); break;
     case Tool::Spline: emit message(tr("Spline: click the points the curve passes through; Enter, double-click or Esc finishes, clicking the first point closes it.")); break;
     case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
-    case Tool::Offset: emit message(tr("Offset: click a curve; its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
+    case Tool::Offset: emit message(tr("Offset: click a curve (a spline or ellipse on its own); its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
     case Tool::Chamfer: emit message(tr("Chamfer: click a corner (or two lines), then type the distance and press Enter (or click).")); break;
     case Tool::Extend: emit message(tr("Extend: click a line near the end to lengthen it to the next curve.")); break;
     case Tool::Mirror:
@@ -584,10 +585,9 @@ void SketchEditor::intersectAt(const QPointF& widgetPos) {
 
 // Project (P): click a body edge to copy it into the sketch, seen along the
 // sketch normal; click inside a face to copy all of its edges.
-void SketchEditor::projectAt(const QPointF& widgetPos) {
-  if (!view_) return;
-  // The edge nearest the cursor on screen.
+TopoDS_Edge SketchEditor::bodyEdgeNear(const QPointF& widgetPos) const {
   TopoDS_Edge best;
+  if (!view_) return best;
   double bestD = 8.0;   // pixels
   for (const auto& b : session_.document().bodies()) {
     if (!view_->isBodyVisible(QString::fromStdString(b.name))) continue;
@@ -617,6 +617,13 @@ void SketchEditor::projectAt(const QPointF& widgetPos) {
       }
     }
   }
+  return best;
+}
+
+void SketchEditor::projectAt(const QPointF& widgetPos) {
+  if (!view_) return;
+  // The edge nearest the cursor on screen.
+  const TopoDS_Edge best = bodyEdgeNear(widgetPos);
   std::vector<TopoDS_Edge> picked;
   if (!best.IsNull()) {
     picked.push_back(best);
@@ -637,6 +644,70 @@ void SketchEditor::projectAt(const QPointF& widgetPos) {
   const int n = addProjected(g);
   solveAndShow();
   emit message(tr("Projected %n curve(s).", nullptr, n));
+}
+
+void SketchEditor::includeAt(const QPointF& widgetPos) {
+  if (!view_) return;
+  std::vector<TopoDS_Edge> picked;
+  if (const TopoDS_Edge best = bodyEdgeNear(widgetPos); !best.IsNull()) {
+    picked.push_back(best);
+  } else if (const TopoDS_Face f = view_->faceAt(widgetPos); !f.IsNull()) {
+    for (TopExp_Explorer x(f, TopAbs_EDGE); x.More(); x.Next()) picked.push_back(TopoDS::Edge(x.Current()));
+  }
+  if (picked.empty()) {
+    emit message(tr("Include 3D Geometry: click a body edge, or inside a face to include all its edges."));
+    return;
+  }
+  checkpoint();
+  const int n = sketch::includeEdges(sk_, frame_, picked);
+  if (n == 0) {
+    undo_.pop_back();
+    emit message(tr("That edge cannot be included."));
+    return;
+  }
+  solveAndShow();
+  emit message(tr("Included %n curve(s) in 3D.", nullptr, n));
+}
+
+bool SketchEditor::showsHandles(int spline) const {
+  if (spline < 0 || spline >= static_cast<int>(sk_.entities.size())) return false;
+  const auto& e = sk_.entities[spline];
+  if (e.type != EntityType::Spline || e.kind != sketch::SplineKind::Fit || e.projected) return false;
+  if (dragHandle_.spline == spline) return true;
+  for (const auto& s : selection_) {
+    if (s.kind == Hit::Entity && s.index == spline) return true;
+    if (s.kind == Hit::Point && std::find(e.fit.begin(), e.fit.end(), s.index) != e.fit.end()) return true;
+  }
+  return false;
+}
+
+SketchEditor::HandleHit SketchEditor::handleAt(double x, double y) const {
+  HandleHit best;
+  double bestD = tolerance();
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    if (!showsHandles(i)) continue;
+    for (const auto& h : sketch::splineHandles(sk_, i))
+      for (bool back : {false, true}) {
+        const double sg = back ? -1 : 1;
+        const double d = std::hypot(x - (h.x + sg * h.tx * h.arm), y - (h.y + sg * h.ty * h.arm));
+        if (d < bestD) {
+          bestD = d;
+          best = {i, h.index, back};
+        }
+      }
+  }
+  return best;
+}
+
+void SketchEditor::moveHandle(const HandleHit& hh, double x, double y) {
+  for (const auto& h : sketch::splineHandles(sk_, hh.spline)) {
+    if (h.index != hh.index) continue;
+    const double sg = hh.back ? -1 : 1;
+    const double tx = sg * (x - h.x) / h.arm, ty = sg * (y - h.y) / h.arm;
+    if (std::hypot(tx, ty) < 1e-3) return;   // on the point itself: no direction
+    if (sketch::setSplineHandle(sk_, hh.spline, hh.index, tx, ty).empty()) rebuild();
+    return;
+  }
 }
 
 int SketchEditor::materialize(const Pick& p) {
@@ -1209,6 +1280,7 @@ void SketchEditor::clickAt(double x, double y) {
     selection_.clear();
     if (h.kind != Hit::None) selection_.push_back(h);
     dragPoint_ = dragLine_ = -1;
+    dragHandle_ = {};
     rebuild();
   }
 }
@@ -1233,6 +1305,14 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
   };
   switch (tool_) {
     case Tool::Select: {
+      // A tangent handle's end: drag it to set the handle.
+      dragHandle_ = handleAt(x, y);
+      if (dragHandle_.spline >= 0) {
+        dragged_ = false;
+        boxing_ = boxShown_ = false;
+        dragPoint_ = dragLine_ = dragLabel_ = -1;
+        return;
+      }
       const Hit h = hitTest(x, y);
       dragged_ = false;
       boxing_ = h.kind == Hit::None;
@@ -1507,8 +1587,10 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::Offset: {
       if (steps_.empty()) {
         const Hit h = hitEntity(x, y);
-        if (h.kind != Hit::Entity || sketch::chainOf(sk_, h.index).empty()) {
-          emit message(tr("Offset: click a line, arc or circle."));
+        const bool curve = h.kind == Hit::Entity && (sk_.entities[h.index].type == EntityType::Spline ||
+                                                     sk_.entities[h.index].type == EntityType::Ellipse);
+        if (h.kind != Hit::Entity || (!curve && sketch::chainOf(sk_, h.index).empty())) {
+          emit message(tr("Offset: click a line, arc, circle, ellipse or spline."));
           return;
         }
         offsetEntity_ = h.index;
@@ -1894,6 +1976,9 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     case Tool::Project:
       projectAt(widgetPos);
       return;
+    case Tool::Include3D:
+      includeAt(widgetPos);
+      return;
     case Tool::Point: {
       const Pick p = pickPoint(x, y);
       if (p.hit.kind == Hit::Point) return;
@@ -1954,6 +2039,15 @@ void SketchEditor::mouseMove(QMouseEvent* e) {
       view_->showSelectionBox(pressPos_, e->position());
       return;
     }
+  }
+  if ((e->buttons() & Qt::LeftButton) && dragHandle_.spline >= 0 && tool_ == Tool::Select) {
+    if (!dragged_) {
+      if ((e->position() - pressPos_).manhattanLength() < 4) return;
+      dragged_ = true;
+      checkpoint();
+    }
+    moveHandle(dragHandle_, x, y);
+    return;
   }
   if ((e->buttons() & Qt::LeftButton) && dragLabel_ >= 0 && tool_ == Tool::Select) {
     if (!dragged_) {
@@ -2041,7 +2135,10 @@ void SketchEditor::mouseRelease(QMouseEvent* e) {
   }
   const bool wasDrag = dragged_;
   const bool wasLabel = dragLabel_ >= 0;
+  const bool wasHandle = dragHandle_.spline >= 0;
   dragPoint_ = dragLine_ = dragLabel_ = -1;
+  dragHandle_ = {};
+  if (wasHandle && !wasDrag) return;   // a click on a handle keeps the selection (double-click frees it)
   if (wasDrag && wasLabel) {
     dragged_ = false;
     emit changed();
@@ -2269,6 +2366,15 @@ bool SketchEditor::editText(sketch::Text& t, bool isNew) {
 void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
   double x, y;
   if (!toSketch(e->position(), x, y)) return;
+  // Double-click a tangent handle's end (with Select): free it.
+  if (tool_ == Tool::Select)
+    if (const HandleHit hh = handleAt(x, y); hh.spline >= 0) {
+      checkpoint();
+      (void)sketch::setSplineHandle(sk_, hh.spline, hh.index, 0, 0);
+      solveAndShow();
+      emit message(tr("Tangent handle freed: the curve sets its own direction there again."));
+      return;
+    }
   // Double-click a text (with Select): change it.
   if (tool_ == Tool::Select)
     if (const int ti = textAt(x, y); ti >= 0) {
@@ -3205,8 +3311,16 @@ void SketchEditor::trimAt(double x, double y, bool breakOnly) {
   const auto& P = sk_.points;
   const Entity target = sk_.entities[ei];
   if (target.type == EntityType::Spline || target.type == EntityType::Ellipse) {
-    emit message(target.type == EntityType::Spline ? tr("Trim and Break do not work on splines yet.")
-                                                   : tr("Trim and Break do not work on ellipses yet."));
+    checkpoint();
+    const std::string err = sketch::trimCurve(sk_, ei, x, y, breakOnly);
+    if (!err.empty()) {
+      undo_.pop_back();
+      emit message(QString::fromStdString(err));
+      return;
+    }
+    selection_.clear();
+    solveAndShow();
+    if (breakOnly) emit message(tr("Broken where it crosses. Click another curve to break it."));
     return;
   }
 
@@ -3233,7 +3347,20 @@ void SketchEditor::trimAt(double x, double y, bool breakOnly) {
   for (int j = 0; j < static_cast<int>(sk_.entities.size()); ++j) {
     if (j == ei) continue;
     const Entity& o = sk_.entities[j];
-    if (o.type == EntityType::Spline || o.type == EntityType::Ellipse) continue;   // no crossings with these yet
+    if (o.type == EntityType::Spline || o.type == EntityType::Ellipse) {
+      // No closed form: crossings found numerically, as line / angle parameters.
+      for (const auto& q : sketch::crossings(sk_, ei, j)) {
+        if (target.type == EntityType::Line) {
+          const auto &a = P[target.a], &b = P[target.b];
+          const double dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+          if (l2 > 0) cuts.push_back(((q.x - a.x) * dx + (q.y - a.y) * dy) / l2);
+        } else {
+          const auto& c = P[target.center];
+          cuts.push_back(std::atan2(q.y - c.y, q.x - c.x));
+        }
+      }
+      continue;
+    }
     if (target.type == EntityType::Line) {
       const auto &a = P[target.a], &b = P[target.b];
       if (o.type == EntityType::Line) {
@@ -4075,6 +4202,31 @@ void SketchEditor::rebuild() {
       }
     }
   }
+  // Tangent handles of selected fit point splines: set ones green, free
+  // ones (the curve's own direction) grey.
+  for (int i = 0; i < static_cast<int>(sk_.entities.size()); ++i) {
+    if (!showsHandles(i)) continue;
+    for (const auto& h : sketch::splineHandles(sk_, i)) {
+      const double ex = h.tx * h.arm, ey = h.ty * h.arm;
+      if (std::hypot(ex, ey) < 1e-9) continue;
+      const Quantity_Color col = h.set ? rgb(80, 200, 120) : rgb(150, 150, 150);
+      sketch::Sketch hs;
+      hs.addLine(h.x - ex, h.y - ey, h.x + ex, h.y + ey);
+      if (const TopoDS_Shape sh = sketch::curves(hs, frame_, false); !sh.IsNull()) {
+        Handle(AIS_Shape) a = wire(sh, col, 1.5, Aspect_TOL_SOLID);
+        ctx->Display(a, AIS_WireFrame, -1, false);
+        ctx->SetZLayer(a, Graphic3d_ZLayerId_Topmost);
+        objects_.push_back(a);
+      }
+      for (double sg : {-1.0, 1.0}) {
+        Handle(AIS_Point) p = new AIS_Point(new Geom_CartesianPoint(sketch::toWorld(frame_, h.x + sg * ex, h.y + sg * ey)));
+        p->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_O_POINT, col, 2.0));
+        ctx->Display(p, 0, -1, false);
+        ctx->SetZLayer(p, Graphic3d_ZLayerId_Topmost);
+        objects_.push_back(p);
+      }
+    }
+  }
   for (int i = 0; i < static_cast<int>(sk_.texts.size()); ++i) {
     const TopoDS_Shape ts = sketch::textShape(sk_, frame_, i);
     if (ts.IsNull()) continue;
@@ -4106,7 +4258,10 @@ void SketchEditor::rebuild() {
   for (int i = 0; i < static_cast<int>(sk_.points.size()); ++i) {
     if (!display_.points && i != 0 && !selected(Hit::Point, i) && !hovered(Hit::Point, i)) continue;
     const bool fixed = res_.ok && i < static_cast<int>(res_.pointFixed.size()) && res_.pointFixed[i];
-    Handle(AIS_Point) p = new AIS_Point(new Geom_CartesianPoint(sketch::toWorld(frame_, sk_.points[i].x, sk_.points[i].y)));
+    // Included 3D geometry: its points stand where they are in space.
+    const gp_Pnt at = sketch::toWorld(frame_, sk_.points[i].x, sk_.points[i].y)
+                          .Translated(gp_Vec(frame_.Direction()) * sk_.points[i].z);
+    Handle(AIS_Point) p = new AIS_Point(new Geom_CartesianPoint(at));
     const Quantity_Color c = i == 0 && !selected(Hit::Point, 0) && !hovered(Hit::Point, 0)
                                  ? rgb(200, 40, 40)
                                  : colorFor(Hit::Point, i, fixed, false);
@@ -4218,6 +4373,18 @@ double SketchEditor::offsetAt(double x, double y, double magnitude) const {
       if (en.type == EntityType::Line) {
         const auto &a = trial.points[en.a], &b = trial.points[en.b];
         dist = std::min(dist, segDistance(x, y, a.x, a.y, b.x, b.y));
+      } else if (en.type == EntityType::Spline || en.type == EntityType::Ellipse) {
+        const TopoDS_Shape sh = sketch::curve(trial, frame_, e);
+        if (sh.IsNull()) continue;
+        BRepAdaptor_Curve c(TopoDS::Edge(sh));
+        double px = 0, py = 0;
+        for (int k = 0; k <= 48; ++k) {
+          double qx, qy;
+          sketch::toSketch(frame_, c.Value(c.FirstParameter() + (c.LastParameter() - c.FirstParameter()) * k / 48), qx, qy);
+          if (k > 0) dist = std::min(dist, segDistance(x, y, px, py, qx, qy));
+          px = qx;
+          py = qy;
+        }
       } else {
         const auto& c = trial.points[en.center];
         dist = std::min(dist, std::abs(std::hypot(x - c.x, y - c.y) - en.radius));

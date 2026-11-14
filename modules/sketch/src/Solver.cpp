@@ -85,6 +85,10 @@ public:
       r.push_back(dist(e.a, e.center) - e.radius);
       r.push_back(dist(e.b, e.center) - e.radius);
     }
+    // Elliptical arcs: both ends lie on the ellipse.
+    for (size_t i = 0; i < s_.entities.size(); ++i)
+      if (s_.entities[i].isEllipticalArc())
+        for (int p : s_.entities[i].fit) r.push_back(onEllipse(p, static_cast<int>(i)));
     for (const auto& c : s_.constraints) add(c, r);
     return r;
   }
@@ -118,6 +122,16 @@ private:
     return (dx * (P(p).y - a.y) - dy * (P(p).x - a.x)) / l;
   }
   bool isRound(int e) const { return sketch::isRound(E(e).type); }
+  // How far a point is off an ellipse: in its own axes (s/A)^2 + (t/B)^2 = 1,
+  // scaled to a distance.
+  double onEllipse(int p, int ellipse) const {
+    const Entity& el = E(ellipse);
+    const double ux = P(el.a).x - P(el.center).x, uy = P(el.a).y - P(el.center).y;
+    const double A = std::max(std::hypot(ux, uy), 1e-12), B = std::max(std::abs(el.radius), 1e-12);
+    const double dx = P(p).x - P(el.center).x, dy = P(p).y - P(el.center).y;
+    const double s = (dx * ux + dy * uy) / A, t = (-dx * uy + dy * ux) / A;
+    return (std::hypot(s / A, t / B) - 1) * std::min(A, B);
+  }
   // An end point two lines/arcs have in common, or -1.
   int sharedEnd(int e0, int e1) const {
     const Entity &a = E(e0), &b = E(e1);
@@ -228,13 +242,7 @@ private:
         if (isRound(e[0])) {
           r.push_back(dist(p[0], E(e[0]).center) - E(e[0]).radius);
         } else if (E(e[0]).type == EntityType::Ellipse) {
-          // In the ellipse's own axes: (s/A)^2 + (t/B)^2 = 1, as a distance.
-          const Entity& el = E(e[0]);
-          const double ux = P(el.a).x - P(el.center).x, uy = P(el.a).y - P(el.center).y;
-          const double A = std::max(std::hypot(ux, uy), 1e-12), B = std::max(std::abs(el.radius), 1e-12);
-          const double dx = P(p[0]).x - P(el.center).x, dy = P(p[0]).y - P(el.center).y;
-          const double s = (dx * ux + dy * uy) / A, t = (-dx * uy + dy * ux) / A;
-          r.push_back((std::hypot(s / A, t / B) - 1) * std::min(A, B));
+          r.push_back(onEllipse(p[0], e[0]));
         } else {
           r.push_back(pointLineDistance(p[0], e[0]));
         }

@@ -306,13 +306,20 @@ std::string mirrorEntities(Sketch& s, const std::vector<int>& entities, int mirr
         for (int& f : c.fit) f = mirrored(f);
         c.a = c.fit.front();
         c.b = c.fit.back();
+        for (auto& h : c.handles) {   // directions reflect too
+          const V t{h.x, h.y};
+          const V r = md * (2 * dot(t, md)) - t;
+          h = {r.x, r.y};
+        }
         break;
       case EntityType::Ellipse:
         c.center = mirrored(e.center);
         c.a = mirrored(e.a);
+        if (e.isEllipticalArc()) c.fit = {mirrored(e.fit[1]), mirrored(e.fit[0])};   // anticlockwise again
         break;
     }
     c.projected = false;
+    c.included = false;
     s.entities.push_back(c);
     const int ni = static_cast<int>(s.entities.size()) - 1;
     made.push_back(ni);
@@ -381,8 +388,11 @@ std::vector<ChainSegment> chainOf(const Sketch& s, int entity, bool* closed) {
 std::string offsetChain(Sketch& s, int entity, double distance, std::vector<int>* created) {
   if (std::abs(distance) < 1e-9) return "Offset: the distance must not be zero";
   bool closed = false;
+  if (entity >= 0 && entity < static_cast<int>(s.entities.size()) &&
+      (s.entities[entity].type == EntityType::Spline || s.entities[entity].type == EntityType::Ellipse))
+    return offsetCurve(s, entity, distance, created);
   const auto chain = chainOf(s, entity, &closed);
-  if (chain.empty()) return "Offset: pick a line, arc or circle (splines cannot be offset yet)";
+  if (chain.empty()) return "Offset: pick a line, arc, circle, ellipse or spline";
   const Sketch backup = s;
   std::vector<int> made;
 
@@ -499,7 +509,7 @@ std::string offsetChain(Sketch& s, int entity, double distance, std::vector<int>
 Point Placement::apply(const Point& p) const {
   const double x = p.x - cx, y = p.y - cy;
   const double c = std::cos(angle), sn = std::sin(angle);
-  return {cx + scale * (c * x - sn * y) + dx, cy + scale * (sn * x + c * y) + dy};
+  return {cx + scale * (c * x - sn * y) + dx, cy + scale * (sn * x + c * y) + dy, p.z};
 }
 
 namespace {
@@ -565,6 +575,11 @@ std::string copyEntities(Sketch& s, const std::vector<int>& entities, const Plac
     for (int& f : c.fit) f = pointTwin.at(f);
     c.radius *= place.scale;
     c.projected = false;
+    c.included = false;
+    for (auto& h : c.handles) {   // tangent handles turn with the copy
+      const double cs = std::cos(place.angle), sn = std::sin(place.angle);
+      h = {cs * h.x - sn * h.y, sn * h.x + cs * h.y};
+    }
     s.entities.push_back(c);
     entityTwin[id] = static_cast<int>(s.entities.size()) - 1;
     made.push_back(entityTwin[id]);
@@ -609,6 +624,11 @@ std::string placeEntities(Sketch& s, const std::vector<int>& entities, const Pla
   for (int id : ents)
     if (s.entities[id].type != EntityType::Line && s.entities[id].type != EntityType::Spline)
       s.entities[id].radius *= place.scale;   // a conic's rho is a shape, not a size
+  for (int id : ents)
+    for (auto& h : s.entities[id].handles) {   // tangent handles turn with the curve
+      const double cs = std::cos(place.angle), sn = std::sin(place.angle);
+      h = {cs * h.x - sn * h.y, sn * h.x + cs * h.y};
+    }
   const bool level = std::abs(std::remainder(place.angle, 2 * std::numbers::pi)) < 1e-12;
   std::vector<Constraint> kept;
   for (Constraint c : s.constraints) {

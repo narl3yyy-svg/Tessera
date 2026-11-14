@@ -24,14 +24,14 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P1-7 | Right click opens a plain context menu, not a radial marking menu | P1 scope | R2 |
 | P2-1 | A sketch on a body face copies the face's plane when created; it does not follow the face if the body changes | Associative references need topological naming | P3 |
 | P2-2 | Extrude remembers each picked profile by a point inside it; a large sketch edit can make it pick a different or no region (reported as an error) | No persistent profile identity yet | P3 |
-| P2-3 | Sketch tools: ~~trim, offset, fillet, spline, polygon, slot, extend, chamfer, mirror~~ done; still no sketch patterns, text, Project / Include, Break, Sketch Scale. Extend works on lines (not arcs); Chamfer is equal-distance; Mirror ties copies with symmetry constraints | P2 scope | P13 |
-| P9-1 | Spline: fit-point splines only (no control-point splines, tangency handles or curvature constraints); constraints act on its points, not the curve; Trim and Offset skip splines | P9 scope | later |
+| P2-3 | Sketch tools: ~~trim, offset, fillet, spline, polygon, slot, extend, chamfer, mirror~~ done; sketch patterns, text, Project / Intersect / Include 3D Geometry, Break and Sketch Scale are done too. Extend works on lines (not arcs); Chamfer is equal-distance; Mirror ties copies with symmetry constraints | P2 scope | P13 |
+| P9-1 | Spline: ~~fit points only, no tangent handles; Trim and Offset skip splines~~ control point splines, tangent handles, Trim / Break / Offset done. Still no curvature constraints, and constraints act on its points, not the curve | P9 scope | later |
 | P9-2 | Sketch Fillet: line-line corners only (not line-arc or arc-arc); the two lines' length dimensions are removed because the corner they measured is gone | P9 scope | later |
 | P9-3 | Sketch Offset: the copy of a line chain gets parallel constraints and one offset dimension (not Fusion's offset constraint that keeps every curve at the distance); offset arcs share their originals' centres; the side is chosen by where the cursor is | P9 scope | later |
 | P2-4 | ~~Dimension values are numbers only~~ Closed: sketch dimensions and size boxes take expressions; a dimension keeps its expression and follows parameter changes (size boxes use the value once) | | closed (P5) |
 | P2-5 | Extrude extents: distance only (one side / symmetric); no To Object, All, taper or thin | P2 scope | P3 |
 | P2-6 | Dimensions show as value labels without arrows/extension lines; constraint glyphs are letters | P2 scope | R2 |
-| P2-7 | ~~Snapping to points only~~ Partly closed: drawing snaps to points, line midpoints, curves (with a point-on-curve constraint), body vertices and edges in the sketch plane, horizontal/vertical from the previous point, alignment with other points, and the grid (on by default). Lines leaving a curve snap tangent (T) or perpendicular (⟂) and get that constraint; pressing on the chain's last point and dragging draws a tangent arc; snapping onto a straight body edge projects it (purple, fixed), onto other body geometry gives a fixed point. Lines also snap parallel (∥) or perpendicular to other lines in the sketch; curved body edges project as fixed arcs/circles. Still missing: the Project / Include command itself, and projected geometry does not follow later changes to the body | P2 scope | P11 |
+| P2-7 | ~~Snapping to points only~~ Partly closed: drawing snaps to points, line midpoints, curves (with a point-on-curve constraint), body vertices and edges in the sketch plane, horizontal/vertical from the previous point, alignment with other points, and the grid (on by default). Lines leaving a curve snap tangent (T) or perpendicular (⟂) and get that constraint; pressing on the chain's last point and dragging draws a tangent arc; snapping onto a straight body edge projects it (purple, fixed), onto other body geometry gives a fixed point. Lines also snap parallel (∥) or perpendicular to other lines in the sketch; curved body edges project as fixed arcs/circles. Still missing: projected geometry does not follow later changes to the body | P2 scope | P11 |
 | P2-8 | The constraint solver is our own Gauss-Newton solver, not planegcs; very large sketches (hundreds of entities) will be slow | Avoids an extra dependency; numeric Jacobian | when needed |
 | P3-1 | Fillet/chamfer edges are found again on replay by a signature (curve type, direction, adjacent face normals, position relative to the body's bounding box), not by full topological naming; big changes can pick a different edge or report it missing | Real topological naming is a larger project | P3 (topological naming) |
 | P3-2 | Fillet: constant radius only (no variable radius, setback or rule-based selection); Chamfer: equal distance only (no two-distance or distance-angle) | P3 scope | P4 |
@@ -41,7 +41,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P8-1 | The drag arrow moves in steps of whatever the mouse gives (no snapping to grid or round values while dragging); Fillet/Chamfer arrows start at the first picked edge and point toward the body's centre, not along the exact fillet bisector | P8 scope | later |
 | P8-2 | Extruding body faces: the faces must be flat and face the same way; the result joins / cuts the body the faces belong to (Fusion can also extrude faces into a new body or other bodies) | P8 scope | later |
 | P8-3 | Create Sketch shows the origin planes, axes and point with hover highlight, but there is no preview of the sketch grid on the hovered plane before clicking | P8 scope | later |
-| P8-5 | Sketch Palette: Feature Options exist for Rectangle (2-point, center) only; Projected Geometries and 3D Sketch are shown disabled (no projection or 3D sketches yet); the palette's settings are not saved with the sketch | P8 scope | with Project / 3-point tools |
+| P8-5 | Sketch Palette: Feature Options exist for Rectangle (2-point, center) only; 3D Sketch is shown disabled (no 3D sketches yet); the palette's settings are not saved with the sketch | P8 scope | with Project / 3-point tools |
 | P10-1 | Construction axes/points are chosen from a list in Revolve and Circular Pattern (not by clicking them in the canvas); no Axis Perpendicular at Point / to Face, Point Along Path, Tangent Plane or Plane Through Three Points yet; vertex picks are stored by position | P10 scope | later |
 | P11-1 | Reference parts not yet matching (docs/ORACLE.md): one fillet whose radius narrows to fit a tapering face follows a cubic B-spline radius law in the reference; Tessera keeps the radius constant (area 0.12% off). Lofts from a polygon to an offset (not coaxial) circle use the general loft | Variable-radius laws | P12 |
 | P11-2 | Recipe features Tessera lacks: sheet metal, variable / chord / spline-radius fillets, thin extrude, boundary surface and thicken, holes on curved faces (Thin Extrude is next; the reference part walls a profile on both sides with two thicknesses, which the familiar tool does not offer) | Not built yet | later |
@@ -75,11 +75,19 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Splines and conics
 
 - A conic's rho is set when drawn (0.5) and changed by double-clicking the curve; it cannot yet be a dimension or an expression.
-- Fit point splines have no tangent handles to drag; control point splines are cubic (fewer frame points: lower degree) and cannot be closed.
-- Trim and Break do not work on splines or conics.
+- Control point splines are cubic (fewer frame points: lower degree) and cannot be closed.
+- Tangent handles set a fit point's direction and fullness (handle length); they cannot yet be dimensioned or tied to other curves (no tangent or curvature constraint on a handle).
+- Trimming or breaking a spline makes fit point splines through the original's points on each piece, with the original's directions at the cut; the shape between can shift slightly (a control point spline or conic piece is fitted through points sampled along it). Pieces are not tied to the curves that cut them (as with lines, P5-3).
+- Offset of a spline or ellipse is a fit point spline through offset points (24 round a closed curve); it does not follow later changes to the original, and an ellipse offset inward past its tightest curve is refused.
+- Extend does not reach to or from splines and ellipses yet.
+
+## Include 3D Geometry
+
+- Body edges come in as they are in space, fixed (purple) and never part of a profile; lines and circles / arcs parallel to the sketch plane stay exact, other edges become fit point splines through 33 points along them.
+- Like projected geometry, included edges do not follow later changes to the body.
+- Included points can be snapped to and constrained; the sketch uses their position seen along its normal (as the familiar tool does when a sketch point is tied to them).
 
 ## Sketch text
 
 - A text box aligns its lines between the corners but does not wrap or shrink text to fit; text longer than the box runs past it.
 - Text on Path starts at the curve's start (a circle: its rightmost point, anticlockwise); letters past the curve's end pile up at the end. No character spacing, bold or italic yet.
-- Include 3D Geometry is not available: sketches are flat; Project (P) brings body edges onto the plane instead.

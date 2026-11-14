@@ -1,0 +1,34 @@
+# Live: a fit point spline's tangent handle dragged with Select (the middle
+# point's handle turned straight up), and Trim on an ellipse cut by a line.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+menu sketch.group-spline sketch.spline
+sclick 0 0
+sclick 20 10
+sclick 40 0
+key Return
+key Escape
+click sketch.select
+sclick 20 10                  # the middle fit point: its handle shows
+wait 300
+shot /tmp/live_spline_handles.png
+sdrag 27.45 10 20 20          # the handle's front end (a third of the chord out), straight up
+wait 300
+click sketch.ellipse
+sclick 70 0
+sclick 100 0                  # one half axis: 30 mm
+sclick 70 20                  # the other: 20 mm
+key Escape
+key l
+sclick 70 -30
+sclick 70 30
+key Escape
+key t
+sclick 91.21 14.14            # the ellipse's right half
+wait 300
+shot /tmp/live_ellipse_trim.png
+click palette.finish
+wait 800
