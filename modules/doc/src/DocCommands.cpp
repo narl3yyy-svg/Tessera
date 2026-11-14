@@ -2056,7 +2056,7 @@ private:
 class ConstructAxisPoint final : public Command {
 public:
   enum class Kind { AxisCylinder, AxisEdge, AxisTwoPoints, AxisTwoPlanes, PointVertex, PointTwoEdges, PointThreePlanes,
-                    PointCenter, PointEdgePlane };
+                    PointCenter, PointEdgePlane, PlaneThreePoints, PlaneTangent };
   explicit ConstructAxisPoint(Kind kind) : kind_(kind) {
     struct Info {
       const char *id, *name, *tip, *icon;
@@ -2071,11 +2071,15 @@ public:
         {kCmdPointThreePlanes, "Point Through Three Planes", "Where three planes meet.", "point"},
         {kCmdPointCenter, "Point at Center of Circle/Sphere/Torus", "The centre of a circular edge or a round face.", "point"},
         {kCmdPointEdgePlane, "Point at Edge and Plane", "Where an edge (extended if straight) crosses a plane.", "point"},
+        {kCmdPlaneThreePoints, "Plane Through Three Points", "Through three vertices.", "plane"},
+        {kCmdPlaneTangent, "Tangent Plane",
+         "Tangent to a cylindrical face, turned round it by an angle from a reference plane's direction.", "plane"},
     };
     const Info& info = infos[static_cast<int>(kind)];
     commonDef(def_, info.id, info.name, info.tip, info.icon, "Construct");
     def_.nameInput = "name";
-    def_.inputs = {{.id = "name", .label = "Name", .tooltip = isAxis() ? "Empty: Axis<n>." : "Empty: Point<n>.",
+    def_.inputs = {{.id = "name", .label = "Name",
+                    .tooltip = isAxis() ? "Empty: Axis<n>." : isPlane() ? "Empty: Plane<n>." : "Empty: Point<n>.",
                     .type = InputType::String, .defaultValue = std::string{}, .optional = true}};
     auto edges = [] {
       return InputDef{.id = "edges", .label = "Edges", .tooltip = "Click edges in the canvas.", .type = InputType::Edges,
@@ -2094,7 +2098,14 @@ public:
       case Kind::AxisEdge:
       case Kind::PointTwoEdges: def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges()}); break;
       case Kind::AxisTwoPoints:
+      case Kind::PlaneThreePoints:
       case Kind::PointVertex: def_.inputs.insert(def_.inputs.end(), {bodyInput(), vertices()}); break;
+      case Kind::PlaneTangent:
+        def_.inputs.insert(def_.inputs.end(),
+                           {bodyInput(), faces(), planeChoice("Reference: the plane's normal sets where angle 0 is."),
+                            InputDef{.id = "angle", .label = "Angle", .tooltip = "Round the face from the reference.",
+                                     .type = InputType::Real, .defaultValue = 0.0, .unit = Unit::Degree}});
+        break;
       case Kind::PointCenter: def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges(), faces()}); break;
       case Kind::PointEdgePlane:
         def_.inputs.insert(def_.inputs.end(), {bodyInput(), edges(), planeChoice("The plane the edge crosses.")});
@@ -2114,6 +2125,7 @@ public:
   const CommandDef& def() const override { return def_; }
 
   bool isAxis() const { return kind_ <= Kind::AxisTwoPlanes; }
+  bool isPlane() const { return kind_ >= Kind::PlaneThreePoints; }
   bool usesBody() const { return kind_ != Kind::AxisTwoPlanes && kind_ != Kind::PointThreePlanes; }
 
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
@@ -2121,6 +2133,7 @@ public:
       if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
     try {
       if (isAxis()) (void)axisOf(docOf(ctx), in);
+      else if (isPlane()) (void)planeFrameOf(docOf(ctx), in);
       else (void)pointOf(docOf(ctx), in);
     } catch (const std::exception& e) {
       return e.what();
@@ -2129,7 +2142,8 @@ public:
   }
   void prepare(Inputs& in, CommandContext& ctx) const override {
     const Document& doc = docOf(ctx);
-    if (getString(in, "name").empty()) in["name"] = isAxis() ? doc.nextAxisName() : doc.nextPointName();
+    if (getString(in, "name").empty())
+      in["name"] = isAxis() ? doc.nextAxisName() : isPlane() ? doc.nextPlaneName() : doc.nextPointName();
     if (!usesBody()) return;
     defaultBody(in, doc);
     if (const auto b = doc.body(getString(in, "body"))) {
@@ -2149,6 +2163,9 @@ public:
     if (isAxis()) {
       if (name.empty()) name = doc.nextAxisName();
       doc.setAxis({name, axisOf(doc, in)});
+    } else if (isPlane()) {
+      if (name.empty()) name = doc.nextPlaneName();
+      doc.setPlane({name, sketch::customPlaneSpec(planeFrameOf(doc, in))});
     } else {
       if (name.empty()) name = doc.nextPointName();
       doc.setPoint({name, pointOf(doc, in)});
@@ -2177,7 +2194,9 @@ private:
     } catch (const kernel::KernelError& err) {
       throw CommandError(std::string("Vertices: ") + err.what());
     }
-    if (out.size() < want) throw CommandError(want == 1 ? "Vertices: click a vertex" : "Vertices: click two vertices");
+    if (out.size() < want)
+      throw CommandError(want == 1 ? "Vertices: click a vertex"
+                         : want == 2 ? "Vertices: click two vertices" : "Vertices: click three vertices");
     return out;
   }
   static gp_Pln plane(const Document& doc, const Inputs& in, const char* id) {
@@ -2304,6 +2323,44 @@ private:
       default: break;
     }
     throw CommandError("not a point");
+  }
+
+  gp_Ax3 planeFrameOf(const Document& doc, const Inputs& in) const {
+    if (kind_ == Kind::PlaneThreePoints) {
+      const auto p = verticesOf(doc, in, 3);
+      if (p.size() < 3) throw CommandError("Vertices: click three vertices");
+      const gp_Vec u(p[0], p[1]), v(p[0], p[2]);
+      const gp_Vec n = u.Crossed(v);
+      if (u.Magnitude() < 1e-9 || n.Magnitude() < 1e-9 * u.Magnitude() * v.Magnitude())
+        throw CommandError("Vertices: the three points are in line");
+      return gp_Ax3(p[0], gp_Dir(n), gp_Dir(u));
+    }
+    // Tangent plane: on a cylinder's side, facing out along a direction
+    // turned `angle` round the axis from the reference plane's normal.
+    const std::string refs = getString(in, "faces");
+    if (refs.empty()) throw CommandError("Face: click a cylindrical face");
+    TopoDS_Shape f;
+    try {
+      f = kernel::resolveFaces(body(doc, in), refs).front();
+    } catch (const kernel::KernelError& err) {
+      throw CommandError(std::string("Face: ") + err.what());
+    }
+    BRepAdaptor_Surface s(TopoDS::Face(f), true);
+    if (s.GetType() != GeomAbs_Cylinder) throw CommandError("Face: pick a cylindrical face");
+    const gp_Cylinder cyl = s.Cylinder();
+    const gp_Ax1 axis = cyl.Axis();
+    const gp_Ax3 ref = planeOf(doc, in);
+    const gp_Vec a(axis.Direction());
+    gp_Vec d0 = gp_Vec(ref.Direction()) - a * gp_Vec(ref.Direction()).Dot(a);
+    if (d0.Magnitude() < 1e-9) d0 = gp_Vec(ref.XDirection()) - a * gp_Vec(ref.XDirection()).Dot(a);
+    if (d0.Magnitude() < 1e-9) throw CommandError("Plane: the reference lies across the axis; pick another");
+    const gp_Dir n = gp_Dir(d0).Rotated(gp_Ax1(gp_Pnt(0, 0, 0), axis.Direction()), getReal(in, "angle"));
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(f, g);
+    // The axis point level with the face's middle, out by the radius.
+    const gp_Pnt mid = g.CentreOfMass();
+    const gp_Pnt onAxis = axis.Location().Translated(a * gp_Vec(axis.Location(), mid).Dot(a));
+    return gp_Ax3(onAxis.Translated(gp_Vec(n) * cyl.Radius()), n, axis.Direction());
   }
 
   Kind kind_;
@@ -3012,7 +3069,8 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Coil>());
   using CAP = ConstructAxisPoint::Kind;
   for (CAP k : {CAP::AxisCylinder, CAP::AxisEdge, CAP::AxisTwoPoints, CAP::AxisTwoPlanes, CAP::PointVertex,
-                CAP::PointTwoEdges, CAP::PointThreePlanes, CAP::PointCenter, CAP::PointEdgePlane})
+                CAP::PointTwoEdges, CAP::PointThreePlanes, CAP::PointCenter, CAP::PointEdgePlane, CAP::PlaneThreePoints,
+                CAP::PlaneTangent})
     registry.add(std::make_unique<ConstructAxisPoint>(k));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Fillet));
   registry.add(std::make_unique<EdgeFeature>(EdgeFeature::Kind::Chamfer));

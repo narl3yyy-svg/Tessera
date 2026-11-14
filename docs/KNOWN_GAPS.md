@@ -55,7 +55,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 | P5-2 | Patterns copy features (what they added or cut, as one shape: "Identical", not "Adjust") or whole bodies, not faces or components; directions are world or construction axes (not picked edges) | P5 scope | P6 |
 | P5-3 | Trim removes up to the nearest crossings; trimmed pieces do not get coincident constraints to the crossing curves | P5 scope | P6 |
 | P5-4 | Size boxes exist for Line (length, angle), Rectangle, Center Rectangle (width, height), Circle (diameter), Polygon (diameter, sides) and Slot (length, width); not yet for arcs | P5 scope | P6 |
-| P5-5 | Construction planes are built from origin or other construction planes (offset, angle about the plane's X/Y axis, midplane of two parallel planes); not yet tangent to faces or through points/edges | P5 scope | P6 |
+| P5-5 | Construction planes: offset, angle about the plane's X/Y axis, midplane of two parallel planes, through three vertices, tangent to a cylinder (~~not tangent to faces or through points~~). Still no plane through two edges, tangent to other curved faces, or at a point on a face; three-point planes take body vertices, not construction points | P5 scope | P6 |
 | P5-6 | A plane picked from a body face is copied when picked (not associative to the face) | Needs topological naming | P6 |
 | P6-1 | Sweep: the path is all curves of one sketch (one connected chain); no guide rails, twist or scaling; the profile must sit at the start of the path | P6 scope | later |
 | P6-2 | Loft: one profile per sketch (its largest region), no rails or centre line, no point sections | P6 scope | later |

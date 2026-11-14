@@ -29,7 +29,7 @@ scope.
 | **Create** | Extrude of sketch profiles or body faces with drag arrows in the canvas (one side / two sides with an arrow per side / symmetric, distance, through all or to an object, start offset, taper, Thin Extrude), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (ISO metric, cosmetic or modeled, shaft or hole), Hole (click any face, flat or curved, or sketch points; simple / counterbore / countersink, 118° drill point), Rectangular, Circular and Path Pattern of features (picked in the timeline) or bodies, with Extent / Spacing and drag arrows, Mirror, Box / Cylinder / Sphere / Torus / Cone |
 | **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer (equal, two distances, distance and angle), Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical; click a face, edge or point on each part; angle, offset, flip), Drive Joints (slider and Play) |
-| **Construct** | Offset Plane, Plane at Angle, Midplane; axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
+| **Construct** | Offset Plane, Plane at Angle, Midplane, Plane Through Three Points, Tangent Plane (on a cylinder, at an angle from a reference plane); axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb |
 | **Files** | `.tsr` designs; export STEP, IGES, STL, 3MF, OBJ, BREP; insert STEP, IGES, STL, BREP; 3D Print; Capture Image |
 | **Parametric** | Sketch dimensions and feature values (an extrude's distance, a fillet's radius ...) are named model parameters (d1, d2 ...) usable in any expression; every step is in the timeline: double-click to change it and only it and the steps after it rebuild (the ones before are kept, so editing late features stays quick in long designs); drag features to reorder (a drop that would break a feature is refused); drag the history marker back to roll the design back and add features earlier, or right-click > Roll History Marker Here / Roll to End; suppress, delete, unlimited undo |
@@ -97,7 +97,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, face patterns |
 | **Extrude** | To curved faces and whole bodies, Participant Bodies |
 | **Modify** | Variable-radius and setback fillets, Replace Face, Split Face, Silhouette Split, Delete (faces), Align, two-sided draft, Appearance, Physical Material, Compute All; drag arrows for Move/Copy |
-| **Construct** | Tangent Plane, Plane Through Points, axis perpendicular at a point; picking axes and points in the canvas |
+| **Construct** | Plane Through Two Edges, Plane Tangent to Face at Point, axis perpendicular at a point; picking axes and points in the canvas |
 | **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Motion Study, Contact Sets; separate component files |
 | **Configure** | Configurations (design variants in a table) |
 | **Inspect** | Minimum Radius, Accessibility, Isocurve analysis |
@@ -142,7 +142,7 @@ build/modules/api/tessera-cli --help   # headless scripting
 Adding a tool, the test layout and the conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input
-(91 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
+(92 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
 (71 pass today, 18 need tools that are still planned; see [docs/ORACLE.md](docs/ORACLE.md)). The build has no
 compiler warnings, and the whole suite also passes under AddressSanitizer and UndefinedBehaviorSanitizer (how to
 run that check: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#tests)).
