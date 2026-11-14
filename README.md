@@ -27,7 +27,7 @@ scope.
 | **Sketch** | Line, Midpoint Line, 2-Point / 3-Point / Center Rectangle, Center / 2-Point / 3-Point / 2-Tangent / 3-Tangent Circle, Center Point / 3-Point / Tangent Arc, Ellipse, Polygon, Slot, Fit Point / Control Point Spline (tangent handles: select it, drag a handle's end, double-click to free it), Conic Curve, Text (on a point, in a box, on a path), Point, construction lines, Mirror, Fillet (lines and arcs), Chamfer, Trim and Break (also ellipses, splines and conics), Extend (lines and arcs), Offset (O; also ellipses and splines), Project (P), Intersect, Include 3D Geometry, Sketch Dimension; Sketch Palette (feature options, linetype, Look At, grid, snap, slice, show/hide profiles, points, dimensions, constraints, construction); on-canvas size boxes (type a value, **Tab**, **Enter**); live sizes; snap to points and an adaptive grid (hold **Ctrl** to draw without snapping or automatic constraints); select curves then a constraint; right-click Delete; **X** makes the selection construction |
 | **Constraints** | Coincident, Horizontal/Vertical, Parallel, Perpendicular, Equal, Tangent, Concentric, Midpoint, Collinear, Symmetry, Fix; blue = free, white/black = fully constrained |
 | **Create** | Extrude of sketch profiles or body faces with drag arrows in the canvas (one side / two sides with an arrow per side / symmetric, distance, through all or to an object, start offset, taper, Thin Extrude), Revolve, Sweep, Loft, Pipe (round/square/triangular, hollow), Coil (revolutions/height/pitch, taper, section), Thread (ISO metric, cosmetic or modeled, shaft or hole), Hole (click any face, flat or curved, or sketch points; simple / counterbore / countersink, 118° drill point), Rectangular, Circular and Path Pattern of features (picked in the timeline) or bodies, with Extent / Spacing and drag arrows, Mirror, Box / Cylinder / Sphere / Torus / Cone |
-| **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer (equal, two distances, distance and angle), Shell, Draft, Offset Face, Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
+| **Modify** | Press Pull (flat or curved faces), Fillet, Chamfer (equal, two distances, distance and angle), Shell, Draft, Offset Face, Delete (faces: holes, fillets, bosses close over), Split Face (by a plane), Combine (join / cut / intersect), Split Body, Move/Copy, Scale, Remove, Change Parameters |
 | **Assemble** | New Component (group bodies), Joint (rigid, revolute, slider, cylindrical; click a face, edge or point on each part; angle, offset, flip), Drive Joints (slider and Play) |
 | **Construct** | Offset Plane, Plane at Angle, Midplane, Plane Through Three Points, Tangent Plane (on a cylinder, at an angle from a reference plane); axes (through cylinder, edge, two points, two planes); points (vertex, two edges, three planes, centre, edge and plane). Axes drive Revolve and Circular Pattern |
 | **Inspect** | Measure, Interference, Section Analysis, Center of Mass, Zebra, Draft Analysis, Curvature Map, Curvature Comb |
@@ -96,7 +96,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Sketch** | 3D sketches; Project to Surface; Extend of splines and ellipses; curvature (G2) and polygon constraints; sketch chamfers with arcs |
 | **Create** | Rib, Web, Emboss, Thicken, Boundary Fill, face patterns |
 | **Extrude** | To curved faces and whole bodies, Participant Bodies |
-| **Modify** | Variable-radius and setback fillets, Replace Face, Split Face, Silhouette Split, Delete (faces), Align, two-sided draft, Appearance, Physical Material, Compute All; drag arrows for Move/Copy |
+| **Modify** | Variable-radius and setback fillets, Replace Face, Split Face by sketch curves, Silhouette Split, Align, two-sided draft, Appearance, Physical Material, Compute All; drag arrows for Move/Copy |
 | **Construct** | Plane Through Two Edges, Plane Tangent to Face at Point, axis perpendicular at a point; picking axes and points in the canvas |
 | **Assemble** | As-Built Joints, Joint Origins, Ball / Planar / Pin-Slot joints, joint limits, Rigid Groups, Motion Links, Motion Study, Contact Sets; separate component files |
 | **Configure** | Configurations (design variants in a table) |
@@ -142,7 +142,7 @@ build/modules/api/tessera-cli --help   # headless scripting
 Adding a tool, the test layout and the conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input
-(92 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
+(93 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
 (71 pass today, 18 need tools that are still planned; see [docs/ORACLE.md](docs/ORACLE.md)). The build has no
 compiler warnings, and the whole suite also passes under AddressSanitizer and UndefinedBehaviorSanitizer (how to
 run that check: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#tests)).

@@ -2645,10 +2645,16 @@ private:
 // Offset Face and Draft: change chosen faces of one body.
 class FaceFeature final : public Command {
 public:
-  enum class Kind { Offset, Draft };
+  enum class Kind { Offset, Draft, Delete, Split };
   explicit FaceFeature(Kind kind) : kind_(kind) {
     if (kind == Kind::Offset) {
       commonDef(def_, kCmdOffsetFace, "Offset Face", "Moves faces (flat or curved) along their normals.", "offset-face");
+    } else if (kind == Kind::Delete) {
+      commonDef(def_, kCmdDeleteFaces, "Delete", "Removes faces (a hole, a fillet, a boss ...); the faces around close the gap.",
+                "delete-face");
+    } else if (kind == Kind::Split) {
+      commonDef(def_, kCmdSplitFace, "Split Face", "Cuts faces where a plane crosses them (the body keeps its shape).",
+                "split-face");
     } else {
       commonDef(def_, kCmdDraft, "Draft", "Tilts faces so parts release from a mould: pick the pull direction plane, then faces.", "draft");
     }
@@ -2658,7 +2664,9 @@ public:
     if (kind == Kind::Offset) {
       def_.inputs.push_back({.id = "distance", .label = "Distance", .tooltip = "Positive grows the body.",
                              .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter});
-    } else {
+    } else if (kind == Kind::Split) {
+      def_.inputs.push_back(planeChoice("The splitting plane."));
+    } else if (kind == Kind::Draft) {
       def_.inputs.push_back(planeChoice("Pull direction (its normal) and neutral plane (where faces keep their size)."));
       def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = "Draft angle.", .type = InputType::Real,
                              .defaultValue = 0.0872664626, .unit = Unit::Degree, .min = -1.48, .max = 1.48});
@@ -2686,6 +2694,13 @@ public:
       const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
       if (kind_ == Kind::Offset) {
         doc.replaceBody(name, kernel::offsetFaces(shape, faces, getReal(in, "distance")));
+      } else if (kind_ == Kind::Delete) {
+        doc.replaceBody(name, kernel::deleteFaces(shape, faces));
+      } else if (kind_ == Kind::Split) {
+        const gp_Ax3 f = planeOf(doc, in, "plane", "-");
+        const gp_Dir n = f.Direction();
+        const gp_Pnt o = f.Location();
+        doc.replaceBody(name, kernel::splitFaces(shape, faces, {n.X(), n.Y(), n.Z()}, {o.X(), o.Y(), o.Z()}));
       } else {
         const gp_Ax3 f = planeOf(doc, in, "plane", "-");
         gp_Dir n = f.Direction();
@@ -3086,6 +3101,9 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<AddUserParameter>());
   registry.add(std::make_unique<DocumentUnits>());
   registry.add(std::make_unique<InsertGeometry>());
+  // Last, so they sit in the MODIFY menu rather than taking ribbon buttons.
+  registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Delete));
+  registry.add(std::make_unique<FaceFeature>(FaceFeature::Kind::Split));
 }
 
 } // namespace tsr::doc

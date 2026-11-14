@@ -203,6 +203,14 @@ TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
 TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
                    double angle);
 
+// Delete (faces): removes faces and lets their neighbours grow over the gap
+// (holes, fillets, chamfers, bosses ...), as the familiar Delete does.
+TopoDS_Shape deleteFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces);
+
+// Split Face: cuts faces where a plane (through `planeOrigin`, normal
+// `normal`) crosses them; the body keeps its shape, with more faces.
+TopoDS_Shape splitFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 normal, Vec3 planeOrigin);
+
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError
 // if OCCT fails or the result is empty (e.g. a cut that removes everything).

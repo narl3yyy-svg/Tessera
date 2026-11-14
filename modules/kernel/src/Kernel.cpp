@@ -49,6 +49,9 @@
 #include <BRepOffsetAPI_MakeOffsetShape.hxx>
 #include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepOffset_MakeOffset.hxx>
+#include <BRepAlgoAPI_Defeaturing.hxx>
+#include <BRepAlgoAPI_Section.hxx>
+#include <BRepFeat_SplitShape.hxx>
 #include <BRepTools.hxx>
 #include <gp_Cylinder.hxx>
 #include <BRepOffsetAPI_MakeThickSolid.hxx>
@@ -1698,6 +1701,52 @@ TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
   });
   if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
     throw KernelError("Offset Face: could not move those faces that far (try a smaller distance)");
+  return result;
+}
+
+TopoDS_Shape deleteFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces) {
+  if (faces.empty()) throw KernelError("Delete: select the faces to remove");
+  TopoDS_Shape result = guarded("Delete", [&]() -> TopoDS_Shape {
+    BRepAlgoAPI_Defeaturing df;
+    df.SetShape(body);
+    for (const auto& f : faces) df.AddFaceToRemove(f);
+    df.SetRunParallel(false);
+    df.SetToFillHistory(false);
+    df.Build();
+    if (!df.IsDone() || df.HasErrors()) return TopoDS_Shape();
+    ShapeUpgrade_UnifySameDomain unify(df.Shape(), true, true, false);
+    unify.Build();
+    return unify.Shape();
+  });
+  if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
+    throw KernelError("Delete: the faces around those cannot close the gap (try deleting the whole feature's faces)");
+  return result;
+}
+
+TopoDS_Shape splitFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 normal, Vec3 planeOrigin) {
+  if (faces.empty()) throw KernelError("Split Face: select the faces to split");
+  const gp_Pln pln(gp_Pnt(planeOrigin.x, planeOrigin.y, planeOrigin.z), gp_Dir(normal.x, normal.y, normal.z));
+  int cuts = 0;
+  TopoDS_Shape result = guarded("Split Face", [&]() -> TopoDS_Shape {
+    BRepFeat_SplitShape split(body);
+    for (const auto& f : faces) {
+      BRepAlgoAPI_Section sec(f, pln, false);
+      sec.Approximation(true);
+      sec.ComputePCurveOn1(true);
+      sec.Build();
+      if (!sec.IsDone()) continue;
+      for (TopExp_Explorer e(sec.Shape(), TopAbs_EDGE); e.More(); e.Next()) {
+        split.Add(TopoDS::Edge(e.Current()), TopoDS::Face(f));
+        ++cuts;
+      }
+    }
+    if (cuts == 0) return body;   // reported below, plainly
+    split.Build();
+    if (!split.IsDone()) return TopoDS_Shape();
+    return split.Shape();
+  });
+  if (cuts == 0) throw KernelError("Split Face: the plane does not cross those faces");
+  if (!isValid(result)) throw KernelError("Split Face: the faces could not be split there");
   return result;
 }
 
