@@ -43,7 +43,7 @@ public:
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
     RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc, ControlSpline, Conic, TextOnPath,
-    Include3D,
+    Include3D, MidpointLine,
   };
 
   // featureId < 0: a new sketch named `name`.

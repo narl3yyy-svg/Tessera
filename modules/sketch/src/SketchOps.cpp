@@ -58,14 +58,165 @@ std::optional<std::pair<int, int>> cornerAt(const Sketch& s, int point) {
   std::vector<int> lines;
   for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
     const Entity& e = s.entities[i];
-    if (e.type == EntityType::Line && !e.construction && (j.same(e.a, point) || j.same(e.b, point))) lines.push_back(i);
+    if ((e.type == EntityType::Line || e.type == EntityType::Arc) && !e.construction && (j.same(e.a, point) || j.same(e.b, point)))
+      lines.push_back(i);
   }
   if (lines.size() != 2) return std::nullopt;
   return std::make_pair(lines[0], lines[1]);
 }
 
+namespace {
+
+// Fillet where a line and an arc, or two arcs, meet: the fillet's centre is
+// where the curves' offset copies (lines moved by the radius, circles grown
+// or shrunk by it) cross, nearest the corner with both tangent points on
+// the curves' sides of the corner.
+std::string filletWithArc(Sketch& s, int la, int lb, double radius, int* arcOut) {
+  Joints j(s);
+  const Entity A = s.entities[la], B = s.entities[lb];
+  int ea = -1, eb = -1;
+  for (int pa : {A.a, A.b})
+    for (int pb : {B.a, B.b})
+      if (ea < 0 && j.same(pa, pb)) {
+        ea = pa;
+        eb = pb;
+      }
+  if (ea < 0) return "Fillet: the two curves do not meet at a corner";
+  const V p = at(s, ea);
+  // Offset loci: a line as point + direction, a circle as centre + radius.
+  struct Locus {
+    bool line;
+    V o, d;     // line
+    V c;        // circle
+    double r;   // circle
+  };
+  auto loci = [&](const Entity& e) {
+    std::vector<Locus> out;
+    if (e.type == EntityType::Line) {
+      const V a = at(s, e.a), d = unit(at(s, e.b) - a), n{-d.y, d.x};
+      for (double sg : {-1.0, 1.0}) out.push_back({true, a + n * (sg * radius), d, {}, 0});
+    } else {
+      const V c = at(s, e.center);
+      out.push_back({false, {}, {}, c, e.radius + radius});
+      if (e.radius > radius) out.push_back({false, {}, {}, c, e.radius - radius});
+    }
+    return out;
+  };
+  auto meet = [](const Locus& u, const Locus& v) {
+    std::vector<V> out;
+    if (u.line && v.line) {
+      const double den = cross(u.d, v.d);
+      if (std::abs(den) > 1e-12) out.push_back(u.o + u.d * (cross(v.o - u.o, v.d) / den));
+    } else if (u.line != v.line) {
+      const Locus& l = u.line ? u : v;
+      const Locus& c = u.line ? v : u;
+      const V f = l.o - c.c;
+      const double b = dot(f, l.d), cc = dot(f, f) - c.r * c.r, disc = b * b - cc;
+      if (disc >= 0)
+        for (double sg : {-1.0, 1.0}) out.push_back(l.o + l.d * (-b + sg * std::sqrt(disc)));
+    } else {
+      const V d = v.c - u.c;
+      const double dist = len(d);
+      if (dist > 1e-12 && dist <= u.r + v.r && dist >= std::abs(u.r - v.r)) {
+        const double a = (u.r * u.r - v.r * v.r + dist * dist) / (2 * dist);
+        const double h = std::sqrt(std::max(0.0, u.r * u.r - a * a));
+        const V m = u.c + unit(d) * a, n{-d.y / dist, d.x / dist};
+        out.push_back(m + n * h);
+        out.push_back(m - n * h);
+      }
+    }
+    return out;
+  };
+  // Where the fillet touches a curve, and whether that lies on the curve on
+  // its side of the corner.
+  auto touch = [&](const Entity& e, int cornerEnd, V c, V& t) {
+    if (e.type == EntityType::Line) {
+      const V a = at(s, e.a), d = at(s, e.b) - a;
+      const double u = dot(c - a, d) / dot(d, d);
+      t = a + d * u;
+      const bool fromA = cornerEnd == e.a;
+      return u > 1e-9 && u < 1 - 1e-9 && (fromA ? u > 0 : u < 1);
+    }
+    const V cc = at(s, e.center);
+    t = cc + unit(c - cc) * e.radius;
+    const double a0 = std::atan2(at(s, e.a).y - cc.y, at(s, e.a).x - cc.x);
+    double span = std::atan2(at(s, e.b).y - cc.y, at(s, e.b).x - cc.x) - a0;
+    span -= 2 * kPi * std::floor(span / (2 * kPi));
+    double u = std::atan2(t.y - cc.y, t.x - cc.x) - a0;
+    u -= 2 * kPi * std::floor(u / (2 * kPi));
+    return u > 1e-9 && u < span - 1e-9;
+  };
+  double best = 1e300;
+  V c{}, t1{}, t2{};
+  for (const auto& u : loci(A))
+    for (const auto& v : loci(B))
+      for (const V& cand : meet(u, v)) {
+        V ta, tb;
+        if (!touch(A, ea, cand, ta) || !touch(B, eb, cand, tb))
+          continue;
+        // Inside the corner: the fillet stays near it, both touch points on the short way round.
+        const double score = len(cand - p) + len(ta - p) + len(tb - p);
+        if (score < best) {
+          best = score;
+          c = cand;
+          t1 = ta;
+          t2 = tb;
+        }
+      }
+  if (best > 1e299) return "Fillet: the radius does not fit that corner";
+
+  const Sketch backup = s;
+  int pt1 = ea, pt2 = eb;
+  if (ea == eb) {
+    pt1 = s.addPoint(t1.x, t1.y);
+    pt2 = s.addPoint(t2.x, t2.y);
+    Entity& ra = s.entities[la];
+    Entity& rb = s.entities[lb];
+    (ra.a == ea ? ra.a : ra.b) = pt1;
+    (rb.a == eb ? rb.a : rb.b) = pt2;
+  } else {
+    s.points[ea] = {t1.x, t1.y};
+    s.points[eb] = {t2.x, t2.y};
+  }
+  std::vector<Constraint> kept;
+  for (const auto& k : s.constraints) {
+    const bool joinsEnds = k.type == ConstraintType::Coincident && k.points.size() == 2 && j.same(k.points[0], ea) &&
+                           j.same(k.points[1], ea);
+    const bool lengthDim = (k.type == ConstraintType::Distance || k.type == ConstraintType::HorizontalDistance ||
+                            k.type == ConstraintType::VerticalDistance) &&
+                           k.points.empty() && k.entities.size() == 1 && (k.entities[0] == la || k.entities[0] == lb);
+    if (!joinsEnds && !lengthDim) kept.push_back(k);
+  }
+  s.constraints = std::move(kept);
+  const int pc = s.addPoint(c.x, c.y);
+  const bool ccw = cross(t1 - c, t2 - c) > 0;
+  const int arc = s.addArc(pc, ccw ? pt1 : pt2, ccw ? pt2 : pt1);
+  s.entities[arc].radius = radius;
+  s.addConstraint({ConstraintType::Tangent, {}, {la, arc}});
+  s.addConstraint({ConstraintType::Tangent, {}, {lb, arc}});
+  s.addConstraint({ConstraintType::Radius, {}, {arc}, radius});
+  if (ea == eb) {
+    bool used = false;
+    for (int i = 0; i < static_cast<int>(s.entities.size()); ++i)
+      for (int q : s.entityPoints(i)) used = used || q == ea;
+    if (!used) s.removePoints({ea});
+  }
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return "Fillet: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+  }
+  if (arcOut) *arcOut = arc;
+  return {};
+}
+
+} // namespace
+
 std::string filletCorner(Sketch& s, int la, int lb, double radius, int* arcOut) {
-  if (!isLine(s, la) || !isLine(s, lb) || la == lb) return "Fillet: pick two lines that meet at a corner";
+  const auto isArc = [&](int e) { return e >= 0 && e < static_cast<int>(s.entities.size()) && s.entities[e].type == EntityType::Arc; };
+  if (la != lb && radius > 0 && ((isArc(la) && (isArc(lb) || isLine(s, lb))) || (isLine(s, la) && isArc(lb))))
+    return filletWithArc(s, la, lb, radius, arcOut);
+  if (!isLine(s, la) || !isLine(s, lb) || la == lb) return "Fillet: pick two lines or arcs that meet at a corner";
   if (!(radius > 0)) return "Fillet: the radius must be greater than zero";
   Joints j(s);
   const Entity A = s.entities[la], B = s.entities[lb];

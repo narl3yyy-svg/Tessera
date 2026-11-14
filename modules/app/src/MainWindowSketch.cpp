@@ -306,6 +306,7 @@ QWidget* MainWindow::buildSketchTab() {
   QHBoxLayout* create = panel(tr("CREATE"));
   toolButton(create, T::Select, QStringLiteral("select"), tr("Select / move"), QStringLiteral("Q"));
   toolButton(create, T::Line, QStringLiteral("line"), tr("Line"), QStringLiteral("L"));
+  toolButton(create, T::MidpointLine, QStringLiteral("line-mid"), tr("Midpoint Line"), {});
   toolGroup(create, QStringLiteral("rectangle"),
             {{T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R")},
              {T::ThreePointRectangle, QStringLiteral("rectangle-3pt"), tr("3-Point Rectangle"), {}},

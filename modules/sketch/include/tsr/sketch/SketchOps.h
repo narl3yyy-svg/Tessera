@@ -16,7 +16,8 @@ namespace tsr::sketch {
 // exactly two do.
 std::optional<std::pair<int, int>> cornerAt(const Sketch& s, int point);
 
-// Rounds the corner where two lines meet with an arc of `radius`: the lines
+// Rounds the corner where two lines (or a line and an arc, or two arcs)
+// meet with an arc of `radius`: the curves
 // are shortened to the tangent points and the arc gets tangent constraints
 // and a radius dimension. Dimensions of the two lines' lengths are dropped
 // (the corner they measured is gone). Returns empty on success, else why
@@ -67,6 +68,10 @@ std::string chamferCorner(Sketch& s, int lineA, int lineB, double distance, int*
 // Extends a line's free end nearest (x, y) to the first curve it meets,
 // leaving the new end on that curve. Returns empty on success, else why not.
 std::string extendLine(Sketch& s, int line, double x, double y);
+// Extend for any curve that has one: a line (see extendLine; it also reaches
+// splines and ellipses) or an arc, whose end nearest (x, y) runs on round its
+// circle to the first curve it meets. Returns empty on success, else why not.
+std::string extendCurve(Sketch& s, int entity, double x, double y);
 
 // Mirror copies of `entities` across the line `mirrorLine`, tied to the
 // originals with symmetry constraints (points on the mirror line are

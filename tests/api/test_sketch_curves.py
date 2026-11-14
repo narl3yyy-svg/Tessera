@@ -142,3 +142,39 @@ again = json.loads(tsr.sketch_data(name))
 assert max(len(p) for p in again["points"]) == 3 and sum(1 for x in again["entities"] if x.get("included")) == 12
 assert any("ends" in x for x in json.loads(tsr.sketch_data("Sketch1"))["entities"])
 print("sketch curves: OK")
+
+# --- Extend: an arc's end runs on round its circle to the first curve; a line
+# reaches an ellipse.
+arc = {"points": [[0, 0], [0, 0], [1, 0], [0, 1], [-0.5, -2], [-0.5, 2]],
+       "entities": [{"type": "arc", "c": 1, "p": [2, 3], "r": 1.0}, {"type": "line", "p": [4, 5]}],
+       "constraints": [{"type": "fix", "p": [1], "v": 0.0, "v2": 0.0}]}
+ext = json.loads(tsr.sketch_extend(json.dumps(arc), 0, 0.0, 1.05))
+end = ext["points"][ext["entities"][0]["p"][1]]
+assert abs(end[0] + 0.5) < 1e-6 and abs(end[1] - math.sqrt(0.75)) < 1e-6, end
+assert any(c["type"] == "pointOnEntity" for c in ext["constraints"]), ext["constraints"]
+toell = {"points": [[0, 0], [0, 0], [1, 0], [5, 0], [7, 0]],
+         "entities": [{"type": "line", "p": [1, 2]}, {"type": "ellipse", "c": 3, "p": [4, -1], "r": 1.0}],
+         "constraints": [{"type": "fix", "p": [1], "v": 0.0, "v2": 0.0}, {"type": "fix", "p": [3], "v": 5.0, "v2": 0.0},
+                         {"type": "fix", "p": [4], "v": 7.0, "v2": 0.0}]}
+ext = json.loads(tsr.sketch_extend(json.dumps(toell), 0, 0.9, 0.0))
+assert abs(ext["points"][2][0] - 3.0) < 1e-6, ext["points"]
+print("sketch extend: OK")
+
+# --- Fillet where an arc meets a line: a 5 mm round, tangent to both.
+al = {"points": [[0, 0], [0, 0], [2, 0], [0, 2], [0, 5]],
+      "entities": [{"type": "arc", "c": 1, "p": [2, 3], "r": 2.0}, {"type": "line", "p": [3, 4]}],
+      "constraints": [{"type": "fix", "p": [1], "v": 0.0, "v2": 0.0}, {"type": "fix", "p": [2], "v": 2.0, "v2": 0.0},
+                      {"type": "fix", "p": [4], "v": 0.0, "v2": 5.0}, {"type": "vertical", "e": [1]}]}
+fil = json.loads(tsr.sketch_fillet(json.dumps(al), 0, 1, 0.5))
+arcs = [e for e in fil["entities"] if e["type"] == "arc" and abs(e["r"] - 0.5) < 1e-9]
+assert len(arcs) == 1, fil["entities"]
+c = fil["points"][arcs[0]["c"]]
+assert abs(c[0] - 0.5) < 1e-6 and abs(c[1] - math.sqrt(6.0)) < 1e-6, c
+assert sum(1 for k in fil["constraints"] if k["type"] == "tangent") == 2
+# Two arcs meeting at a point: a round between them.
+aa = {"points": [[0, 0], [0, 0], [2, 0], [0, 2], [0, 4], [-2, 4]],
+      "entities": [{"type": "arc", "c": 1, "p": [2, 3], "r": 2.0}, {"type": "arc", "c": 4, "p": [3, 5], "r": 2.0}],
+      "constraints": [{"type": "fix", "p": [1], "v": 0.0, "v2": 0.0}, {"type": "fix", "p": [4], "v": 0.0, "v2": 4.0}]}
+fil = json.loads(tsr.sketch_fillet(json.dumps(aa), 0, 1, 0.3))
+assert any(e["type"] == "arc" and abs(e["r"] - 0.3) < 1e-9 for e in fil["entities"]), fil["entities"]
+print("sketch fillet arcs: OK")

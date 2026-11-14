@@ -237,6 +237,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Slot: emit message(tr("Slot: click one end centre, then the other. The boxes take length and width.")); break;
     case Tool::ThreePointRectangle: emit message(tr("3-Point Rectangle: click both ends of one side, then a point for the width.")); break;
     case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
+    case Tool::MidpointLine: emit message(tr("Midpoint Line: click the middle, then one end; the line runs as far the other way.")); break;
     case Tool::ThreePointCircle: emit message(tr("3-Point Circle: click three points on the circle.")); break;
     case Tool::ThreePointArc: emit message(tr("3-Point Arc: click the start, the end, then a point the arc passes through.")); break;
     case Tool::ControlSpline: emit message(tr("Control Point Spline: click the points of its frame; Enter or double-click finishes, Esc throws it away.")); break;
@@ -1522,7 +1523,7 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       const Hit h = hitEntity(x, y);
       if (h.kind != Hit::Entity) return;
       checkpoint();
-      const std::string err = sketch::extendLine(sk_, h.index, x, y);
+      const std::string err = sketch::extendCurve(sk_, h.index, x, y);
       if (!err.empty()) {
         undo_.pop_back();
         emit message(QString::fromStdString(err));
@@ -1541,16 +1542,18 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         std::optional<std::pair<int, int>> corner;
         if (h.kind == Hit::Point) {
           corner = sketch::cornerAt(sk_, h.index);
-        } else if (h.kind == Hit::Entity && sk_.entities[h.index].type == EntityType::Line) {
+        } else if (h.kind == Hit::Entity && (sk_.entities[h.index].type == EntityType::Line ||
+                                             (tool_ == Tool::Fillet && sk_.entities[h.index].type == EntityType::Arc))) {
           if (firstFilletLine_ < 0 || firstFilletLine_ == h.index) {
             firstFilletLine_ = h.index;
-            emit message(tr("Fillet: click the second line."));
+            emit message(tool_ == Tool::Fillet ? tr("Fillet: click the second line or arc.") : tr("Chamfer: click the second line."));
             return;
           }
           corner = std::make_pair(firstFilletLine_, h.index);
         }
         if (!corner) {
-          emit message(tr("Fillet: click a corner where two lines meet, or two lines."));
+          emit message(tool_ == Tool::Fillet ? tr("Fillet: click a corner where two lines or arcs meet, or the two curves.")
+                                             : tr("Chamfer: click a corner where two lines meet, or two lines."));
           return;
         }
         // The corner point, for the live radius and the box.
@@ -1679,6 +1682,26 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
       sk_.addConstraint({ConstraintType::Parallel, {}, {l0, l2}});
       sk_.addConstraint({ConstraintType::Parallel, {}, {l1, l3}});
       autoHorizontalVertical(l0);   // a level or upright first side stays so
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::MidpointLine: {
+      if (steps_.empty()) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      const Pick end = pickPoint(x, y);
+      const double mx = steps_[0].x, my = steps_[0].y;
+      if (std::hypot(end.x - mx, end.y - my) < tolerance() / 2) return;
+      checkpoint();
+      const int mid = materialize(steps_[0]);
+      const int b = materialize(end);
+      const int a = sk_.addPoint(2 * sk_.points[mid].x - sk_.points[b].x, 2 * sk_.points[mid].y - sk_.points[b].y);
+      const int line = sk_.addLine(a, b, construction_);
+      (void)sketch::addConstraintChecked(sk_, {ConstraintType::Midpoint, {mid}, {line}});
+      autoHorizontalVertical(line);
       resetSteps();
       solveAndShow();
       if (!res_.ok) undo();
@@ -4433,7 +4456,8 @@ void SketchEditor::updatePreview(double x, double y) {
                        tool_ == Tool::Slot || tool_ == Tool::Spline || tool_ == Tool::ThreePointRectangle ||
                        tool_ == Tool::TwoPointCircle || tool_ == Tool::ThreePointCircle || tool_ == Tool::ThreePointArc ||
                        tool_ == Tool::TangentArc || tool_ == Tool::ControlSpline || tool_ == Tool::Conic ||
-                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse;
+                       tool_ == Tool::OverallSlot || tool_ == Tool::ArcSlot || tool_ == Tool::Ellipse ||
+                       tool_ == Tool::MidpointLine;
   if (view_ && drawing && !(hudTool() && !steps_.empty() && hudAnyLocked())) showSnap(snapAt(x, y));
   if (view_ && tool_ == Tool::TwoTangentCircle && tangentLines_.size() == 2) {
     double cx, cy, r;
@@ -4586,6 +4610,9 @@ void SketchEditor::updatePreview(double x, double y) {
       if (r > 1e-9) tmp.addCircle(a.x, a.y, r);
       break;
     }
+    case Tool::MidpointLine:
+      if (std::hypot(x - a.x, y - a.y) > 1e-9) tmp.addLine(2 * a.x - x, 2 * a.y - y, x, y);
+      break;
     case Tool::TwoPointCircle: {
       const double r = std::hypot(x - a.x, y - a.y) / 2;
       if (r > 1e-9) tmp.addCircle((a.x + x) / 2, (a.y + y) / 2, r);

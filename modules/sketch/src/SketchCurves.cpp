@@ -398,4 +398,108 @@ int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>&
   return made;
 }
 
+namespace {
+
+// The end of `entity` nearest (x, y) must be free (no other curve uses it).
+bool endIsFree(const Sketch& s, int entity, int endPt) {
+  for (int i = 0; i < static_cast<int>(s.entities.size()); ++i)
+    if (i != entity)
+      for (int q : s.entityPoints(i))
+        if (q == endPt) return false;
+  return true;
+}
+
+std::string finishExtend(Sketch& s, const Sketch& backup, int entity, int endPt, const Point& to, int target) {
+  s.points[endPt].x = to.x;
+  s.points[endPt].y = to.y;
+  // A length dimension on the curve changes: drop it; keep the end on the target.
+  std::erase_if(s.constraints, [&](const Constraint& k) {
+    return k.type == ConstraintType::Distance && k.points.empty() && k.entities.size() == 1 && k.entities[0] == entity;
+  });
+  if (s.entities[target].type != EntityType::Spline) s.addConstraint({ConstraintType::PointOnEntity, {endPt}, {target}});
+  const SolveResult r = solve(s);
+  if (!r.ok) {
+    s = backup;
+    return "Extend: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+  }
+  return {};
+}
+
+} // namespace
+
+std::string extendCurve(Sketch& s, int entity, double x, double y) {
+  if (entity < 0 || entity >= static_cast<int>(s.entities.size())) return "Extend: click a line or arc near the end to extend";
+  const Entity e = s.entities[entity];
+  if (e.type == EntityType::Line) {
+    // Lines and circles / arcs in closed form first; then curves without one.
+    const Point pa = s.points[e.a], pb = s.points[e.b];
+    const bool atB = std::hypot(x - pb.x, y - pb.y) < std::hypot(x - pa.x, y - pa.y);
+    const int endPt = atB ? e.b : e.a;
+    if (!endIsFree(s, entity, endPt)) return "Extend: that end is connected to another curve";
+    const Point from = atB ? pb : pa;
+    double dx = atB ? pb.x - pa.x : pa.x - pb.x, dy = atB ? pb.y - pa.y : pa.y - pb.y;
+    const double len = std::hypot(dx, dy);
+    if (len < 1e-12) return "Extend: the line has no length";
+    dx /= len;
+    dy /= len;
+    // A long ray from the end, as a line in a copy of the sketch.
+    Sketch ray = s;
+    for (auto& p : ray.points) p.z = 0;
+    const int far = ray.addPoint(from.x + dx * 1e4, from.y + dy * 1e4);
+    const int near = ray.addPoint(from.x, from.y);
+    const int rayLine = ray.addLine(near, far);
+    double best = 1e300;
+    int target = -1;
+    Point hit{};
+    for (int j = 0; j < static_cast<int>(s.entities.size()); ++j) {
+      if (j == entity) continue;
+      for (const auto& q : crossings(ray, rayLine, j)) {
+        const double t = (q.x - from.x) * dx + (q.y - from.y) * dy;
+        if (t > 1e-7 && t < best) {
+          best = t;
+          target = j;
+          hit = q;
+        }
+      }
+    }
+    if (target < 0) return "Extend: nothing to extend to in that direction";
+    const Sketch backup = s;
+    return finishExtend(s, backup, entity, endPt, hit, target);
+  }
+  if (e.type == EntityType::Arc) {
+    const Point c = s.points[e.center], pa = s.points[e.a], pb = s.points[e.b];
+    const bool atB = std::hypot(x - pb.x, y - pb.y) < std::hypot(x - pa.x, y - pa.y);
+    const int endPt = atB ? e.b : e.a;
+    if (!endIsFree(s, entity, endPt)) return "Extend: that end is connected to another curve";
+    const double twoPi = 2 * kPi;
+    auto norm = [&](double v) { return v - twoPi * std::floor(v / twoPi); };
+    const double a0 = std::atan2(pa.y - c.y, pa.x - c.x), a1 = std::atan2(pb.y - c.y, pb.x - c.x);
+    const double span = norm(a1 - a0);
+    // The whole circle in a copy: where others cross it.
+    Sketch whole = s;
+    for (auto& p : whole.points) p.z = 0;
+    whole.entities[entity].type = EntityType::Circle;
+    double best = 1e300;
+    int target = -1;
+    Point hit{};
+    for (int j = 0; j < static_cast<int>(s.entities.size()); ++j) {
+      if (j == entity) continue;
+      for (const auto& q : crossings(whole, entity, j)) {
+        const double ang = std::atan2(q.y - c.y, q.x - c.x);
+        // How far round from the end, going away from the arc.
+        const double d = atB ? norm(ang - a1) : norm(a0 - ang);
+        if (d > 1e-7 && d < twoPi - span - 1e-7 && d < best) {
+          best = d;
+          target = j;
+          hit = q;
+        }
+      }
+    }
+    if (target < 0) return "Extend: nothing to extend to round that way";
+    const Sketch backup = s;
+    return finishExtend(s, backup, entity, endPt, hit, target);
+  }
+  return "Extend: click a line or arc near the end to extend (splines and ellipses cannot be extended yet)";
+}
+
 } // namespace tsr::sketch

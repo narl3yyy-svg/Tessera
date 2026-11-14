@@ -1,0 +1,15 @@
+# Live: SKETCH > Midpoint Line: click the middle, then one end; the line runs
+# as far the other way, its middle kept on the first point.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line-mid
+sclick 20 20
+sclick 40 30
+key Escape
+wait 300
+shot /tmp/live_midpoint_line.png
+click palette.finish
+wait 800
