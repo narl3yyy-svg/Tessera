@@ -340,8 +340,8 @@ std::optional<double> Viewport::arrowParam(int which, const QPointF& pos) const 
     const gp_Vec rel(a.base, gp_Pnt(x, y, z).Translated(v * t));
     const gp_Vec across = n.Crossed(gp_Vec(a.ref));
     double ang = std::atan2(rel.Dot(across), rel.Dot(gp_Vec(a.ref)));
-    while (ang - a.value > M_PI) ang -= 2 * M_PI;
-    while (a.value - ang > M_PI) ang += 2 * M_PI;
+    // The turn nearest the current value (remainder: a huge value cannot hang the loop).
+    if (std::isfinite(a.value)) ang = a.value + std::remainder(ang - a.value, 2 * M_PI);
     return ang;
   }
   const gp_Vec v(vx, vy, vz), u(a.dir);

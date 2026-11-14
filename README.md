@@ -142,9 +142,10 @@ build/modules/api/tessera-cli --help   # headless scripting
 Adding a tool, the test layout and the conventions are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 Every feature is checked three ways: Python API tests, GUI tests driven with real mouse and keyboard input
-(88 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
+(89 `ctest` tests in all, every one passing), and 90 **reference parts** with known volumes, areas and sizes
 (71 pass today, 18 need tools that are still planned; see [docs/ORACLE.md](docs/ORACLE.md)). The build has no
-compiler warnings.
+compiler warnings, and the whole suite also passes under AddressSanitizer and UndefinedBehaviorSanitizer (how to
+run that check: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#tests)).
 
 ## License
 

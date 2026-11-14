@@ -57,7 +57,8 @@ std::optional<Curve2d> curve2d(const Sketch& flat, int entity) {
     out.t0 = t0;
     out.t1 = t1;
     const gp_Pnt2d a = out.c->Value(t0), b = out.c->Value(t1);
-    out.periodic = a.Distance(b) < 1e-7;
+    out.periodic = a.Distance(b) < 1e-7 && t1 - t0 > 1e-9;
+    if (!(t1 > t0)) return std::nullopt;
     return out;
   } catch (const Standard_Failure&) {
     return std::nullopt;
@@ -107,9 +108,7 @@ int makePiece(Sketch& s, const Entity& src, const Curve2d& c, double u0, double 
   const double period = c.t1 - c.t0;
   auto wrap = [&](double u) {
     if (!c.periodic) return u;
-    while (u > c.t1) u -= period;
-    while (u < c.t0) u += period;
-    return u;
+    return c.t0 + std::fmod(std::fmod(u - c.t0, period) + period, period);
   };
   if (src.type == EntityType::Ellipse) return s.addEllipticalArc(src.center, src.a, src.radius, start, end, src.construction);
   // A spline: a fit point spline through its own fit points that lie on the
@@ -123,8 +122,7 @@ int makePiece(Sketch& s, const Entity& src, const Curve2d& c, double u0, double 
     for (size_t i = 0; i < src.fit.size() - (closed ? 1 : 0); ++i) {
       const Point& q = s.points.at(src.fit[i]);
       double u = paramOf(c, q.x, q.y);
-      if (c.periodic)
-        while (u < u0) u += period;
+      if (c.periodic && u < u0) u += period * std::ceil((u0 - u) / period);
       if (u > u0 + 1e-7 && u < u1 - 1e-7) inner.emplace_back(u, static_cast<int>(i));
     }
     std::sort(inner.begin(), inner.end());
@@ -187,8 +185,8 @@ std::string trimCurve(Sketch& s, int entity, double x, double y, bool breakOnly)
   for (double u : cuts) {
     if (c->periodic) {
       double after = u, before = u;
-      while (after <= uc + 1e-9) after += period;
-      while (before >= uc - 1e-9) before -= period;
+      if (after <= uc + 1e-9) after += period * (std::floor((uc + 1e-9 - after) / period) + 1);
+      if (before >= uc - 1e-9) before -= period * (std::floor((before - (uc - 1e-9)) / period) + 1);
       if (!hi || after < *hi) hi = after;
       if (!lo || before > *lo) lo = before;
     } else {
@@ -198,8 +196,7 @@ std::string trimCurve(Sketch& s, int entity, double x, double y, bool breakOnly)
   }
   const Sketch backup = s;
   auto pointAt = [&](double u) {
-    while (c->periodic && u > c->t1) u -= period;
-    while (c->periodic && u < c->t0) u += period;
+    if (c->periodic) u = c->t0 + std::fmod(std::fmod(u - c->t0, period) + period, period);
     return newPoint(s, c->c->Value(u));
   };
   std::vector<int> pieces;

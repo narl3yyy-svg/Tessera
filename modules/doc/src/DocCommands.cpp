@@ -1794,6 +1794,7 @@ public:
       throw CommandError(std::string("Direction: ") + e.what());
     }
     const auto n1 = getInt(in, "quantity1"), n2 = getInt(in, "quantity2");
+    if (n1 * n2 > 1000) throw CommandError("Quantity: at most 1000 copies in all (" + std::to_string(n1 * n2) + " asked)");
     double s1 = getReal(in, "distance1"), s2 = getReal(in, "distance2");
     if (stringOr(in, "distanceType", "Spacing") == "Extent") {
       s1 = n1 > 1 ? s1 / static_cast<double>(n1 - 1) : 0;
@@ -2501,11 +2502,14 @@ public:
 private:
   static std::pair<double, double> turnsAndHeight(const Inputs& in) {
     const std::string t = getString(in, "type");
+    if (getReal(in, "revolutions") > 1000 && t != "Height and Pitch") throw CommandError("Revolutions: at most 1000 turns");
     if (t == "Revolution and Pitch") return {getReal(in, "revolutions"), getReal(in, "revolutions") * getReal(in, "pitch")};
     if (t == "Height and Pitch") {
       const double h = getReal(in, "height");
       if (std::abs(h) < 1e-9) throw CommandError("Height: must not be zero");
-      return {std::abs(h) / getReal(in, "pitch"), h};
+      const double turns = std::abs(h) / getReal(in, "pitch");
+      if (turns > 1000) throw CommandError("Pitch: too fine for that height (at most 1000 turns)");
+      return {turns, h};
     }
     if (std::abs(getReal(in, "height")) < 1e-9) throw CommandError("Height: must not be zero");
     return {getReal(in, "revolutions"), getReal(in, "height")};

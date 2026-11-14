@@ -1,5 +1,6 @@
 // MainWindow: sketch mode (SKETCH ribbon tab, plane picking, finish/cancel)
 // and profile picking for features that take profiles (Extrude).
+#include "ProfileCache.h"
 #include "CommandDialog.h"
 #include "Icons.h"
 #include "MainWindow.h"
@@ -447,7 +448,7 @@ void MainWindow::updateProfilePicking() {
   std::vector<int> indices;
   try {
     const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
-    const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+    const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec->data), frame);
     for (const QString& item : picks.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
       const auto xy = item.split(QLatin1Char(','));
       if (xy.size() != 2) continue;
@@ -682,7 +683,7 @@ void MainWindow::onProfileClicked(const QString& sketchName, int index) {
     if (!rec) return;
     try {
       const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
-      const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+      const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec->data), frame);
       if (index < 0 || index >= static_cast<int>(profiles.size())) return;
       const QString item = QStringLiteral("%1,%2").arg(profiles[index].x, 0, 'g', 12).arg(profiles[index].y, 0, 'g', 12);
       const bool add = viewport_->boxPicking() ||
@@ -715,7 +716,7 @@ void MainWindow::onProfileClicked(const QString& sketchName, int index) {
   if (!rec) return;
   try {
     const gp_Ax3 frame = session_.document().planeFrame(rec->plane, rec->offset);
-    const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+    const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec->data), frame);
     if (index < 0 || index >= static_cast<int>(profiles.size())) return;
     // Current picks on this sketch (picks on another sketch are replaced).
     std::vector<int> picked;

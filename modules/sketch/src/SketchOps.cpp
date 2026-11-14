@@ -658,6 +658,7 @@ std::string placeEntities(Sketch& s, const std::vector<int>& entities, const Pla
 std::string rectangularPattern(Sketch& s, const std::vector<int>& entities, double angle, int count1, double spacing1,
                                int count2, double spacing2, std::vector<int>* created) {
   if (count1 < 1 || count2 < 1 || count1 * count2 < 2) return "Pattern: at least two copies in all";
+  if (static_cast<long long>(count1) * count2 > 1000) return "Pattern: at most 1000 copies in all";
   const Sketch backup = s;
   const double ux = std::cos(angle), uy = std::sin(angle), vx = -uy, vy = ux;
   for (int i = 0; i < count1; ++i)
@@ -677,6 +678,7 @@ std::string rectangularPattern(Sketch& s, const std::vector<int>& entities, doub
 std::string circularPattern(Sketch& s, const std::vector<int>& entities, int center, int count, double totalAngle,
                             std::vector<int>* created) {
   if (count < 2) return "Pattern: at least two copies";
+  if (count > 1000) return "Pattern: at most 1000 copies";
   if (center < 0 || center >= static_cast<int>(s.points.size())) return "Pattern: pick the centre point";
   const Sketch backup = s;
   const bool full = std::abs(std::abs(totalAngle) - 2 * std::numbers::pi) < 1e-9;

@@ -66,9 +66,8 @@ void unpack(Sketch& s, const Layout& L, const Eigen::VectorXd& q) {
 }
 
 double wrapAngle(double a) {
-  while (a > kPi) a -= 2 * kPi;
-  while (a < -kPi) a += 2 * kPi;
-  return a;
+  // remainder, not a loop: a huge typed angle must not spin forever.
+  return std::isfinite(a) ? std::remainder(a, 2 * kPi) : a;
 }
 
 // Evaluates every residual for the geometry in `s`.

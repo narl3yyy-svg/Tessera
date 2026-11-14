@@ -1242,12 +1242,12 @@ void Document::recompute(const CommandRegistry& registry) {
   effects_.clear();
   for (const Feature& f : features()) {
     std::string error;
-    const auto before = bodyShapes();
     pendingTools_.clear();
     if (f.rolledBack) {   // after the history marker
       effects_[f.id] = FeatureEffect{};
       continue;
     }
+    const auto before = bodyShapes();
     if (!f.suppressed) {
       if (const Command* cmd = registry.find(f.commandId)) {
         try {

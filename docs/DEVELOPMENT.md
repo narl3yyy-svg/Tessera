@@ -36,6 +36,20 @@ Live tests: `scripts/live-test.sh tests/live/<name>.drive [setup.py] [check.py]`
 `sclick 40 0` (sketch mm), `adrag 0 -120` (the arrow) or `plane XY`; `shot FILE` saves a screenshot. Needs
 `xvfb-run` and libXtst (no other packages).
 
+Memory and undefined-behaviour check (run before a release, and after large changes): build a second tree with
+AddressSanitizer and UndefinedBehaviorSanitizer and run every test in it, one at a time (live tests share the
+virtual display):
+
+```bash
+cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1"       -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build-asan -j4
+cd build-asan && ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ctest -j1 -E '^oracle$'
+```
+
+Inputs typed by people (angles, counts, pitches) must never drive an unbounded loop: wrap angles with
+`std::remainder`, not `while` loops, and cap counts (patterns and coils: at most 1000 copies or turns);
+`tests/api/test_robustness.py` checks these.
+
 Screenshots for visual checks: `tessera --script examples/<demo>.py --screenshot out.png`; add
 `--start-command <id>`, `--edit-sketch <name>` or `--demo-hud` to show a panel, sketch mode or the size boxes.
 On a headless machine run it inside `kwin_wayland --virtual --xwayland --exit-with-session <script>`.

@@ -2,6 +2,7 @@
 // (sketch profiles or body faces), Press Pull, Fillet and Chamfer get an
 // arrow at the geometry they act on; dragging it sets their distance or
 // radius live, and the box beside it takes typed values and expressions.
+#include "ProfileCache.h"
 #include "CommandDialog.h"
 #include "MainWindow.h"
 #include "ParameterCompleter.h"
@@ -196,7 +197,7 @@ void MainWindow::updateDragArrow() {
       if (!rec) return off();
       try {
         const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
-        const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+        const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec->data), frame);
         std::vector<int> picked;
         for (const QString& item : active_->currentProfiles().split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
           const auto xy = item.split(QLatin1Char(','));
@@ -307,7 +308,7 @@ void MainWindow::updateDragArrow() {
       const gp_Ax1 axis = doc::revolveAxis(doc, sketchName.toStdString(), active_->textInput(QStringLiteral("axis")).toStdString(),
                                            active_->textInput(QStringLiteral("constructionAxis")).toStdString());
       const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
-      const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec->data), frame);
+      const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec->data), frame);
       GProp_GProps all;
       for (const auto& pr : profiles) {
         GProp_GProps g;

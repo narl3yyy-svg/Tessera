@@ -1,3 +1,4 @@
+#include "ProfileCache.h"
 #include "MainWindow.h"
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -993,7 +994,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
       try {
         const auto& rec = sketches.back();
         const gp_Ax3 frame = d.planeFrame(rec.plane, rec.offset);
-        const auto profiles = sketch::profiles(sketch::Sketch::fromJson(rec.data), frame);
+        const auto profiles = cachedProfiles(sketch::Sketch::fromJson(rec.data), frame);
         if (profiles.size() == 1)
           autoProfile = {qs(rec.name), QStringLiteral("%1,%2").arg(profiles[0].x, 0, 'g', 12).arg(profiles[0].y, 0, 'g', 12)};
       } catch (const std::exception&) {
@@ -1259,7 +1260,7 @@ void MainWindow::refresh() {
         sd.curves = freeC;
         if (anyFixed) sd.fixedCurves = fixedC;
         sd.construction = sketch::curves(s, sd.frame, true);
-        sd.profiles = sketch::profiles(s, sd.frame);
+        sd.profiles = cachedProfiles(s, sd.frame);
       } catch (const std::exception&) {
         sd.visible = false;
       }
@@ -1580,6 +1581,10 @@ int MainWindow::timelineSlot(int x) const {
 // Press, drag past the start distance, release: the item moves to the slot
 // under the pointer. Returns true when the event was used.
 bool MainWindow::timelineDrag(QEvent* e) {
+  // Only mouse events are cast (every other event passes through here too).
+  if (e->type() != QEvent::MouseButtonPress && e->type() != QEvent::MouseMove &&
+      e->type() != QEvent::MouseButtonRelease)
+    return false;
   auto* me = static_cast<QMouseEvent*>(e);
   switch (e->type()) {
     case QEvent::MouseButtonPress:

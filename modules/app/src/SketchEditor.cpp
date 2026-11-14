@@ -1,3 +1,4 @@
+#include "ProfileCache.h"
 #include "SketchEditor.h"
 #include "ParameterCompleter.h"
 #include "Theme.h"
@@ -4141,7 +4142,7 @@ void SketchEditor::rebuild() {
   // Closed regions, lightly shaded (what Extrude can pick after Finish).
   if (display_.profiles) {
     try {
-      for (const auto& pr : sketch::profiles(sk_, frame_)) {
+      for (const auto& pr : cachedProfiles(sk_, frame_)) {
         Handle(AIS_Shape) f = new AIS_Shape(pr.face);
         Graphic3d_MaterialAspect m(Graphic3d_NameOfMaterial_UserDefined);
         const Quantity_Color c = rgb(120, 170, 230);

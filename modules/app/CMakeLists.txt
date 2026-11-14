@@ -10,6 +10,7 @@ add_executable(tessera
   src/SketchEditor.cpp
   src/SketchEditor.h
   src/SketchPalette.cpp
+  src/ProfileCache.cpp
   src/SketchPalette.h
   src/ViewportSketch.cpp
   src/ViewportArrow.cpp
