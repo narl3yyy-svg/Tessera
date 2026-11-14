@@ -154,6 +154,9 @@ Viewport::Viewport(QWidget* parent) : QOpenGLWidget(parent) {
     viewer_->AddLight(key);
     viewer_->AddLight(fill);
     viewer_->AddLight(ambient);
+    keyLight_ = key;
+    fillLight_ = fill;
+    ambientLight_ = ambient;
     viewer_->SetLightOn();
     viewer_->SetRectangularGridValues(0, 0, 1.0, 1.0, 0);     // 10 mm cells
     viewer_->SetRectangularGridGraphicValues(25.0, 25.0, 0);  // 500 mm across
@@ -1192,13 +1195,44 @@ void Viewport::setBodiesGhosted(bool on) {
   if (glReady_) rebuild();
 }
 
+QStringList Viewport::environmentNames() {
+  return {tr("Theme (default)"), tr("Grey Room"), tr("Dark Sky"), tr("White Studio"), tr("Warm Light")};
+}
+
+void Viewport::setEnvironment(int index) {
+  environment_ = std::clamp(index, 0, static_cast<int>(environmentNames().size()) - 1);
+  applyTheme();
+}
+
 void Viewport::applyTheme() {
   if (view_.IsNull()) {
     update();
     return;
   }
   const auto& c = themeColors();
-  view_->SetBgGradientColors(qc(c.viewTop), qc(c.viewBottom), Aspect_GradientFillMethod_Vertical);
+  // Backgrounds (top, bottom) and light strengths (key, fill, ambient) per
+  // environment; the light colour warms for Warm Light.
+  struct Env {
+    QColor top, bottom;
+    double key, fill, ambient;
+    Quantity_Color tint;
+  };
+  const Env envs[] = {
+      {c.viewTop, c.viewBottom, 0.9, 0.45, 0.38, Quantity_Color(Quantity_NOC_WHITE)},
+      {QColor(150, 154, 160), QColor(92, 96, 104), 0.85, 0.5, 0.42, Quantity_Color(Quantity_NOC_WHITE)},
+      {QColor(18, 24, 40), QColor(52, 62, 84), 1.0, 0.35, 0.25, Quantity_Color(0.85, 0.9, 1.0, Quantity_TOC_sRGB)},
+      {QColor(250, 250, 252), QColor(214, 218, 224), 0.75, 0.55, 0.5, Quantity_Color(Quantity_NOC_WHITE)},
+      {QColor(255, 226, 190), QColor(150, 108, 80), 0.95, 0.4, 0.35, Quantity_Color(1.0, 0.88, 0.72, Quantity_TOC_sRGB)},
+  };
+  const Env& e = envs[std::clamp(environment_, 0, 4)];
+  view_->SetBgGradientColors(qc(e.top), qc(e.bottom), Aspect_GradientFillMethod_Vertical);
+  if (!keyLight_.IsNull()) {
+    keyLight_->SetIntensity(static_cast<float>(e.key));
+    keyLight_->SetColor(e.tint);
+    fillLight_->SetIntensity(static_cast<float>(e.fill));
+    ambientLight_->SetIntensity(static_cast<float>(e.ambient));
+    viewer_->UpdateLights();
+  }
   viewer_->Grid()->SetColors(qc(c.grid), qc(c.gridMajor));
   cube_->SetBoxColor(qc(c.cubeBox));
   cube_->SetTextColor(qc(c.cubeText));

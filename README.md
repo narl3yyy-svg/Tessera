@@ -66,7 +66,7 @@ never needs the network.
 | Orbit / pan / zoom | **Shift + middle drag** / **middle drag** / **wheel** (other schemes in *File → Preferences*) |
 | Standard views | Click the ViewCube (faces, edges, corners; drag it to orbit), or *Views* on the navigation bar; **F6** fits, **Home** resets |
 | Named views | Browser > *Named Views*: double-click TOP, FRONT, RIGHT, HOME or your own; right-click the folder > *New Named View* saves the current camera in the design |
-| Visual style | *Display > Visual Style* on the navigation bar: Shaded, Shaded with Hidden Edges, Shaded with Visible Edges Only (default), Wireframe, Wireframe with Hidden Edges, Wireframe with Visible Edges Only |
+| Visual style | *Display > Visual Style* on the navigation bar: Shaded, Shaded with Hidden Edges, Shaded with Visible Edges Only (default), Wireframe, Wireframe with Hidden Edges, Wireframe with Visible Edges Only; *Display > Environment*: Grey Room, Dark Sky, White Studio, Warm Light (or the theme's) |
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
 | Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it |
@@ -105,7 +105,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 | **Select** | Freeform and paint selection, select through |
 | **Timeline** | Playback buttons (start / step / end), feature groups |
 | **Workspaces** | Surface, Mesh, Sheet Metal, Plastic, Manage, Utilities; Drawings; CAM; Simulation; Render |
-| **Display** | Environments, ground shadow, layout grid; Appearance (materials on faces) |
+| **Display** | Ground shadow; Appearance (materials on faces) |
 | **Files** | Compressed `.tsr` files |
 
 **Not planned:** cloud storage or collaboration, user accounts and logins, telemetry, electronics / PCB design.

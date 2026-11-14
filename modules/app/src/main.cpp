@@ -501,6 +501,14 @@ int smoke(tsr::app::MainWindow& w, tsr::doc::Session& s) {
   w.sectionPanel()->accept();
   QApplication::processEvents();
   if (w.sectionPanel() || w.viewport()->dragArrowActive()) return fail("section panel close");
+  // Display > Environment: a preset applies and is remembered.
+  if (auto* env = w.findChild<QAction*>(QStringLiteral("environment2"))) {
+    env->trigger();
+    if (w.viewport()->environment() != 2) return fail("environment");
+    if (auto* back = w.findChild<QAction*>(QStringLiteral("environment0"))) back->trigger();
+  } else {
+    return fail("environment menu");
+  }
   // Inspect analyses: each opens, shows, and Remove clears it.
   for (int k = 0; k < 7; ++k) {
     auto* panel = w.openAnalysis(k);

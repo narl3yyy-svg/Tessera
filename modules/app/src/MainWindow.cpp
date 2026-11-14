@@ -750,6 +750,24 @@ void MainWindow::buildNavBar() {
   setIcon(gridMenu->addAction(tr("Grid Settings…"), this, [this] { gridSettings(); }), QStringLiteral("grid"));
   gridButton->setMenu(gridMenu);
   displayMenu->addSeparator();
+  // Environment: background and light presets, kept in the settings.
+  QMenu* envMenu = displayMenu->addMenu(tr("Environment"));
+  envMenu->setObjectName(QStringLiteral("environmentMenu"));
+  auto* envGroup = new QActionGroup(envMenu);
+  const int savedEnv = QSettings().value(QStringLiteral("view/environment"), 0).toInt();
+  const QStringList envNames = Viewport::environmentNames();
+  for (int i = 0; i < envNames.size(); ++i) {
+    QAction* a = envMenu->addAction(envNames[i]);
+    a->setObjectName(QStringLiteral("environment%1").arg(i));
+    a->setCheckable(true);
+    a->setChecked(i == savedEnv);
+    envGroup->addAction(a);
+    connect(a, &QAction::triggered, this, [this, i] {
+      QSettings().setValue(QStringLiteral("view/environment"), i);
+      viewport_->setEnvironment(i);
+    });
+  }
+  viewport_->setEnvironment(savedEnv);
   QAction* darkTheme = displayMenu->addAction(tr("Dark theme"));
   darkTheme->setObjectName(QStringLiteral("darkTheme"));
   darkTheme->setCheckable(true);

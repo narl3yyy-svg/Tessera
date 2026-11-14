@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794627262.4968545,
-    "seen": 1794627594.3959048,
-    "ast_hash": "747e6c8cd9d9b581d6920a48918ad6c9",
+    "mtime": 1794629215.0684526,
+    "seen": 1794629538.9275892,
+    "ast_hash": "c5fee3fb3a35f2a29b3fa7801dc8826a",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -228,15 +228,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.cpp": {
-    "mtime": 1794628855.6378758,
-    "seen": 1794629159.2254298,
-    "ast_hash": "d176a214376825da2f48ad51ff25094e",
+    "mtime": 1794629215.0684526,
+    "seen": 1794629538.9276197,
+    "ast_hash": "8f52749f158980ba54ed2928f2cc462c",
     "semantic_hash": ""
   },
   "modules/app/src/Viewport.h": {
-    "mtime": 1794628855.6378758,
-    "seen": 1794629159.225431,
-    "ast_hash": "9a6511745f0ae0a4b1b4591b550d6ee6",
+    "mtime": 1794629215.0674505,
+    "seen": 1794629538.9276211,
+    "ast_hash": "ed29fb38909ba9922d2dd35261d92f7a",
     "semantic_hash": ""
   },
   "modules/app/src/ViewportAnalysis.cpp": {
@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/main.cpp": {
-    "mtime": 1794628865.481042,
-    "seen": 1794629159.225437,
-    "ast_hash": "bf159cc2ff8af363b269f392be049603",
+    "mtime": 1794629224.1108127,
+    "seen": 1794629538.927627,
+    "ast_hash": "5472f8a38248ed7b71c3d981e60d4b9c",
     "semantic_hash": ""
   },
   "modules/core/include/tsr/core/Command.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794629152.975043,
-    "seen": 1794629159.225932,
-    "ast_hash": "5dec570e0299e2b86a5e245714ea98ba",
+    "mtime": 1794629325.190212,
+    "seen": 1794629538.9281151,
+    "ast_hash": "7b07c85c8ac2cafdb4102b41dd8afda5",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794628943.608909,
-    "seen": 1794629159.2259417,
-    "ast_hash": "8125e3827f5dc68c2292a989c931f95d",
+    "mtime": 1794629325.190212,
+    "seen": 1794629538.9281251,
+    "ast_hash": "369209f4af11b9f9ab8a72e35bcdb725",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {

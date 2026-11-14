@@ -13,6 +13,8 @@
 #include <AIS_ViewController.hxx>
 #include <AIS_ViewCube.hxx>
 #include <V3d_View.hxx>
+#include <V3d_AmbientLight.hxx>
+#include <V3d_DirectionalLight.hxx>
 #include <V3d_Viewer.hxx>
 #include <Graphic3d_ClipPlane.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -78,6 +80,12 @@ struct AnalysisSettings {
 class Viewport : public QOpenGLWidget, public AIS_ViewController {
   Q_OBJECT
 public:
+  // Environments (Display > Environment): background and light presets.
+  // 0 follows the theme; 1 Grey Room, 2 Dark Sky, 3 White Studio, 4 Warm Light.
+  static QStringList environmentNames();
+  void setEnvironment(int index);
+  int environment() const { return environment_; }
+
   // The six visual styles of the familiar tool's Display Settings.
   // ShadedEdges is "Shaded with Visible Edges Only", the default.
   enum class Style { Shaded, ShadedHidden, ShadedEdges, Wireframe, WireframeHidden, WireframeVisible };
@@ -278,6 +286,10 @@ protected:
   Handle(SelectMgr_EntityOwner) frontEdgeOwner() const;
 
 private:
+  int environment_ = 0;
+  Handle(V3d_DirectionalLight) keyLight_, fillLight_;
+  Handle(V3d_AmbientLight) ambientLight_;
+
   void bindLeftButton();
   void rebuild();
   void rebuildSketches();
