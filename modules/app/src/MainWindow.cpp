@@ -1718,6 +1718,32 @@ bool MainWindow::maybeSave() {
   return session_.path() ? saveTo(qs(session_.path()->string())) : saveAs();
 }
 
+// Insert DXF: the drawing becomes a new sketch on a plane picked from a list
+// (the origin planes and construction planes).
+void MainWindow::insertDxf() {
+  if (editor_ || active_) {
+    statusBar()->showMessage(tr("Finish the current command first."), 3000);
+    return;
+  }
+  const QString path = QFileDialog::getOpenFileName(this, tr("Insert DXF"), QString(), tr("DXF drawing (*.dxf)"));
+  if (path.isEmpty()) return;
+  QStringList planes = {QStringLiteral("XY"), QStringLiteral("XZ"), QStringLiteral("YZ")};
+  for (const auto& p : session_.document().planes()) planes << qs(p.name);
+  bool ok = false;
+  const QString plane = QInputDialog::getItem(this, tr("Insert DXF"), tr("Sketch plane:"), planes, 0, false, &ok);
+  if (!ok) return;
+  try {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) throw std::runtime_error("cannot read " + path.toStdString());
+    const sketch::Sketch s = sketch::fromDxf(f.readAll().toStdString());
+    Inputs in{{"plane", plane.toStdString()}, {"data", s.toJson()}};
+    if (auto err = session_.run(doc::kCmdSketch, in); !err.empty()) throw std::runtime_error(err);
+    viewport_->fitAll();
+  } catch (const std::exception& e) {
+    QMessageBox::critical(this, tr("Insert DXF"), QString::fromStdString(e.what()));
+  }
+}
+
 void MainWindow::saveSketchDxf(const QString& name) {
   const auto rec = session_.document().sketch(name.toStdString());
   if (!rec) return;

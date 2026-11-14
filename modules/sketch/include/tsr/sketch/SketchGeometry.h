@@ -68,6 +68,13 @@ int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>&
 // polylines. Construction geometry goes on its own layer when asked.
 std::string toDxf(const Sketch& s, bool construction = false);
 
+// Reads a DXF drawing (ASCII, any version) into sketch geometry: LINE,
+// CIRCLE, ARC, LWPOLYLINE / POLYLINE (bulges become arcs), SPLINE (fit or
+// control points) and ELLIPSE. Units from $INSUNITS (default millimetres);
+// `scale` multiplies on top. Ends that meet share a point, so closed shapes
+// are profiles. Throws SketchError when nothing can be read.
+Sketch fromDxf(const std::string& text, double scale = 1.0);
+
 // Index of the profile containing sketch point (x, y), or -1.
 int profileAt(const std::vector<Profile>& ps, const gp_Ax3& frame, double x, double y);
 

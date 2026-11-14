@@ -191,6 +191,7 @@ private:
   void noteRecent(const QString& path);
   void fillRecentMenu(QMenu* menu);
   void saveSketchDxf(const QString& sketchName);
+  void insertDxf();
   void runScript();
 
   doc::Session& session_;

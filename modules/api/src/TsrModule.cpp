@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 #include <array>
 #include <pybind11/stl.h>
 
@@ -278,6 +279,16 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("entity"), py::arg("distance"),
      "Offset the chain through an entity (cm; closed chains: positive is outward); returns the new sketch JSON.");
+  m.def("insert_dxf", [](const std::string& path, const std::string& plane, double scale) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) throw std::runtime_error("cannot read " + path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const sketch::Sketch s = sketch::fromDxf(ss.str(), scale);
+    Inputs in{{"plane", plane}, {"data", s.toJson()}};
+    if (auto err = activeSession().run(doc::kCmdSketch, in); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("path"), py::arg("plane") = "XY", py::arg("scale") = 1.0,
+     "Insert DXF: a new sketch on the plane from a DXF drawing.");
   m.def("export_sketch_dxf", [](const std::string& name, const std::string& path, bool construction) {
     const auto rec = activeSession().document().sketch(name);
     if (!rec) throw std::runtime_error("no sketch named '" + name + "'");

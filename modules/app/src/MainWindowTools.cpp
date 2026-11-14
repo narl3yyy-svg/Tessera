@@ -107,7 +107,9 @@ void MainWindow::buildUiCommands() {
       [this] { openAnalysis(3); });
   add("Insert", "ui.insert", "Insert Mesh / CAD File", "insert", "Adds bodies from a STEP, IGES, STL or BREP file.", "",
       [this] { insertFile(); });
-  planned("Insert", "ui.insertSvg", "Insert SVG / DXF", "insert-2d");
+  add("Insert", "ui.insertDxf", "Insert DXF", "insert-2d", "A new sketch from a DXF drawing (lines, arcs, polylines, splines).",
+      "", [this] { insertDxf(); });
+  planned("Insert", "ui.insertSvg", "Insert SVG", "insert-2d");
   planned("Insert", "ui.canvas", "Canvas", "image");
   planned("Insert", "ui.decal", "Decal", "image");
   add("Select", "ui.select", "Select", "select",

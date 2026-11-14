@@ -32,3 +32,44 @@ assert abs(float(arc["40"]) - 10.0) < 1e-9 and abs(float(arc["50"])) < 1e-9 and 
 tsr.export_sketch_dxf("Sketch1", path, construction=True)
 assert "CONSTRUCTION" in open(path).read()
 print("sketch dxf: OK")
+
+# --- Insert DXF: a 40 x 30 mm rectangle with a 10 mm circle, saved and read back.
+import adsk.core
+import adsk.fusion
+root = adsk.fusion.Design.cast(adsk.core.Application.get().activeProduct).rootComponent
+tsr.new_document()
+rect = {"points": [[0, 0], [0, 0], [4, 0], [4, 3], [0, 3], [2, 1.5]],
+        "entities": [{"type": "line", "p": [1, 2]}, {"type": "line", "p": [2, 3]}, {"type": "line", "p": [3, 4]},
+                     {"type": "line", "p": [4, 1]}, {"type": "circle", "c": 5, "r": 0.5}]}
+tsr.run_command("tsr.sketch.create", plane="XY", data=json.dumps(rect))
+tsr.export_sketch_dxf("Sketch1", path)
+tsr.new_document()
+tsr.insert_dxf(path, "XY")
+tsr.run_command("tsr.feature.extrude", distance=1.0)
+import math
+# Both regions (the ring and the disc) are extruded: the whole 40 x 30 block,
+# and the circle came back as a circle (two regions, not one).
+assert abs(root.bRepBodies.item(0).volume - 12) < 1e-6, root.bRepBodies.item(0).volume
+assert sum(1 for e in json.loads(tsr.sketch_data("Sketch1"))["entities"] if e["type"] == "circle") == 1
+
+# A hand-written LWPOLYLINE in inches: a 1 x 1 inch square whose top side is
+# a half circle bulging out (bulge 1): area 1 + pi / 8 square inches.
+lw = "\n".join(["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "1", "0", "ENDSEC",
+                "0", "SECTION", "2", "ENTITIES", "0", "LWPOLYLINE", "8", "0", "90", "4", "70", "1",
+                "10", "0", "20", "0", "10", "1", "20", "0", "10", "1", "20", "1", "42", "1", "10", "0", "20", "1",
+                "0", "ENDSEC", "0", "EOF", ""])
+lpath = os.path.join(tempfile.mkdtemp(), "lw.dxf")
+open(lpath, "w").write(lw)
+tsr.new_document()
+tsr.insert_dxf(lpath, "XY")
+tsr.run_command("tsr.feature.extrude", distance=1.0)
+inch2 = 2.54 * 2.54
+assert abs(root.bRepBodies.item(0).volume - (1 + math.pi / 8) * inch2) < 1e-6, root.bRepBodies.item(0).volume
+try:
+    bad = os.path.join(tempfile.mkdtemp(), "bad.dxf")
+    open(bad, "w").write("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")
+    tsr.insert_dxf(bad)
+    raise AssertionError("an empty DXF was accepted")
+except RuntimeError as e:
+    assert "nothing" in str(e), e
+print("insert dxf: OK")

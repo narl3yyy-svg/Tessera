@@ -41,7 +41,7 @@ Tracked against the menus people know. Done = usable today.
 
 **Display**: ViewCube ✅ (faces, edges, corners, drag to orbit) · Named Views ✅ · Visual Style ✅ (all six, hidden-line wireframes) · Orthographic / Perspective ✅ · Environment · Ground shadow · Layout grid
 
-**Insert**: Insert Mesh / CAD (STEP, IGES, STL, BREP) ✅ · Insert SVG · Insert DXF · Canvas · Decal · McMaster-style part libraries (no)
+**Insert**: Insert Mesh / CAD (STEP, IGES, STL, BREP) ✅ · Insert SVG · Insert DXF ✅ (lines, arcs, circles, polylines with bulges, splines, ellipses) · Canvas · Decal · McMaster-style part libraries (no)
 
 **Select**: Select ✅ · Selection filters (bodies, faces, edges, vertices) ✅ · Window/Freeform/Paint selection · Select through
 

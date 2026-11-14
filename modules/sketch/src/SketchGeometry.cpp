@@ -39,6 +39,8 @@
 #include <gp_Elips.hxx>
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <cmath>
 #include <sstream>
 
@@ -608,6 +610,172 @@ std::string toDxf(const Sketch& s, bool construction) {
   pair(0, "ENDSEC");
   pair(0, "EOF");
   return o.str();
+}
+
+Sketch fromDxf(const std::string& text, double scale) {
+  // Group code / value pairs.
+  std::vector<std::pair<int, std::string>> g;
+  {
+    std::istringstream in(text);
+    std::string code, value;
+    auto trim = [](std::string& t) {
+      while (!t.empty() && (t.back() == '\r' || t.back() == ' ' || t.back() == '\t')) t.pop_back();
+      size_t a = 0;
+      while (a < t.size() && (t[a] == ' ' || t[a] == '\t')) ++a;
+      t.erase(0, a);
+    };
+    while (std::getline(in, code) && std::getline(in, value)) {
+      trim(code);
+      trim(value);
+      try {
+        g.emplace_back(std::stoi(code), value);
+      } catch (...) {
+        throw SketchError("not a DXF file (bad group code '" + code + "')");
+      }
+    }
+  }
+  auto real = [](const std::string& v) {
+    try {
+      return std::stod(v);
+    } catch (...) {
+      return 0.0;
+    }
+  };
+  // Units: $INSUNITS 1 inch, 2 feet, 4 mm, 5 cm, 6 m; anything else mm.
+  double unit = 0.1;   // cm per drawing unit
+  for (size_t i = 0; i + 1 < g.size(); ++i)
+    if (g[i].first == 9 && g[i].second == "$INSUNITS" && g[i + 1].first == 70) {
+      const int u = static_cast<int>(real(g[i + 1].second));
+      unit = u == 1 ? 2.54 : u == 2 ? 30.48 : u == 5 ? 1.0 : u == 6 ? 100.0 : 0.1;
+    }
+  const double k = unit * scale;
+  Sketch s;
+  std::map<std::pair<long long, long long>, int> byPlace;   // shared ends
+  auto point = [&](double x, double y) {
+    x *= k;
+    y *= k;
+    const auto key = std::make_pair(std::llround(x * 1e6), std::llround(y * 1e6));
+    if (auto it = byPlace.find(key); it != byPlace.end()) return it->second;
+    return byPlace[key] = s.addPoint(x, y);
+  };
+  const double pi = 3.14159265358979323846;
+  auto arcThrough = [&](double cx, double cy, double r, double a0, double a1) {   // anticlockwise, radians
+    if (r * k < 1e-9) return;
+    const int c = s.addPoint(cx * k, cy * k);
+    const int p0 = point(cx + r * std::cos(a0), cy + r * std::sin(a0));
+    const int p1 = point(cx + r * std::cos(a1), cy + r * std::sin(a1));
+    if (p0 == p1) {
+      s.addCircleAt(c, r * k);
+      return;
+    }
+    const int e = s.addArc(c, p0, p1);
+    s.entities[e].radius = r * k;
+  };
+  // A polyline's segment, straight or (bulge = tan(angle / 4)) an arc.
+  auto segment = [&](double x0, double y0, double x1, double y1, double bulge) {
+    if (std::abs(bulge) < 1e-12) {
+      const int a = point(x0, y0), b = point(x1, y1);
+      if (a != b) s.addLine(a, b);
+      return;
+    }
+    // Sagitta form: the centre lies left of p0 -> p1 (bulge > 0: anticlockwise)
+    // at (chord / 2) (1 - b^2) / (2 b); the radius is (chord / 2) (1 + b^2) / (2 |b|).
+    const double chord = std::hypot(x1 - x0, y1 - y0);
+    if (chord < 1e-12) return;
+    const double nx = -(y1 - y0) / chord, ny = (x1 - x0) / chord;
+    const double d = chord / 2 * (1 - bulge * bulge) / (2 * bulge);
+    const double r = chord / 2 * (1 + bulge * bulge) / (2 * std::abs(bulge));
+    const double cx = (x0 + x1) / 2 + nx * d, cy = (y0 + y1) / 2 + ny * d;
+    double a0 = std::atan2(y0 - cy, x0 - cx), a1 = std::atan2(y1 - cy, x1 - cx);
+    if (bulge < 0) std::swap(a0, a1);   // clockwise: the same arc from the other end
+    arcThrough(cx, cy, r, a0, a1);
+  };
+
+  bool inEntities = false;
+  for (size_t i = 0; i < g.size(); ++i) {
+    if (g[i].first == 2 && g[i].second == "ENTITIES") inEntities = true;
+    if (g[i].first == 0 && g[i].second == "ENDSEC") inEntities = false;
+    if (!inEntities || g[i].first != 0) continue;
+    const std::string type = g[i].second;
+    // This entity's pairs, up to the next 0 code.
+    size_t j = i + 1;
+    while (j < g.size() && g[j].first != 0) ++j;
+    auto get = [&](int code, double def = 0) {
+      for (size_t q = i + 1; q < j; ++q)
+        if (g[q].first == code) return real(g[q].second);
+      return def;
+    };
+    auto all = [&](int code) {
+      std::vector<double> v;
+      for (size_t q = i + 1; q < j; ++q)
+        if (g[q].first == code) v.push_back(real(g[q].second));
+      return v;
+    };
+    if (type == "LINE") {
+      const int a = point(get(10), get(20)), b = point(get(11), get(21));
+      if (a != b) s.addLine(a, b);
+    } else if (type == "CIRCLE") {
+      if (get(40) * k > 1e-9) s.addCircle(get(10) * k, get(20) * k, get(40) * k);
+    } else if (type == "ARC") {
+      arcThrough(get(10), get(20), get(40), get(50) * pi / 180, get(51) * pi / 180);
+    } else if (type == "LWPOLYLINE") {
+      // Vertices in order: 10/20, with an optional 42 bulge after each.
+      std::vector<std::array<double, 3>> v;
+      for (size_t q = i + 1; q < j; ++q) {
+        if (g[q].first == 10) v.push_back({real(g[q].second), 0, 0});
+        else if (g[q].first == 20 && !v.empty()) v.back()[1] = real(g[q].second);
+        else if (g[q].first == 42 && !v.empty()) v.back()[2] = real(g[q].second);
+      }
+      const bool closed = static_cast<int>(get(70)) & 1;
+      for (size_t q = 0; q + 1 < v.size(); ++q) segment(v[q][0], v[q][1], v[q + 1][0], v[q + 1][1], v[q][2]);
+      if (closed && v.size() > 2) segment(v.back()[0], v.back()[1], v[0][0], v[0][1], v.back()[2]);
+    } else if (type == "POLYLINE") {
+      const bool closed = static_cast<int>(get(70)) & 1;
+      std::vector<std::array<double, 3>> v;
+      size_t q = j;
+      while (q < g.size() && !(g[q].first == 0 && g[q].second == "SEQEND")) {
+        if (g[q].first == 0 && g[q].second == "VERTEX") v.push_back({0, 0, 0});
+        else if (!v.empty() && g[q].first == 10) v.back()[0] = real(g[q].second);
+        else if (!v.empty() && g[q].first == 20) v.back()[1] = real(g[q].second);
+        else if (!v.empty() && g[q].first == 42) v.back()[2] = real(g[q].second);
+        ++q;
+      }
+      for (size_t a = 0; a + 1 < v.size(); ++a) segment(v[a][0], v[a][1], v[a + 1][0], v[a + 1][1], v[a][2]);
+      if (closed && v.size() > 2) segment(v.back()[0], v.back()[1], v[0][0], v[0][1], v.back()[2]);
+      i = q;
+      continue;
+    } else if (type == "SPLINE") {
+      const auto fx = all(11), fy = all(21), cxs = all(10), cys = all(20);
+      const bool fit = fx.size() >= 2 && fx.size() == fy.size();
+      const auto& xs = fit ? fx : cxs;
+      const auto& ys = fit ? fy : cys;
+      if (xs.size() < 2 || xs.size() != ys.size()) continue;
+      std::vector<int> pts;
+      for (size_t q = 0; q < xs.size(); ++q) {
+        const int p = (q == 0 || q + 1 == xs.size()) ? point(xs[q], ys[q]) : s.addPoint(xs[q] * k, ys[q] * k);
+        if (pts.empty() || pts.back() != p) pts.push_back(p);
+      }
+      if (pts.size() >= 2) s.addSpline(pts, false, fit ? SplineKind::Fit : SplineKind::Control);
+    } else if (type == "ELLIPSE") {
+      const double cx = get(10), cy = get(20), mx = get(11), my = get(21), ratio = get(40, 1);
+      const double t0 = get(41, 0), t1 = get(42, 2 * pi);
+      const double A = std::hypot(mx, my);
+      if (A * k < 1e-9) continue;
+      const int c = s.addPoint(cx * k, cy * k), ax = s.addPoint((cx + mx) * k, (cy + my) * k);
+      const bool full = std::abs(std::abs(t1 - t0) - 2 * pi) < 1e-9;
+      if (full) {
+        s.addEllipse(c, ax, A * ratio * k);
+      } else {
+        const double ux = mx / A, uy = my / A, B = A * ratio;
+        auto at = [&](double t) {
+          return point(cx + A * std::cos(t) * ux - B * std::sin(t) * uy, cy + A * std::cos(t) * uy + B * std::sin(t) * ux);
+        };
+        s.addEllipticalArc(c, ax, B * k, at(t0), at(t1));
+      }
+    }
+  }
+  if (s.entities.empty()) throw SketchError("nothing in that DXF file could be read (lines, arcs, circles, polylines, splines, ellipses)");
+  return s;
 }
 
 } // namespace tsr::sketch
