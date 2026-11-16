@@ -1,0 +1,24 @@
+# Live: sketch MODIFY > Chamfer where a line runs into an arc, as in the
+# familiar tool. Click the corner, type 5, Enter: a 5 mm chamfer cuts both.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 0 0
+sclick 20 0
+key Escape
+menu sketch.group-arc sketch.arc-tangent
+sclick 20 0               # the line's end
+sclick 20 20              # a half circle up
+key Escape
+click sketch.sketch-chamfer
+sclick 20 0               # the corner
+wait 300
+type 5
+key Return
+wait 500
+shot /tmp/live_chamfer_arc.png
+click palette.finish
+wait 600

@@ -216,7 +216,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Spline: emit message(tr("Spline: click the points the curve passes through; Enter, double-click or Esc finishes, clicking the first point closes it.")); break;
     case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
     case Tool::Offset: emit message(tr("Offset: click a curve (a spline or ellipse on its own); its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
-    case Tool::Chamfer: emit message(tr("Chamfer: click a corner (or two lines), then type the distance and press Enter (or click).")); break;
+    case Tool::Chamfer: emit message(tr("Chamfer: click a corner (or two lines or arcs), then type the distance and press Enter (or click).")); break;
     case Tool::Extend: emit message(tr("Extend: click a line, arc, elliptical arc or spline near the end to lengthen it to the next curve.")); break;
     case Tool::Mirror:
       emit message(selection_.empty() ? tr("Mirror: click the curves to mirror, press Enter, then click the mirror line.")
@@ -1543,17 +1543,17 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         if (h.kind == Hit::Point) {
           corner = sketch::cornerAt(sk_, h.index);
         } else if (h.kind == Hit::Entity && (sk_.entities[h.index].type == EntityType::Line ||
-                                             (tool_ == Tool::Fillet && sk_.entities[h.index].type == EntityType::Arc))) {
+                                             sk_.entities[h.index].type == EntityType::Arc)) {
           if (firstFilletLine_ < 0 || firstFilletLine_ == h.index) {
             firstFilletLine_ = h.index;
-            emit message(tool_ == Tool::Fillet ? tr("Fillet: click the second line or arc.") : tr("Chamfer: click the second line."));
+            emit message(tool_ == Tool::Fillet ? tr("Fillet: click the second line or arc.") : tr("Chamfer: click the second line or arc."));
             return;
           }
           corner = std::make_pair(firstFilletLine_, h.index);
         }
         if (!corner) {
           emit message(tool_ == Tool::Fillet ? tr("Fillet: click a corner where two lines or arcs meet, or the two curves.")
-                                             : tr("Chamfer: click a corner where two lines meet, or two lines."));
+                                             : tr("Chamfer: click a corner where two lines or arcs meet, or the two curves."));
           return;
         }
         // The corner point, for the live radius and the box.

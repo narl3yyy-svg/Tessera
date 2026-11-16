@@ -290,7 +290,11 @@ std::string filletCorner(Sketch& s, int la, int lb, double radius, int* arcOut) 
 }
 
 std::string chamferCorner(Sketch& s, int la, int lb, double distance, int* lineOut) {
-  if (!isLine(s, la) || !isLine(s, lb) || la == lb) return "Chamfer: pick two lines that meet at a corner";
+  const auto ok = [&](int e) {
+    return e >= 0 && e < static_cast<int>(s.entities.size()) &&
+           (s.entities[e].type == EntityType::Line || s.entities[e].type == EntityType::Arc);
+  };
+  if (!ok(la) || !ok(lb) || la == lb) return "Chamfer: pick two lines or arcs that meet at a corner";
   if (!(distance > 0)) return "Chamfer: the distance must be greater than zero";
   Joints j(s);
   const Entity A = s.entities[la], B = s.entities[lb];
@@ -301,14 +305,33 @@ std::string chamferCorner(Sketch& s, int la, int lb, double distance, int* lineO
         ea = pa;
         eb = pb;
       }
-  if (ea < 0) return "Chamfer: the two lines do not meet at a corner";
-  const int fa = ea == A.a ? A.b : A.a, fb = eb == B.a ? B.b : B.a;
-  const V p = at(s, ea);
-  const V u1 = unit(at(s, fa) - p), u2 = unit(at(s, fb) - p);
-  if (std::abs(cross(u1, u2)) < 1e-6) return "Chamfer: the lines are parallel";
-  if (distance >= len(at(s, fa) - p) - 1e-9 || distance >= len(at(s, fb) - p) - 1e-9)
-    return "Chamfer: the distance is too large for these lines";
-  const V t1 = p + u1 * distance, t2 = p + u2 * distance;
+  if (ea < 0) return "Chamfer: the two curves do not meet at a corner";
+  // Where each curve is cut: `distance` from the corner, straight across
+  // (along a line; on an arc, the point that far from the corner).
+  const auto cutOn = [&](const Entity& E, int ep, V& out) {
+    const V p = at(s, ep);
+    if (E.type == EntityType::Line) {
+      const int far = ep == E.a ? E.b : E.a;
+      if (distance >= len(at(s, far) - p) - 1e-9) return false;
+      out = p + unit(at(s, far) - p) * distance;
+      return true;
+    }
+    const V c = at(s, E.center);
+    const double r = len(at(s, E.a) - c);
+    if (r < 1e-12 || distance >= 2 * r - 1e-9) return false;
+    const double delta = 2 * std::asin(distance / (2 * r));
+    const double a0 = std::atan2(at(s, E.a).y - c.y, at(s, E.a).x - c.x);
+    const double a1 = std::atan2(at(s, E.b).y - c.y, at(s, E.b).x - c.x);
+    double span = a1 - a0;
+    while (span <= 0) span += 2 * kPi;
+    if (delta >= span - 1e-9) return false;
+    const double ang = ep == E.a ? a0 + delta : a1 - delta;   // arcs run anticlockwise a -> b
+    out = c + V{r * std::cos(ang), r * std::sin(ang)};
+    return true;
+  };
+  V t1{}, t2{};
+  if (!cutOn(A, ea, t1) || !cutOn(B, eb, t2)) return "Chamfer: the distance is too large for these curves";
+  if (len(t1 - t2) < 1e-9) return "Chamfer: the curves run on together there";
   const Sketch backup = s;
   int pt1 = ea, pt2 = eb;
   if (ea == eb) {
@@ -329,7 +352,10 @@ std::string chamferCorner(Sketch& s, int la, int lb, double distance, int* lineO
     const bool lengthDim = (k.type == ConstraintType::Distance || k.type == ConstraintType::HorizontalDistance ||
                             k.type == ConstraintType::VerticalDistance) &&
                            k.points.empty() && k.entities.size() == 1 && (k.entities[0] == la || k.entities[0] == lb);
-    if (!joinsEnds && !lengthDim) kept.push_back(k);
+    // Two curves tangent at the corner no longer touch there.
+    const bool cornerTangent = k.type == ConstraintType::Tangent && k.entities.size() == 2 &&
+                               ((k.entities[0] == la && k.entities[1] == lb) || (k.entities[0] == lb && k.entities[1] == la));
+    if (!joinsEnds && !lengthDim && !cornerTangent) kept.push_back(k);
   }
   s.constraints = std::move(kept);
   const int line = s.addLine(pt1, pt2, A.construction);

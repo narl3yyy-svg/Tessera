@@ -192,9 +192,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794816017.7827992,
-    "seen": 1794816569.189853,
-    "ast_hash": "06657b650c21c898b1657fbdf12e115d",
+    "mtime": 1794816592.3637457,
+    "seen": 1794817023.1236217,
+    "ast_hash": "b9c849372bbb030c170c4b55ac8ae0ba",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
@@ -444,9 +444,9 @@
     "semantic_hash": ""
   },
   "modules/sketch/src/SketchOps.cpp": {
-    "mtime": 1794625030.487605,
-    "seen": 1794625296.6800933,
-    "ast_hash": "04635a863630f862f6d244e26e431d82",
+    "mtime": 1794816592.361743,
+    "seen": 1794817023.1236608,
+    "ast_hash": "597def2c0e4b48939f6a6758d68e3914",
     "semantic_hash": ""
   },
   "modules/sketch/src/Solver.cpp": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794816281.3659377,
-    "seen": 1794816569.1901526,
-    "ast_hash": "3e63584d99e17e2b1bac30369f3c5fb2",
+    "mtime": 1794816796.2581065,
+    "seen": 1794817023.1239314,
+    "ast_hash": "8e583fb35aceb08b25f2ab2ec44ead24",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1938,9 +1938,9 @@
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794816281.3669376,
-    "seen": 1794816569.190156,
-    "ast_hash": "b75a4c833159a1e67564d8ddf241f311",
+    "mtime": 1794816796.2591066,
+    "seen": 1794817023.1239347,
+    "ast_hash": "b1879ea9abcc616393a4cda5da036cf7",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794816281.3669376,
-    "seen": 1794816569.1901586,
-    "ast_hash": "469532f46a66df0a5694ab31a70e843d",
+    "mtime": 1794816796.2581065,
+    "seen": 1794817023.1239374,
+    "ast_hash": "3d96c8a2b79732a318433aefed45e5b3",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794816258.4602594,
-    "seen": 1794816569.1901646,
-    "ast_hash": "effd73d99697775855b2b6a4f88492d3",
+    "mtime": 1794816771.9440782,
+    "seen": 1794817023.123943,
+    "ast_hash": "998021d68089eb2ccbfac8ebfe2761a9",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2403,6 +2403,18 @@
     "mtime": 1794816258.3773332,
     "seen": 1794816569.18995,
     "ast_hash": "df875fb2284eb9bc8a79c3c3b61e58f6",
+    "semantic_hash": ""
+  },
+  "tests/api/test_chamfer_arcs.py": {
+    "mtime": 1794816626.8305137,
+    "seen": 1794817023.1236713,
+    "ast_hash": "f8c7a1d78b77813f312dbe1908efaebd",
+    "semantic_hash": ""
+  },
+  "tests/live/chamfer_arc_check.py": {
+    "mtime": 1794816759.3261673,
+    "seen": 1794817023.1237175,
+    "ast_hash": "a6dd9ce127840f569291fc2da810f538",
     "semantic_hash": ""
   }
 }

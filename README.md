@@ -93,7 +93,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 
 | Area | Planned |
 |---|---|
-| **Sketch** | 3D sketches; Project to Surface; curvature (G2) and polygon constraints; sketch chamfers with arcs |
+| **Sketch** | 3D sketches; Project to Surface; curvature (G2) and polygon constraints |
 | **Create** | Emboss, Boundary Fill, face patterns |
 | **Extrude** | Participant Bodies; to a single curved face extended past its body |
 | **Modify** | Setback and chord-length fillets, Replace Face, Split Face by sketch curves, Silhouette Split, Align, two-sided draft, appearance on single faces, a material library editor; drag arrows for Move/Copy |
