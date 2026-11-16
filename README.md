@@ -64,6 +64,7 @@ never needs the network.
 | Action | How |
 |---|---|
 | Orbit / pan / zoom | **Shift + middle drag** / **middle drag** / **wheel** (other schemes in *File → Preferences*) |
+| Draw off the sketch plane | Sketch Palette > *3D Sketch*: clicks snap to body corners anywhere in space; double-click a point (Select) to type its height |
 | Sketch tools not on the ribbon | Click a panel title (*CREATE ▾*, *MODIFY ▾*, *CONSTRAINTS ▾*): its menu lists every tool in it, e.g. Ellipse, Conic Curve, the sketch patterns, Chamfer, Extend, Break, Move/Copy |
 | Standard views | Click the ViewCube (faces, edges, corners; drag it to orbit), or *Views* on the navigation bar; **F6** fits, **Home** resets |
 | Named views | Browser > *Named Views*: double-click TOP, FRONT, RIGHT, HOME or your own; right-click the folder > *New Named View* saves the current camera in the design |
@@ -94,7 +95,7 @@ Shown greyed out in the menus until they are built. Roughly in order of work; th
 
 | Area | Planned |
 |---|---|
-| **Sketch** | 3D sketches; Project to Surface |
+| **Sketch** | Project to Surface; 3D sketch: a move triad for points, constraints in space |
 | **Create** | Emboss, Boundary Fill, face patterns |
 | **Extrude** | Participant Bodies; to a single curved face extended past its body |
 | **Modify** | Setback and chord-length fillets, Replace Face, Split Face by sketch curves, Silhouette Split, Align, two-sided draft, appearance on single faces, a material library editor; drag arrows for Move/Copy |

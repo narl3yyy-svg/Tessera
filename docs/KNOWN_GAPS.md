@@ -81,6 +81,12 @@ One line per item: id, what differs, why, and the phase that closes it.
 - Offset of a spline or ellipse is a fit point spline through offset points (24 round a closed curve); it does not follow later changes to the original, and an ellipse offset inward past its tightest curve is refused.
 - Extend of a spline carries it on along its circle of curvature at the end (straight where it is flat) and adds the meeting point as its new end, the old end staying as a fit (or frame) point; the true natural continuation of the curve may differ slightly. Conics and full ellipses cannot be extended.
 
+## 3D Sketch
+
+- With 3D Sketch on, Line, Spline, Control Point Spline and Point clicks snap to body corners off the plane (within 10 px on screen); there is no move triad yet, and edges are not snapped along their length in space.
+- A point's height is set by double-clicking it; the solver works in the plane, so constraints and dimensions act on the points as seen along the sketch normal (heights stay as set). The rubber-band preview is drawn in the plane.
+- Curves with a point off the plane bound no profile and are left out of sketch DXF export; they can serve as paths.
+
 ## Curvature (G2)
 
 - Curvature applies to open fit point splines (not control point splines or conics). A spline with a Curvature constraint is built as its own cubic through its points, matching the other curve's direction and curvature exactly at the joint; its shape away from the joint can differ a little from the same spline without the constraint.

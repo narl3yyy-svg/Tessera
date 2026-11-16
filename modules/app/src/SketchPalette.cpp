@@ -116,8 +116,11 @@ SketchPalette::SketchPalette(SketchEditor* editor, QWidget* parent) : QDialog(pa
   QCheckBox* projected = projected_;
   construction_ = option(QStringLiteral("palette.construction"), tr("Construction Geometries"), true);
   auto* sketch3d = option(QStringLiteral("palette.3d"), tr("3D Sketch"), false);
-  sketch3d->setEnabled(false);
-  sketch3d->setToolTip(tr("Planned: see docs/ROADMAP.md"));
+  sketch3d->setToolTip(tr("Draw off the sketch plane: clicks snap to body corners anywhere; double-click a point to "
+                          "set its height"));
+  connect(sketch3d, &QCheckBox::toggled, this, [this](bool on) {
+    if (editor_) editor_->set3D(on);
+  });
   for (QCheckBox* c : {grid_, snap_, slice_, profiles_, points_, dimensions_, constraints_, projected, construction_, sketch3d})
     addRow(c->accessibleName(), c);
 

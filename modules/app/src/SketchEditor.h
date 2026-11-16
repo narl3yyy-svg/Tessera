@@ -93,6 +93,10 @@ public:
   bool selectAt(const QPointF& widgetPos);
   bool hasSelection() const { return !selection_.empty(); }
   // Esc: abandons the current drawing step, then the tool.
+  // 3D Sketch (Sketch Palette): clicks snap to body corners anywhere in
+  // space, so curves can leave the plane; double-click a point to set its height.
+  void set3D(bool on);
+  bool is3D() const { return sketch3d_; }
   void escape();
   // Enter: finishes a spline being drawn (Esc throws it away).
   void commitCurve();
@@ -136,6 +140,11 @@ private:
     enum Kind { None, Point, Entity, Label } kind = None;
     int index = -1;
   };
+  bool sketch3d_ = false;
+  std::optional<std::array<double, 3>> snap3d_;   // this click: a body corner (x, y, height)
+  void press2d(double x, double y, Qt::KeyboardModifiers mods, const QPointF& widgetPos);
+  void press3d(double x, double y, Qt::KeyboardModifiers mods);
+  std::optional<std::array<double, 3>> bodyCornerNear(const QPointF& widgetPos) const;
   struct Pick {
     Hit hit;
     double x = 0, y = 0;
@@ -149,6 +158,7 @@ private:
     int bodySegment = -1;       // on this straight body edge: the edge is projected too
     bool onXAxis = false;       // on the sketch's X axis (lined up with the origin): kept there
     bool onYAxis = false;       // on the sketch's Y axis
+    double z = 0;               // 3D Sketch: height above the plane (a body corner off it)
   };
 
   // Where the cursor snaps while drawing, like the familiar sketcher:

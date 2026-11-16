@@ -1,0 +1,36 @@
+# Live: Sketch Palette > 3D Sketch, as in the familiar tool. With it on, a
+# line runs from a body corner above the sketch plane down to the origin;
+# a point gets a height by double-clicking it.
+waitfor tsr.feature.extrude
+wait 600
+bdclick Origin            # the XY plane from the Browser: the block covers its centre
+wait 300
+brclick XY
+wait 400
+key Down
+key Return
+waitfor sketch.line
+wait 500
+bdclick Named_Views
+wait 300
+bdclick HOME              # an angled view: corners at other heights stand apart
+wait 900
+check palette.3d
+wait 300
+click sketch.line
+wclick 40 20 10           # the block's top corner, 10 mm above the plane
+sclick 0 0                # the origin
+key Escape
+click sketch.point
+sclick 10 -10
+key Escape
+click sketch.select
+sdclick 10 -10            # the point: its height
+waitfor pointHeight
+key ctrl+a
+type 15 mm
+key Return
+wait 500
+shot /tmp/live_sketch_3d.png
+click palette.finish
+wait 600

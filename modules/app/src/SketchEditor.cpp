@@ -403,6 +403,15 @@ QString SketchEditor::lengthText(double cm) const {
 }
 
 SketchEditor::Pick SketchEditor::pickPoint(double x, double y, int exclude) const {
+  // 3D Sketch: this click is on a body corner off the plane; the point goes there.
+  if (snap3d_ && std::abs(x - (*snap3d_)[0]) < 1e-12 && std::abs(y - (*snap3d_)[1]) < 1e-12) {
+    Pick p;
+    p.x = x;
+    p.y = y;
+    p.z = (*snap3d_)[2];
+    p.bodyPoint = true;
+    return p;
+  }
   const Snap s = snapAt(x, y, exclude);
   Pick p;
   p.x = s.x;
@@ -719,6 +728,7 @@ int SketchEditor::materialize(const Pick& p) {
   if (p.hit.kind == Hit::Point && p.hit.index >= 0 && p.hit.index < static_cast<int>(sk_.points.size()))
     return p.hit.index;
   const int pt = sk_.addPoint(p.x, p.y);
+  sk_.points[pt].z = p.z;   // 3D Sketch: off the plane
   // Snapped onto a curve or a line's middle: keep it there.
   if (p.onEntity >= 0 && p.onEntity < static_cast<int>(sk_.entities.size()) &&
       sk_.entities[p.onEntity].type != EntityType::Spline)
@@ -1290,7 +1300,59 @@ void SketchEditor::clickAt(double x, double y) {
   }
 }
 
-void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPointF& widgetPos) {
+std::optional<std::array<double, 3>> SketchEditor::bodyCornerNear(const QPointF& widgetPos) const {
+  if (!view_) return std::nullopt;
+  std::optional<std::array<double, 3>> best;
+  double bestD = 10;   // pixels
+  for (const auto& b : session_.document().bodies()) {
+    TopTools_IndexedMapOfShape verts;
+    TopExp::MapShapes(b.shape, TopAbs_VERTEX, verts);
+    for (int i = 1; i <= verts.Extent(); ++i) {
+      const gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(verts(i)));
+      const QPointF w = view_->toWidget(p);
+      const double d = std::hypot(w.x() - widgetPos.x(), w.y() - widgetPos.y());
+      if (d >= bestD) continue;
+      bestD = d;
+      double x, y;
+      sketch::toSketch(frame_, p, x, y);
+      best = std::array<double, 3>{x, y, gp_Vec(frame_.Location(), p).Dot(gp_Vec(frame_.Direction()))};
+    }
+  }
+  // A corner in the plane is the ordinary snap's.
+  if (best && std::abs((*best)[2]) < 1e-9) return std::nullopt;
+  return best;
+}
+
+void SketchEditor::set3D(bool on) {
+  sketch3d_ = on;
+  emit message(on ? tr("3D Sketch: click body corners anywhere to draw off the plane; double-click a point to set its height.")
+                  : tr("3D Sketch off: drawing stays in the sketch plane."));
+}
+
+void SketchEditor::press(double x, double y, Qt::KeyboardModifiers mods, const QPointF& widgetPos) {
+  // 3D Sketch: a click on a body corner off the plane lands on that corner.
+  snap3d_.reset();
+  struct Clear {
+    std::optional<std::array<double, 3>>& s;
+    ~Clear() { s.reset(); }
+  } clear{snap3d_};
+  if (sketch3d_ && (tool_ == Tool::Line || tool_ == Tool::Spline || tool_ == Tool::ControlSpline || tool_ == Tool::Point))
+    if (const auto c = bodyCornerNear(widgetPos)) {
+      snap3d_ = c;
+      x = (*c)[0];
+      y = (*c)[1];
+      return press3d(x, y, mods);
+    }
+  press2d(x, y, mods, widgetPos);
+}
+
+void SketchEditor::press3d(double x, double y, Qt::KeyboardModifiers mods) {
+  // As a plain click there, without the sizes typed into the boxes.
+  clearHud();
+  press2d(x, y, mods, QPointF());
+}
+
+void SketchEditor::press2d(double x, double y, Qt::KeyboardModifiers, const QPointF& widgetPos) {
   // Typed sizes override the cursor (the cursor still gives the direction).
   const bool locked = hudTool() && !steps_.empty() && hudAnyLocked();
   if (hudTool() && !steps_.empty()) {
@@ -2466,6 +2528,24 @@ void SketchEditor::mouseDoubleClick(QMouseEvent* e) {
       (void)sketch::setSplineHandle(sk_, hh.spline, hh.index, 0, 0);
       solveAndShow();
       emit message(tr("Tangent handle freed: the curve sets its own direction there again."));
+      return;
+    }
+  // 3D Sketch: double-click a point (with Select) to set its height above the plane.
+  if (tool_ == Tool::Select && sketch3d_)
+    if (const Hit h = hitTest(x, y); h.kind == Hit::Point && h.index > 0) {
+      const double z = sk_.points[h.index].z;
+      const auto v = askFields(tr("Point height"), {{{tr("Height above the sketch plane"), QStringLiteral("pointHeight"),
+                                                      lengthText(z)}}});
+      if (v) {
+        try {
+          const double nz = session_.document().evaluate((*v)[0].toStdString(), Unit::Millimeter, localDimensions());
+          checkpoint();
+          sk_.points[h.index].z = nz;
+          solveAndShow();
+        } catch (const std::exception& ex) {
+          emit message(tr("Height: %1").arg(QString::fromUtf8(ex.what())));
+        }
+      }
       return;
     }
   // Double-click a text (with Select): change it.

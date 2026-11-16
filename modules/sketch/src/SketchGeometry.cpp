@@ -385,13 +385,20 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
 }
 
 namespace {
+// A curve with a point off the sketch plane (3D sketch, included geometry).
+bool offPlane(const Sketch& s, int i) {
+  for (int p : s.entityPoints(i))
+    if (p >= 0 && std::abs(s.points.at(p).z) > 1e-9) return true;
+  return false;
+}
+
 TopoDS_Shape entityCurves(const Sketch& s, const gp_Ax3& f, bool construction, bool planarOnly = false) {
   TopoDS_Compound c;
   BRep_Builder b;
   b.MakeCompound(c);
   for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
     if (s.entities[i].construction != construction) continue;
-    if (planarOnly && s.entities[i].included) continue;   // 3D reference geometry bounds no profile
+    if (planarOnly && (s.entities[i].included || offPlane(s, i))) continue;   // 3D curves bound no profile
     const TopoDS_Shape e = curve(s, f, i);
     if (!e.IsNull()) b.Add(c, e);
   }
@@ -714,7 +721,7 @@ std::string toDxf(const Sketch& s, bool construction) {
   for (int i = 0; i < static_cast<int>(s.entities.size()); ++i) {
     const Entity& e = s.entities[i];
     if (e.construction && !construction) continue;
-    if (e.included) continue;   // 3D reference geometry is not part of the drawing
+    if (e.included || offPlane(s, i)) continue;   // 3D curves are not part of a flat drawing
     const char* layer = e.construction ? "CONSTRUCTION" : "0";
     switch (e.type) {
       case EntityType::Line:
