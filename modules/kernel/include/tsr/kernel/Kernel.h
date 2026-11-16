@@ -227,6 +227,14 @@ TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& fa
 // `symmetric`.
 TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, bool symmetric);
 
+// Faces as a feature (the familiar Pattern Type: Faces): the solid that the
+// picked faces of `body` enclose together with flat caps over the outlines
+// where they meet the rest of the body: a boss's sides and top, a pocket's
+// walls and floor, a hole's wall. `added` says whether it stands out of the
+// body (join its copies) or is cut into it (cut them). Throws KernelError
+// when an outline is not flat or the faces enclose nothing.
+TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, bool& added);
+
 // Emboss: flat profile faces (a sketch's regions) put onto `face` and grown
 // `depth` from it along its normal: outward for an emboss, into the body for
 // a deboss (negative depth). On a cylinder with `wrap`, the profiles are

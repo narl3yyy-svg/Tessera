@@ -1621,8 +1621,14 @@ void placeCopies(Document& doc, const std::string& name, const std::vector<TopoD
 using CopyFn = std::function<TopoDS_Shape(const TopoDS_Shape&)>;
 
 InputDef patternTypeInput() {
-  return choice("patternType", "Pattern Type", {"Features", "Bodies"},
-                "Features: copy what the picked features added or removed. Bodies: copy a whole body.");
+  return choice("patternType", "Pattern Type", {"Features", "Bodies", "Faces"},
+                "Features: copy what the picked features added or removed. Bodies: copy a whole body. Faces: copy "
+                "the boss, pocket or hole the picked faces make.");
+}
+InputDef patternFacesInput() {
+  return InputDef{.id = "faces", .label = "Faces", .tooltip = "Click every face of the boss, pocket or hole to copy.",
+                  .type = InputType::Faces, .defaultValue = std::string{}, .optional = true,
+                  .visibleWhen = "patternType=Faces"};
 }
 InputDef featuresInput() {
   return InputDef{.id = "features", .label = "Features", .tooltip = "Click features in the timeline.",
@@ -1631,7 +1637,12 @@ InputDef featuresInput() {
 }
 
 std::string checkPattern(const Inputs& in, Document& doc) {
-  if (stringOr(in, "patternType", "Bodies") == "Bodies") return checkBody(in, doc);
+  const std::string type = stringOr(in, "patternType", "Bodies");
+  if (type == "Bodies") return checkBody(in, doc);
+  if (type == "Faces") {
+    if (auto err = checkBody(in, doc); !err.empty()) return err;
+    return stringOr(in, "faces", "").empty() ? "Faces: click the faces of the boss, pocket or hole to copy" : "";
+  }
   const auto names = splitNames(getString(in, "features"));
   if (names.empty()) return "Features: click features in the timeline";
   const auto all = doc.features();
@@ -1639,6 +1650,46 @@ std::string checkPattern(const Inputs& in, Document& doc) {
     if (std::none_of(all.begin(), all.end(), [&](const Feature& f) { return f.name == n; }))
       return "Features: no feature named '" + n + "'";
   return {};
+}
+
+// The body to pattern, and (Faces) the picked faces as full references, so a
+// replay after the body changes finds the same faces.
+void preparePattern(Inputs& in, const Document& doc) {
+  defaultBody(in, doc);
+  if (stringOr(in, "patternType", "Bodies") != "Faces") return;
+  if (const auto b = doc.body(getString(in, "body"))) {
+    try {
+      in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(std::string("Faces: ") + e.what());
+    }
+  }
+}
+
+// The boss / pocket / hole the picked faces make, and whether it adds.
+TopoDS_Shape facesTool(const Document& doc, const Inputs& in, bool& added) {
+  const std::string name = bodyName(in, doc);
+  const auto b = doc.body(name);
+  if (!b) throw CommandError("Body: '" + name + "' does not exist");
+  try {
+    return kernel::faceFeature(b->shape, kernel::resolveFaces(b->shape, getString(in, "faces")), added);
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(e.what());
+  }
+}
+
+// Faces: the feature they make, copied and joined to (or cut from) the body.
+void patternFaces(Document& doc, const Inputs& in, const std::vector<CopyFn>& copies) {
+  bool added = false;
+  const TopoDS_Shape tool = facesTool(doc, in, added);
+  const std::string name = bodyName(in, doc);
+  TopoDS_Compound all;
+  BRep_Builder bb;
+  bb.MakeCompound(all);
+  for (const auto& c : copies) bb.Add(all, c(tool));
+  doc.noteTool(all, added ? "join" : "cut", name);
+  storeBodies(doc, name,
+              kernel::boolean(added ? kernel::BooleanOp::Join : kernel::BooleanOp::Cut, doc.body(name)->shape, all), false);
 }
 
 TopoDS_Shape differenceOrNull(const TopoDS_Shape& a, const TopoDS_Shape& b) {
@@ -1724,6 +1775,10 @@ void patternFeatures(Document& doc, const Inputs& in, const std::vector<CopyFn>&
 void runPattern(Document& doc, const Inputs& in, const std::vector<CopyFn>& copies) {
   const bool join = getString(in, "result") == "Join";
   try {
+    if (stringOr(in, "patternType", "Bodies") == "Faces") {
+      patternFaces(doc, in, copies);
+      return;
+    }
     if (stringOr(in, "patternType", "Bodies") == "Features") {
       patternFeatures(doc, in, copies, join);
       return;
@@ -1744,18 +1799,20 @@ class Mirror final : public Command {
 public:
   Mirror() {
     commonDef(def_, kCmdMirror, "Mirror", "Mirrors features or a body across a plane.", "mirror", "Create");
-    InputDef type = choice("patternType", "Object Type", {"Bodies", "Features"},
-                           "Bodies: the whole body. Features: what the picked features made, mirrored onto the body.");
+    InputDef type = choice("patternType", "Object Type", {"Bodies", "Features", "Faces"},
+                           "Bodies: the whole body. Features: what the picked features made, mirrored onto the body. "
+                           "Faces: the boss, pocket or hole the picked faces make.");
     InputDef feats = featuresInput();
     InputDef body = bodyInput();
-    body.visibleWhen = "patternType=Bodies";
+    body.visibleWhen = "patternType=Bodies|Faces";
     InputDef op = choice("operation", "Operation", {"New Body", "Join"}, "Join merges the mirror image with the original.");
     op.visibleWhen = "patternType=Bodies";
-    def_.inputs = {type, feats, body, planeChoice("Mirror plane (origin plane, moved by Offset)."), planeOffset(), op};
+    def_.inputs = {type, feats, patternFacesInput(), body, planeChoice("Mirror plane (origin plane, moved by Offset)."),
+                   planeOffset(), op};
   }
   const CommandDef& def() const override { return def_; }
   std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
-  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { preparePattern(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const gp_Ax3 f = planeOf(doc, in);
@@ -1764,6 +1821,10 @@ public:
     try {
       if (stringOr(in, "patternType", "Bodies") == "Features") {
         patternFeatures(doc, in, {[o, n](const TopoDS_Shape& s) { return kernel::mirrored(s, o, n); }}, true);
+        return;
+      }
+      if (stringOr(in, "patternType", "Bodies") == "Faces") {
+        patternFaces(doc, in, {[o, n](const TopoDS_Shape& s) { return kernel::mirrored(s, o, n); }});
         return;
       }
       const std::string name = bodyName(in, doc);
@@ -1799,8 +1860,8 @@ public:
                       .type = InputType::Axis, .defaultValue = std::string(v)};
     };
     InputDef body = bodyInput();
-    body.visibleWhen = "patternType=Bodies";
-    def_.inputs = {patternTypeInput(), featuresInput(), body,
+    body.visibleWhen = "patternType=Bodies|Faces";
+    def_.inputs = {patternTypeInput(), featuresInput(), patternFacesInput(), body,
                    direction("direction1", "Direction 1", "X"),
                    choice("distanceType", "Distance Type", {"Extent", "Spacing"},
                           "Extent: the distance covers all copies. Spacing: the distance between neighbours."),
@@ -1811,7 +1872,7 @@ public:
   }
   const CommandDef& def() const override { return def_; }
   std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
-  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { preparePattern(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     gp_Dir d1, d2;
@@ -1849,8 +1910,8 @@ public:
     commonDef(def_, kCmdCircPattern, "Circular Pattern", "Copies features or a body around a world or construction axis.",
               "pattern-circ", "Create");
     InputDef body = bodyInput();
-    body.visibleWhen = "patternType=Bodies";
-    def_.inputs = {patternTypeInput(), featuresInput(), body,
+    body.visibleWhen = "patternType=Bodies|Faces";
+    def_.inputs = {patternTypeInput(), featuresInput(), patternFacesInput(), body,
                    InputDef{.id = "axis", .label = "Axis", .tooltip = "A world axis (through the origin) or a construction axis.",
                             .type = InputType::Axis, .defaultValue = std::string("Z")},
                    InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
@@ -1862,7 +1923,7 @@ public:
   }
   const CommandDef& def() const override { return def_; }
   std::string validate(const Inputs& in, CommandContext& ctx) const override { return checkPattern(in, docOf(ctx)); }
-  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { preparePattern(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const auto n = getInt(in, "quantity");
@@ -1901,8 +1962,8 @@ public:
               "Copies features or a body along a sketch path (its open curves), measured along the path.",
               "pattern-path", "Create");
     InputDef body = bodyInput();
-    body.visibleWhen = "patternType=Bodies";
-    def_.inputs = {patternTypeInput(), featuresInput(), body,
+    body.visibleWhen = "patternType=Bodies|Faces";
+    def_.inputs = {patternTypeInput(), featuresInput(), patternFacesInput(), body,
                    InputDef{.id = "path", .label = "Path", .tooltip = "A sketch whose open curves form the path.",
                             .type = InputType::Sketch, .defaultValue = std::string{}},
                    InputDef{.id = "quantity", .label = "Quantity", .tooltip = "Including the original.",
@@ -1922,7 +1983,7 @@ public:
     if (getString(in, "path").empty()) return "Path: choose the sketch with the path";
     return checkPattern(in, docOf(ctx));
   }
-  void prepare(Inputs& in, CommandContext& ctx) const override { defaultBody(in, docOf(ctx)); }
+  void prepare(Inputs& in, CommandContext& ctx) const override { preparePattern(in, docOf(ctx)); }
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const auto rec = doc.sketch(getString(in, "path"));
@@ -2003,6 +2064,10 @@ private:
               for (const auto& [b, change] : e->bodies)
                 if (!change.second.IsNull()) return centre(change.second);
             }
+    }
+    if (stringOr(in, "patternType", "Bodies") == "Faces") {
+      bool added = false;
+      return centre(facesTool(doc, in, added));
     }
     const std::string name = bodyName(in, doc);
     if (const auto b = doc.body(name)) return centre(b->shape);

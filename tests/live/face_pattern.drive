@@ -1,0 +1,19 @@
+# Live: Circular Pattern with Pattern Type Faces, as in the familiar tool:
+# click the pocket's floor and its wall, OK: six pockets round the disc.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Circular Pattern
+key Return
+waitfor panelOk
+wait 400
+choose patternType 2          # Faces
+wait 400
+wclick 30 0 8                 # the pocket's floor
+wait 300
+wclick 26.5 3.5 9             # its wall (the far side, seen over the rim)
+wait 600
+shot /tmp/live_face_pattern.png
+click panelOk
+wait 1000
+shot /tmp/live_face_pattern_after.png

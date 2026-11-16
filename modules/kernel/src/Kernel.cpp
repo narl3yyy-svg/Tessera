@@ -2035,6 +2035,67 @@ TopoDS_Face wrapOntoCylinder(const TopoDS_Face& profile, const gp_Cylinder& cyl)
 
 } // namespace
 
+TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, bool& added) {
+  if (faces.empty()) throw KernelError("Faces: click the faces to pattern");
+  // The faces' free outlines (where they meet faces not picked).
+  BRepBuilderAPI_Sewing sew(1e-6);
+  for (const auto& f : faces) sew.Add(BRepBuilderAPI_Copy(f).Shape());
+  sew.Perform();
+  TopoDS_Shape open = sew.SewedShape();
+  if (open.ShapeType() == TopAbs_FACE) {   // one face (a hole's wall): its outlines come from a shell
+    TopoDS_Shell sh;
+    BRep_Builder b;
+    b.MakeShell(sh);
+    b.Add(sh, open);
+    open = sh;
+  }
+  ShapeAnalysis_FreeBounds fb(open, 1e-6, false, false);
+  if (TopExp_Explorer(fb.GetOpenWires(), TopAbs_EDGE).More())
+    throw KernelError("Faces: the picked faces do not close up into a feature (pick all its faces)");
+  BRepBuilderAPI_Sewing all(1e-6);
+  all.Add(open);
+  int caps = 0;
+  for (TopExp_Explorer ex(fb.GetClosedWires(), TopAbs_WIRE); ex.More(); ex.Next()) {
+    BRepBuilderAPI_MakeFace cap(TopoDS::Wire(ex.Current()), true);
+    if (!cap.IsDone())
+      throw KernelError("Faces: they must meet the rest of the body along flat outlines (a boss, pocket or hole)");
+    // A cap lying on a picked face (a body's whole top picked with a hole's
+    // wall) closes nothing.
+    const gp_Pln cp = BRepAdaptor_Surface(cap.Face()).Plane();
+    for (const auto& f : faces) {
+      BRepAdaptor_Surface fs(TopoDS::Face(f));
+      if (fs.GetType() == GeomAbs_Plane && fs.Plane().Axis().IsParallel(cp.Axis(), 1e-9) &&
+          cp.Distance(fs.Plane().Location()) < 1e-7)
+        throw KernelError("Faces: the picked faces do not enclose a feature (pick the faces of one boss, pocket or hole)");
+    }
+    all.Add(cap.Face());
+    ++caps;
+  }
+  TopoDS_Shape solid = guarded("Faces", [&]() -> TopoDS_Shape {
+    all.Perform();
+    TopoDS_Shell shell;
+    int shells = 0;
+    for (TopExp_Explorer ex(all.SewedShape(), TopAbs_SHELL); ex.More(); ex.Next(), ++shells) shell = TopoDS::Shell(ex.Current());
+    if (shells != 1) return TopoDS_Shape();
+    BRepBuilderAPI_MakeSolid ms(shell);
+    if (!ms.IsDone()) return TopoDS_Shape();
+    TopoDS_Solid s = ms.Solid();
+    BRepLib::OrientClosedSolid(s);
+    return s;
+  });
+  const double v = massProperties(solid).volume;
+  if (!(v > 1e-12) || (caps == 0 && faces.size() < 2) || !isValid(solid))
+    throw KernelError("Faces: the picked faces do not enclose a feature (pick the faces of one boss, pocket or hole)");
+  // Mostly inside the body: it was added (a boss); else cut (a pocket, a hole).
+  double inside = 0;
+  try {
+    inside = massProperties(boolean(BooleanOp::Intersect, body, solid)).volume;
+  } catch (const KernelError&) {   // nothing in common
+  }
+  added = inside > v / 2;
+  return solid;
+}
+
 TopoDS_Shape embossTool(const std::vector<TopoDS_Shape>& profiles, const TopoDS_Shape& face, double depth, bool wrap) {
   if (profiles.empty()) throw KernelError("Emboss: select the sketch profiles to emboss");
   if (face.IsNull() || face.ShapeType() != TopAbs_FACE) throw KernelError("Emboss: select the face to emboss on");

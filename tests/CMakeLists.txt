@@ -114,6 +114,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_rigid_group.py)
   add_test(NAME api_emboss
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_emboss.py)
+  add_test(NAME api_face_pattern
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_face_pattern.py)
   add_test(NAME api_sketch_more
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_sketch_more.py)
   add_test(NAME api_extrude_to_object
@@ -180,6 +182,9 @@ if(TSR_WITH_QT)
     add_test(NAME live_emboss
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/emboss.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_emboss.py ${CMAKE_CURRENT_SOURCE_DIR}/live/emboss_check.py)
+    add_test(NAME live_face_pattern
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/face_pattern.drive
+                          ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_face_pattern.py ${CMAKE_CURRENT_SOURCE_DIR}/live/face_pattern_check.py)
     add_test(NAME live_two_sides
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/two_sides.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_sketch.py ${CMAKE_CURRENT_SOURCE_DIR}/live/two_sides_check.py)
@@ -321,7 +326,7 @@ if(TSR_WITH_QT)
     add_test(NAME live_timeline_marker
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker.drive
                           ${CMAKE_CURRENT_SOURCE_DIR}/live/setup_rect_extrude.py ${CMAKE_CURRENT_SOURCE_DIR}/live/timeline_marker_check.py)
-    set_tests_properties(live_emboss live_rigid_group live_project_surface live_sketch_3d live_curvature live_polygons live_chamfer_arc live_midpoint_line live_include_3d live_spline_handles_trim live_text_path live_conic_spline live_tangent_arc live_parameters_table live_viewcube live_named_views live_visual_styles live_circular_ring live_revolve_ring live_shell_arrow live_break_intersect live_sketch_pattern live_sketch_text live_ellipse live_sketch_tangent_slots live_sketch_3pt live_driven_dimension live_dimension_place live_axis_snap live_tangent_chain live_select_other live_edge_loop live_preselect live_sketch_box live_box_fillet live_timeline_marker live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
+    set_tests_properties(live_face_pattern live_emboss live_rigid_group live_project_surface live_sketch_3d live_curvature live_polygons live_chamfer_arc live_midpoint_line live_include_3d live_spline_handles_trim live_text_path live_conic_spline live_tangent_arc live_parameters_table live_viewcube live_named_views live_visual_styles live_circular_ring live_revolve_ring live_shell_arrow live_break_intersect live_sketch_pattern live_sketch_text live_ellipse live_sketch_tangent_slots live_sketch_3pt live_driven_dimension live_dimension_place live_axis_snap live_tangent_chain live_select_other live_edge_loop live_preselect live_sketch_box live_box_fillet live_timeline_marker live_browser_rename live_hole_on_face live_thin_extrude live_fillet_picks live_thread_arrows live_project live_timeline_delete live_value_suggest live_browser_sketch live_sketch_habits live_feature_pattern live_two_sides live_line_tool live_extrude_section live_sketch_modify live_to_object live_face_extrude live_marking_menu live_assembly PROPERTIES
                          ENVIRONMENT "TSR_APP=$<TARGET_FILE:tessera>;TSR_CLI=$<TARGET_FILE:tessera-cli>"
                          TIMEOUT 240)
   endif()
