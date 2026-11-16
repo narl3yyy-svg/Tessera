@@ -548,7 +548,7 @@ void MainWindow::buildRibbon() {
     auto* buttons = new QHBoxLayout;
     buttons->setSpacing(0);
     auto* menu = new QMenu(box);
-    const size_t maxButtons = panel == "Create" || panel == "Modify" ? 7 : panel == "Assemble" ? 4 : 3;
+    const size_t maxButtons = panel == "Create" || panel == "Modify" ? 7 : panel == "Assemble" ? 5 : 3;
     size_t shown = 0;
     for (const Entry& e : it->second) {
       const QString tip = QStringLiteral("<b>%1</b>%2<br>%3")
@@ -1533,7 +1533,12 @@ void MainWindow::refreshBrowser(const QString& docName) {
     it->setCheckState(0, viewport_->isBodyVisible(n) ? Qt::Checked : Qt::Unchecked);
   }
 
-  const auto comps = d.components();
+  // Rigid Groups are listed with the joints, as in the familiar Browser.
+  auto comps = d.components();
+  std::vector<doc::Component> groups;
+  for (const auto& c : comps)
+    if (c.rigid) groups.push_back(c);
+  std::erase_if(comps, [](const doc::Component& c) { return c.rigid; });
   if (!comps.empty()) {
     auto* folder = new QTreeWidgetItem(root, {tr("Components (%1)").arg(comps.size())});
     folder->setIcon(0, icon(QStringLiteral("component")));
@@ -1552,12 +1557,19 @@ void MainWindow::refreshBrowser(const QString& docName) {
     std::vector<std::pair<int, std::string>> joints;
     for (const auto& f : d.features())
       if (f.commandId == doc::kCmdJoint || f.commandId == doc::kCmdAsBuiltJoint) joints.emplace_back(f.id, f.name);
-    if (!joints.empty()) {
-      auto* folder = new QTreeWidgetItem(root, {tr("Joints (%1)").arg(joints.size())});
+    if (!joints.empty() || !groups.empty()) {
+      auto* folder = new QTreeWidgetItem(root, {tr("Joints (%1)").arg(joints.size() + groups.size())});
       folder->setIcon(0, icon(QStringLiteral("joint")));
       for (const auto& [id, name] : joints) {
         auto* it = new QTreeWidgetItem(folder, {qs(name)});
         it->setIcon(0, icon(QStringLiteral("joint")));
+      }
+      for (const auto& g : groups) {
+        QStringList members;
+        for (const auto& m : g.bodies) members << qs(m);
+        auto* it = new QTreeWidgetItem(folder, {qs(g.name)});
+        it->setIcon(0, icon(QStringLiteral("rigid")));
+        it->setToolTip(0, tr("Rigid Group: %1 move together").arg(members.join(QStringLiteral(", "))));
       }
       folder->setExpanded(true);
     }

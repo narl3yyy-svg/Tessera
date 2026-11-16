@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "modules/api/src/TsrModule.cpp": {
-    "mtime": 1794820014.801748,
-    "seen": 1794820556.7865171,
-    "ast_hash": "063eea10ba997b06b8a8b34aa0c61943",
+    "mtime": 1794837254.0171857,
+    "seen": 1794837486.8593547,
+    "ast_hash": "37993123bea42d91e664b8d458db452e",
     "semantic_hash": ""
   },
   "modules/api/src/cli_main.cpp": {
@@ -126,9 +126,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.cpp": {
-    "mtime": 1794632086.7338133,
-    "seen": 1794816569.18984,
-    "ast_hash": "38ef72751bec7f0b9ec71ed685fa25a4",
+    "mtime": 1794837254.0161853,
+    "seen": 1794837486.8593655,
+    "ast_hash": "c9aa4678d5b844c067401f74e40ac44d",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindow.h": {
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
-    "mtime": 1794632365.900431,
-    "seen": 1794816569.189875,
-    "ast_hash": "549886ac19489070092ae7ce09f56eb3",
+    "mtime": 1794837239.0258262,
+    "seen": 1794837486.8594303,
+    "ast_hash": "23604b98f4e401cdd27001e992ddc75c",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Session.h": {
@@ -360,15 +360,15 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794632365.9049423,
-    "seen": 1794816569.1898768,
-    "ast_hash": "67b062f24852dd1c2bc7adfbefaa3fd3",
+    "mtime": 1794837239.0268247,
+    "seen": 1794837486.8594337,
+    "ast_hash": "4d3ad8f782c1307a2ad972f4b87c40e5",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
-    "mtime": 1794632365.9014347,
-    "seen": 1794816569.1898775,
-    "ast_hash": "547ea99c5d6dc351a2345c7c47289b62",
+    "mtime": 1794837239.0268247,
+    "seen": 1794837486.8594353,
+    "ast_hash": "eb38ac15cbdfd2ed24f481a44f04d208",
     "semantic_hash": ""
   },
   "modules/doc/src/OcafApp.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794820310.8545258,
-    "seen": 1794820556.7868345,
-    "ast_hash": "f82ac64f5f523130ea22cb545ff82bc5",
+    "mtime": 1794837472.920642,
+    "seen": 1794837486.8601036,
+    "ast_hash": "931188f506178ca21b27abc341b2ed36",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794820310.855526,
-    "seen": 1794820556.786837,
-    "ast_hash": "83f72672f63d601e096f24cafff70c60",
+    "mtime": 1794837472.9229634,
+    "seen": 1794837486.860109,
+    "ast_hash": "9dc1dc9aa53c13a0cfab17be7775de46",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794820310.855526,
-    "seen": 1794820556.7868378,
-    "ast_hash": "696a11a7472d28f24fdca721810b93aa",
+    "mtime": 1794837472.9219606,
+    "seen": 1794837486.8601108,
+    "ast_hash": "f16c9e08d88a70c019353c4520962fae",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794820310.855526,
-    "seen": 1794820556.78684,
-    "ast_hash": "7a892444de057aa5a469e870b17cc91f",
+    "mtime": 1794837472.9219606,
+    "seen": 1794837486.8601155,
+    "ast_hash": "6c1e4aabc27156659f852e552e840e40",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794820160.5204556,
-    "seen": 1794820556.7868462,
-    "ast_hash": "c6505cb3e14ae2b40e56a5dabeeeaea9",
+    "mtime": 1794837317.4608574,
+    "seen": 1794837486.8601267,
+    "ast_hash": "b95ba3b8178a0b8c99a443ddbe365fc6",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2463,6 +2463,24 @@
     "mtime": 1794820160.0949495,
     "seen": 1794820556.7866464,
     "ast_hash": "0c178ee7882f3fb5f1e320473f0d9a12",
+    "semantic_hash": ""
+  },
+  "tests/api/test_rigid_group.py": {
+    "mtime": 1794837449.9135494,
+    "seen": 1794837486.8595345,
+    "ast_hash": "c669ddafa785b3d62a526b745041ae35",
+    "semantic_hash": ""
+  },
+  "tests/live/rigid_group_check.py": {
+    "mtime": 1794837309.4386353,
+    "seen": 1794837486.8596213,
+    "ast_hash": "62dce3401e275bbd62e2218b63b6beb2",
+    "semantic_hash": ""
+  },
+  "tests/live/setup_rigid_group.py": {
+    "mtime": 1794837309.4077833,
+    "seen": 1794837486.8596394,
+    "ast_hash": "f307e88f75e4a176165c8e7624d14798",
     "semantic_hash": ""
   }
 }

@@ -466,11 +466,12 @@ void bindTsr(py::module_& m) {
     for (const auto& c : activeSession().document().components()) {
       py::dict d;
       d["name"] = c.name;
-      d["bodies"] = c.bodies;
+      d["bodies"] = c.bodies;   // a rigid group: its member components
+      d["rigid"] = c.rigid;
       out.append(d);
     }
     return out;
-  });
+  }, "Components: name and bodies; Rigid Groups too (rigid=True), whose 'bodies' are their member components.");
 
   m.def("export", [](const std::string& path, int refinement) {
     const auto format = kernel::formatForPath(path);

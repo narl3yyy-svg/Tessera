@@ -3026,6 +3026,7 @@ public:
     const auto bodies = split(getString(in, "bodies"));
     // A body belongs to one component: take it out of any other.
     for (auto c : doc.components()) {
+      if (c.rigid) continue;
       const auto before = c.bodies.size();
       std::erase_if(c.bodies, [&](const std::string& b) { return std::find(bodies.begin(), bodies.end(), b) != bodies.end(); });
       if (c.bodies.size() != before) doc.setComponent(c);
@@ -3033,6 +3034,77 @@ public:
     std::string name = getString(in, "name");
     if (name.empty()) name = doc.nextComponentName();
     doc.setComponent({name, bodies});
+  }
+
+private:
+  CommandDef def_;
+};
+
+// Rigid Group, as in the familiar Assemble panel: components locked
+// together, so a joint moving one moves them all, and they cannot be jointed
+// to each other. Picks are bodies (each stands for its component) or
+// component names.
+class RigidGroup final : public Command {
+public:
+  RigidGroup() {
+    commonDef(def_, kCmdRigidGroup, "Rigid Group", "Locks components together so they move as one: click a body of "
+              "each component.", "rigid", "Assemble");
+    def_.nameInput = "name";
+    def_.inputs = {{.id = "name", .label = "Name", .tooltip = "Empty: RigidGroup<n>.", .type = InputType::String,
+                    .defaultValue = std::string{}, .optional = true},
+                   {.id = "components", .label = "Components", .tooltip = "Click a body of each component to lock together.",
+                    .type = InputType::Bodies, .defaultValue = std::string{}}};
+  }
+  const CommandDef& def() const override { return def_; }
+  // The picked components, each once, in pick order; `error` names a bad pick.
+  static std::vector<std::string> members(const Document& doc, const std::string& picks, std::string& error) {
+    std::vector<std::string> out;
+    for (const auto& n : NewComponent::split(picks)) {
+      std::optional<std::string> c;
+      if (const auto comp = doc.component(n); comp && !comp->rigid) {
+        c = n;
+      } else if (doc.body(n)) {
+        c = doc.componentOfBody(n);
+        if (!c) {
+          error = "Components: " + n + " is not in a component (use New Component first)";
+          return {};
+        }
+      } else {
+        error = "Components: '" + n + "' is not a component or body";
+        return {};
+      }
+      if (std::find(out.begin(), out.end(), *c) == out.end()) out.push_back(*c);
+    }
+    return out;
+  }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    std::string error;
+    const auto comps = members(doc, getString(in, "components"), error);
+    if (!error.empty()) return error;
+    if (comps.size() < 2) return "Components: pick at least two components";
+    const std::string name = getString(in, "name");
+    if (!name.empty() && !isIdentifier(name)) return "Name: letters, digits and underscores only";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "name").empty())
+      for (int n = 1;; ++n)
+        if (!doc.component("RigidGroup" + std::to_string(n))) {
+          in["name"] = "RigidGroup" + std::to_string(n);
+          break;
+        }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::string error;
+    Component g;
+    g.name = getString(in, "name");
+    g.bodies = members(doc, getString(in, "components"), error);
+    if (!error.empty()) throw CommandError(error);
+    g.rigid = true;
+    doc.setComponent(g);
   }
 
 private:
@@ -3186,7 +3258,13 @@ public:
     const std::string b2 = getString(in, "origin2").substr(0, getString(in, "origin2").find('|'));
     const auto c1 = doc.componentOfBody(b1);
     if (!c1) return "Component 1: " + b1 + " is not in a component (use New Component first)";
-    if (doc.componentOfBody(b2) == c1) return "Component 2: pick a different component";
+    const auto c2 = doc.componentOfBody(b2);
+    if (c2 == c1) return "Component 2: pick a different component";
+    if (c2) {
+      const auto locked = doc.lockedWith(*c1);
+      if (std::find(locked.begin(), locked.end(), *c2) != locked.end())
+        return "Component 2: " + *c2 + " is locked to " + *c1 + " by a Rigid Group";
+    }
     if (flag(in, "rotationLimits") && real(in, "rotationMin") > real(in, "rotationMax"))
       return "Rotation Limits: the minimum is above the maximum";
     if (flag(in, "slideLimits") && real(in, "slideMin") > real(in, "slideMax"))
@@ -3215,8 +3293,14 @@ public:
   void apply(const Inputs& in, CommandContext& ctx) const override {
     Document& doc = docOf(ctx);
     const auto [moving, trsf] = motion(doc, in, asBuilt_);
-    const auto comp = doc.component(moving);
-    for (const auto& name : comp->bodies) {
+    // The moving component, and every component locked to it by rigid groups.
+    const auto comps = doc.lockedWith(moving);
+    std::vector<std::string> bodies;
+    for (const auto& cn : comps)
+      if (const auto c = doc.component(cn))
+        for (const auto& b : c->bodies)
+          if (std::find(bodies.begin(), bodies.end(), b) == bodies.end()) bodies.push_back(b);
+    for (const auto& name : bodies) {
       const auto b = doc.body(name);
       if (!b) continue;
       doc.replaceBody(name, BRepBuilderAPI_Transform(b->shape, trsf, true).Shape());
@@ -3376,6 +3460,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<RibWeb>(false));
   registry.add(std::make_unique<RibWeb>(true));
   registry.add(std::make_unique<Joint>(true));
+  registry.add(std::make_unique<RigidGroup>());
 }
 
 } // namespace tsr::doc

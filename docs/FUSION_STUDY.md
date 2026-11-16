@@ -149,6 +149,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [x] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
 - [x] Select a feature in the timeline and press Delete (Day 20); right-click > Edit Profile Sketch.
+- [x] Rigid Group: click a component in each; they move as one and cannot be jointed to each other; listed under Joints in the Browser.
 - [ ] Ground / Unground components (thumbtack in the Browser); drag components in the canvas; As-Built Joint (Shift+J); joint limits with drag flags; right-click a joint > Animate / Lock (Day 23).
 - [x] V hides / shows the selected bodies, or the Browser item (Day 6).
 - [ ] Shift-click a range of bodies in the Browser (Day 7).

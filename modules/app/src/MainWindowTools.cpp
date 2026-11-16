@@ -92,7 +92,6 @@ void MainWindow::buildUiCommands() {
       "User parameters and every feature's values in one table; expressions such as width / 2 + 3 mm.", "",
       [this] { showParameters(); });
   planned("Assemble", "ui.jointOrigin", "Joint Origin", "joint-origin");
-  planned("Assemble", "ui.rigidGroup", "Rigid Group", "rigid");
   add("Assemble", "ui.driveJoints", "Drive Joints", "motion", "Moves a joint through its range; Play animates it.", "",
       [this] { driveJoints(); });
   planned("Assemble", "ui.motionLink", "Motion Link", "motion");

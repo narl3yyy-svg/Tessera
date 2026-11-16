@@ -31,6 +31,7 @@ inline constexpr const char* kCmdLoft = "tsr.feature.loft";
 inline constexpr const char* kCmdPressPull = "tsr.feature.pressPull";
 inline constexpr const char* kCmdPipe = "tsr.feature.pipe";
 inline constexpr const char* kCmdNewComponent = "tsr.assemble.newComponent";
+inline constexpr const char* kCmdRigidGroup = "tsr.assemble.rigidGroup";
 inline constexpr const char* kCmdJoint = "tsr.assemble.joint";
 inline constexpr const char* kCmdAsBuiltJoint = "tsr.assemble.asBuiltJoint";
 inline constexpr const char* kCmdThread = "tsr.feature.thread";

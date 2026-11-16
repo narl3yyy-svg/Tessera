@@ -125,7 +125,8 @@ struct ConstructionPoint {
 
 struct Component {
   std::string name;                 // "Component1"
-  std::vector<std::string> bodies;  // bodies that belong to it
+  std::vector<std::string> bodies;  // bodies that belong to it (a rigid group: its member components)
+  bool rigid = false;               // a Rigid Group: its components move together
 };
 
 struct Feature {
@@ -239,6 +240,9 @@ public:
   void setComponent(const Component& c);
   std::string nextComponentName() const;
   std::optional<std::string> componentOfBody(const std::string& body) const;
+  // `component` and every component locked to it by Rigid Groups (directly
+  // or through other groups), `component` first.
+  std::vector<std::string> lockedWith(const std::string& component) const;
   std::vector<ConstructionPoint> points() const;
   std::optional<ConstructionPoint> point(const std::string& name) const;
   void setPoint(const ConstructionPoint& p);

@@ -1094,6 +1094,7 @@ std::vector<Component> Document::components() const {
     std::string b;
     while (std::getline(ss, b, ';'))
       if (!b.empty()) c.bodies.push_back(b);
+    c.rigid = stringOf(nd, "rigid") == "1";
     out.push_back(std::move(c));
   }
   return out;
@@ -1112,7 +1113,9 @@ void Document::setComponent(const Component& c) {
   TDataStd_Name::Set(l, ext(c.name));
   std::string joined;
   for (const auto& b : c.bodies) joined += (joined.empty() ? "" : ";") + b;
-  TDataStd_NamedData::Set(l)->SetString("bodies", ext(joined));
+  Handle(TDataStd_NamedData) nd = TDataStd_NamedData::Set(l);
+  nd->SetString("bodies", ext(joined));
+  nd->SetString("rigid", ext(c.rigid ? "1" : ""));
 }
 
 std::string Document::nextComponentName() const {
@@ -1121,8 +1124,23 @@ std::string Document::nextComponentName() const {
 
 std::optional<std::string> Document::componentOfBody(const std::string& body) const {
   for (const auto& c : components())
-    if (std::find(c.bodies.begin(), c.bodies.end(), body) != c.bodies.end()) return c.name;
+    if (!c.rigid && std::find(c.bodies.begin(), c.bodies.end(), body) != c.bodies.end()) return c.name;
   return std::nullopt;
+}
+
+std::vector<std::string> Document::lockedWith(const std::string& component) const {
+  std::vector<std::string> out = {component};
+  const auto all = components();
+  auto has = [&](const std::string& n) { return std::find(out.begin(), out.end(), n) != out.end(); };
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (const auto& g : all) {
+      if (!g.rigid || std::none_of(g.bodies.begin(), g.bodies.end(), has)) continue;
+      for (const auto& m : g.bodies)
+        if (!has(m)) out.push_back(m), grew = true;
+    }
+  }
+  return out;
 }
 
 std::vector<ConstructionPoint> Document::points() const {
