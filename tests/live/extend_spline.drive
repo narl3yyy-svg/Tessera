@@ -1,0 +1,23 @@
+# Live: MODIFY > Extend on a spline, as in the familiar tool. A level fit
+# point spline and an upright line beyond it: click the spline near its end;
+# it runs on to the line.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick 50 -20
+sclick 50 20
+key Escape
+menu sketch.group-spline sketch.spline
+sclick 0 0
+sclick 10 0
+sclick 20 0
+key Return
+click sketch.extend
+sclick 19 0               # near the spline's right end
+wait 400
+shot /tmp/live_extend_spline.png
+click palette.finish
+wait 600

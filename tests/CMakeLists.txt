@@ -61,6 +61,8 @@ if(TSR_WITH_PYTHON)
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_ellipse.py)
   add_test(NAME api_named_views
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_named_views.py)
+  add_test(NAME api_extend_curves
+           COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_extend_curves.py)
   add_test(NAME api_text_box_path
            COMMAND tessera-cli --script ${CMAKE_CURRENT_SOURCE_DIR}/api/test_text_box_path.py)
   add_test(NAME api_conic_control_spline
@@ -239,6 +241,9 @@ if(TSR_WITH_QT)
     add_test(NAME live_axis_snap
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/axis_snap.drive
                           "" ${CMAKE_CURRENT_SOURCE_DIR}/live/axis_snap_check.py)
+    add_test(NAME live_extend_spline
+             COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/extend_spline.drive
+                          "" ${CMAKE_CURRENT_SOURCE_DIR}/live/extend_spline_check.py)
     add_test(NAME live_text_path
              COMMAND bash ${PROJECT_SOURCE_DIR}/scripts/live-test.sh ${CMAKE_CURRENT_SOURCE_DIR}/live/text_path.drive
                           "" ${CMAKE_CURRENT_SOURCE_DIR}/live/text_path_check.py)

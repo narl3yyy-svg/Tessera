@@ -217,7 +217,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Fillet: emit message(tr("Fillet: click a corner (or two lines), then type the radius and press Enter (or click).")); break;
     case Tool::Offset: emit message(tr("Offset: click a curve (a spline or ellipse on its own); its connected chain is copied. Move to the side you want, type the distance, Enter (or click).")); break;
     case Tool::Chamfer: emit message(tr("Chamfer: click a corner (or two lines), then type the distance and press Enter (or click).")); break;
-    case Tool::Extend: emit message(tr("Extend: click a line near the end to lengthen it to the next curve.")); break;
+    case Tool::Extend: emit message(tr("Extend: click a line, arc, elliptical arc or spline near the end to lengthen it to the next curve.")); break;
     case Tool::Mirror:
       emit message(selection_.empty() ? tr("Mirror: click the curves to mirror, press Enter, then click the mirror line.")
                                       : tr("Mirror: click the mirror line."));

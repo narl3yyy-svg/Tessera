@@ -428,7 +428,7 @@ std::string finishExtend(Sketch& s, const Sketch& backup, int entity, int endPt,
 } // namespace
 
 std::string extendCurve(Sketch& s, int entity, double x, double y) {
-  if (entity < 0 || entity >= static_cast<int>(s.entities.size())) return "Extend: click a line or arc near the end to extend";
+  if (entity < 0 || entity >= static_cast<int>(s.entities.size())) return "Extend: click a curve near the end to extend";
   const Entity e = s.entities[entity];
   if (e.type == EntityType::Line) {
     // Lines and circles / arcs in closed form first; then curves without one.
@@ -499,7 +499,118 @@ std::string extendCurve(Sketch& s, int entity, double x, double y) {
     const Sketch backup = s;
     return finishExtend(s, backup, entity, endPt, hit, target);
   }
-  return "Extend: click a line or arc near the end to extend (splines and ellipses cannot be extended yet)";
+  if (e.type == EntityType::Ellipse && e.isEllipticalArc()) {
+    // An elliptical arc: on round its ellipse (anticlockwise from fit[0] to
+    // fit[1]) to the first crossing beyond the clicked end.
+    const Point pa = s.points[e.fit[0]], pb = s.points[e.fit[1]];
+    const bool atB = std::hypot(x - pb.x, y - pb.y) < std::hypot(x - pa.x, y - pa.y);
+    const int endPt = atB ? e.fit[1] : e.fit[0];
+    if (!endIsFree(s, entity, endPt)) return "Extend: that end is connected to another curve";
+    Sketch whole = flattened(s);
+    whole.entities[entity].fit.clear();
+    const auto c = curve2d(whole, entity);
+    if (!c || !c->periodic) return "Extend: that ellipse has no shape";
+    const double period = c->t1 - c->t0;
+    auto norm = [&](double v) { return v - period * std::floor(v / period); };
+    const double u0 = paramOf(*c, pa.x, pa.y), u1 = paramOf(*c, pb.x, pb.y);
+    const double span = norm(u1 - u0);
+    double best = 1e300;
+    int target = -1;
+    Point hit{};
+    for (int j = 0; j < static_cast<int>(s.entities.size()); ++j) {
+      if (j == entity) continue;
+      for (const auto& q : crossingsOf(whole, entity, *c, j)) {
+        const double u = paramOf(*c, q.x, q.y);
+        const double d = atB ? norm(u - u1) : norm(u0 - u);
+        if (d > 1e-7 && d < period - span - 1e-7 && d < best) {
+          best = d;
+          target = j;
+          hit = q;
+        }
+      }
+    }
+    if (target < 0) return "Extend: nothing to extend to round that way";
+    const Sketch backup = s;
+    return finishExtend(s, backup, entity, endPt, hit, target);
+  }
+  if (e.type == EntityType::Spline && e.kind != SplineKind::Conic && e.fit.size() >= 2 &&
+      e.fit.front() != e.fit.back()) {
+    // A spline: it carries on from the clicked end along its circle of
+    // curvature there (straight when it is flat) to the first curve it
+    // meets, which becomes its new end point.
+    const Sketch flat = flattened(s);
+    const auto c = curve2d(flat, entity);
+    if (!c) return "Extend: that spline has no shape";
+    const Point pa = s.points[e.fit.front()], pb = s.points[e.fit.back()];
+    const bool atB = std::hypot(x - pb.x, y - pb.y) < std::hypot(x - pa.x, y - pa.y);
+    const int endPt = atB ? e.fit.back() : e.fit.front();
+    if (!endIsFree(s, entity, endPt)) return "Extend: that end is connected to another curve";
+    gp_Pnt2d p;
+    gp_Vec2d v, acc;
+    c->c->D2(atB ? c->t1 : c->t0, p, v, acc);
+    if (v.Magnitude() < 1e-12) return "Extend: the spline has no direction at that end";
+    if (!atB) v.Reverse();   // travelling away from the curve
+    const double speed = v.Magnitude();
+    const double k = (v.X() * acc.Y() - v.Y() * acc.X()) / (speed * speed * speed);   // signed curvature
+    const gp_Vec2d t = v / speed, left(-t.Y(), t.X());
+    Sketch probe = flat;
+    const int start = probe.addPoint(p.X(), p.Y());
+    int path = -1;
+    gp_Pnt2d centre;
+    const bool round = std::abs(k) > 1e-6;
+    if (round) {
+      centre = p.Translated(left * (1 / k));
+      path = probe.addCircleAt(probe.addPoint(centre.X(), centre.Y()), 1 / std::abs(k));
+    } else {
+      path = probe.addLine(start, probe.addPoint(p.X() + t.X() * 1e4, p.Y() + t.Y() * 1e4));
+    }
+    const double a0 = std::atan2(p.Y() - centre.Y(), p.X() - centre.X());
+    double best = 1e300;
+    int target = -1;
+    Point hit{};
+    for (int j = 0; j < static_cast<int>(s.entities.size()); ++j) {
+      if (j == entity) continue;
+      for (const auto& q : crossings(probe, path, j)) {
+        double d;
+        if (round) {
+          const double ang = std::atan2(q.y - centre.Y(), q.x - centre.X());
+          double turn = k > 0 ? ang - a0 : a0 - ang;   // anticlockwise when it bends left
+          turn -= 2 * kPi * std::floor(turn / (2 * kPi));
+          d = turn;
+        } else {
+          d = (q.x - p.X()) * t.X() + (q.y - p.Y()) * t.Y();
+        }
+        if (d > 1e-7 && d < best) {
+          best = d;
+          target = j;
+          hit = q;
+        }
+      }
+    }
+    if (target < 0) return "Extend: nothing to extend to in that direction";
+    const Sketch backup = s;
+    Entity& sp = s.entities[entity];
+    const int np = s.addPoint(hit.x, hit.y);
+    // The old end stays as a point the curve passes through (or a frame point).
+    if (atB) {
+      sp.fit.push_back(np);
+      if (!sp.handles.empty()) sp.handles.push_back({0, 0});
+    } else {
+      sp.fit.insert(sp.fit.begin(), np);
+      if (!sp.handles.empty()) sp.handles.insert(sp.handles.begin(), Point{0, 0});
+    }
+    sp.a = sp.fit.front();
+    sp.b = sp.fit.back();
+    if (s.entities[target].type != EntityType::Spline) s.addConstraint({ConstraintType::PointOnEntity, {np}, {target}});
+    const SolveResult r = solve(s);
+    if (!r.ok || curve(s, xyFrame(), entity).IsNull()) {
+      s = backup;
+      return "Extend: " + (r.message.empty() ? std::string("the result cannot be solved") : r.message);
+    }
+    return {};
+  }
+  if (e.type == EntityType::Spline && e.kind == SplineKind::Conic) return "Extend: a conic cannot be extended";
+  return "Extend: click near the free end of a line, arc, elliptical arc or spline";
 }
 
 } // namespace tsr::sketch

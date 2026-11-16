@@ -79,7 +79,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 - Tangent handles set a fit point's direction and fullness (handle length); they cannot yet be dimensioned or tied to other curves (no tangent or curvature constraint on a handle).
 - Trimming or breaking a spline makes fit point splines through the original's points on each piece, with the original's directions at the cut; the shape between can shift slightly (a control point spline or conic piece is fitted through points sampled along it). Pieces are not tied to the curves that cut them (as with lines, P5-3).
 - Offset of a spline or ellipse is a fit point spline through offset points (24 round a closed curve); it does not follow later changes to the original, and an ellipse offset inward past its tightest curve is refused.
-- Extend does not reach to or from splines and ellipses yet.
+- Extend of a spline carries it on along its circle of curvature at the end (straight where it is flat) and adds the meeting point as its new end, the old end staying as a fit (or frame) point; the true natural continuation of the curve may differ slightly. Conics and full ellipses cannot be extended.
 
 ## Include 3D Geometry
 
