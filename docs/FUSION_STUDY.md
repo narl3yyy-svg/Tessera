@@ -120,6 +120,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
 - [x] Sketch ribbon as in the familiar sketch tab: the everyday tools in each panel's row, and every tool in the panel's title menu (CREATE ▾, MODIFY ▾, CONSTRAINTS ▾); the row fits a 1440 px window.
+- [x] Project to Surface (Project / Include menu): pick faces, then sketch curves, Enter: the curves drape onto the faces along the sketch normal as fixed 3D curves.
 - [x] 3D Sketch (Sketch Palette): clicks snap to body corners anywhere in space; a point's height is typed (double-click it); 3D curves bound no profile. Still to come: the move triad, constraints in space.
 - [x] Curvature (G2) constraint: a fit point spline joined to a line, arc, elliptical arc or spline runs on in the same direction, equally bent.
 - [x] Circumscribed / inscribed / edge polygon, the side count typed after Tab (Day 6); one Polygon constraint keeps it regular.

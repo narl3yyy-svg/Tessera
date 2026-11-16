@@ -1,0 +1,21 @@
+# Live: sketch CREATE > Project / Include > Project to Surface, as in the
+# familiar tool. A line across a sphere's middle; pick the sphere's face,
+# then the line, Enter: the line is draped over the sphere in 3D.
+waitfor tsr.feature.extrude
+wait 600
+bdclick Sketch1           # the empty sketch on XY (the sphere hides the plane)
+waitfor sketch.line
+wait 600
+click sketch.line
+sclick -10 0
+sclick 10 0
+key Escape
+menu sketch.group-project sketch.project-surface
+sclick 0 8                # the sphere's face, clear of the line
+wait 300
+sclick 5 0                # the line
+key Return
+wait 600
+shot /tmp/live_project_surface.png
+click palette.finish
+wait 600

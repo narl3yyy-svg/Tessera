@@ -62,6 +62,11 @@ std::vector<SplineHandle> splineHandles(const Sketch& s, int entity);
 // Returns how many curves were added.
 int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>& edges);
 
+// Project to Surface: the sketch's curves `entities` projected along the
+// sketch normal onto `faces`, added as fixed 3D curves (as Include 3D
+// Geometry adds them). Returns how many were made.
+int projectToSurface(Sketch& s, const gp_Ax3& frame, const TopoDS_Shape& faces, const std::vector<int>& entities);
+
 // The sketch as a DXF drawing (AutoCAD R12 text, which every CAD and laser /
 // CNC program reads), in millimetres, in the sketch's own coordinates:
 // lines, circles and arcs exactly, other curves and text outlines as

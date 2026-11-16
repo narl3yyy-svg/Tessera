@@ -1,5 +1,6 @@
 #include "ProfileCache.h"
 #include "SketchEditor.h"
+#include <TopoDS_Face.hxx>
 #include "ParameterCompleter.h"
 #include "Theme.h"
 
@@ -229,6 +230,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Perpendicular: emit message(tr("Perpendicular: click two lines.")); break;
     case Tool::Equal: emit message(tr("Equal: click two lines, or two circles/arcs.")); break;
     case Tool::Tangent: emit message(tr("Tangent: click a line and a circle/arc, or two circles/arcs.")); break;
+    case Tool::ProjectSurface: emit message(tr("Project to Surface: click the body faces, then the sketch curves to project onto them; Enter projects.")); break;
     case Tool::Curvature: emit message(tr("Curvature: click a spline and the curve joined to its end: smooth there, equally bent (G2).")); break;
     case Tool::Fix: emit message(tr("Fix: click a point or curve to lock it in place.")); break;
     case Tool::Midpoint: emit message(tr("Midpoint: click a point, then a line.")); break;
@@ -272,6 +274,7 @@ void SketchEditor::setTool(Tool t) {
 
 void SketchEditor::resetSteps() {
   clearHud();
+  surfaceFaces_.Nullify();
   steps_.clear();
   tangentLines_.clear();
   tangentClicks_.clear();
@@ -660,6 +663,57 @@ void SketchEditor::projectAt(const QPointF& widgetPos) {
   emit message(tr("Projected %n curve(s).", nullptr, n));
 }
 
+// Project to Surface: faces first (clicks on bodies), then the sketch's own
+// curves (clicks on them); Enter drapes the curves onto the faces along the
+// sketch normal, as fixed 3D curves.
+void SketchEditor::projectSurfacePick(double x, double y, const QPointF& widgetPos) {
+  const Hit h = hitEntity(x, y);
+  if (h.kind == Hit::Entity && !sk_.entities[h.index].included) {
+    if (surfaceFaces_.IsNull()) {
+      emit message(tr("Project to Surface: click the faces first, then the curves."));
+      return;
+    }
+    const bool already = std::any_of(picks_.begin(), picks_.end(), [&](const auto& p) { return p.hit.index == h.index; });
+    if (!already) picks_.push_back({h, x, y});
+    rebuild();
+    emit message(tr("%n curve(s) to project: click more, or press Enter.", nullptr, static_cast<int>(picks_.size())));
+    return;
+  }
+  if (!view_) return;
+  const TopoDS_Face f = view_->faceAt(widgetPos);
+  if (f.IsNull()) {
+    emit message(tr("Project to Surface: click a body face, then the curves."));
+    return;
+  }
+  TopoDS_Compound all;
+  BRep_Builder bb;
+  bb.MakeCompound(all);
+  if (!surfaceFaces_.IsNull())
+    for (TopExp_Explorer x2(surfaceFaces_, TopAbs_FACE); x2.More(); x2.Next()) bb.Add(all, x2.Current());
+  bb.Add(all, f);
+  surfaceFaces_ = all;
+  emit message(tr("Face picked. Click more faces, or the sketch curves to project."));
+}
+
+bool SketchEditor::projectToSurfaceNow() {
+  if (tool_ != Tool::ProjectSurface || surfaceFaces_.IsNull() || picks_.empty()) return false;
+  std::vector<int> ids;
+  for (const auto& p : picks_) ids.push_back(p.hit.index);
+  checkpoint();
+  const int n = sketch::projectToSurface(sk_, frame_, surfaceFaces_, ids);
+  picks_.clear();
+  surfaceFaces_.Nullify();
+  if (n == 0) {
+    undo_.pop_back();
+    emit message(tr("Project to Surface: none of those curves land on the faces."));
+    rebuild();
+    return true;
+  }
+  solveAndShow();
+  emit message(tr("Projected %n curve(s) onto the surface.", nullptr, n));
+  return true;
+}
+
 void SketchEditor::includeAt(const QPointF& widgetPos) {
   if (!view_) return;
   std::vector<TopoDS_Edge> picked;
@@ -761,7 +815,9 @@ bool SketchEditor::onlyProjected(const sketch::Constraint& c) const {
   for (int p : c.points) {
     bool owned = false;
     for (const auto& e : sk_.entities)
-      if (e.projected && (e.a == p || e.b == p || e.center == p)) owned = true;
+      if (e.projected && (e.a == p || e.b == p || e.center == p ||
+                          std::find(e.fit.begin(), e.fit.end(), p) != e.fit.end()))
+        owned = true;   // a projected spline's fit points too (Project to Surface, Include 3D)
     if (!owned) return false;
     any = true;
   }
@@ -2128,6 +2184,9 @@ void SketchEditor::press2d(double x, double y, Qt::KeyboardModifiers, const QPoi
     case Tool::Intersect:
       intersectAt(widgetPos);
       return;
+    case Tool::ProjectSurface:
+      projectSurfacePick(x, y, widgetPos);
+      return;
     case Tool::Project:
       projectAt(widgetPos);
       return;
@@ -3481,6 +3540,8 @@ bool SketchEditor::keyPress(QKeyEvent* e) {
     emit message(tr("Mirror: click the mirror line."));
     return true;
   }
+  if (tool_ == Tool::ProjectSurface && (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) && projectToSurfaceNow())
+    return true;
   if ((tool_ == Tool::Spline || tool_ == Tool::ControlSpline) && steps_.size() >= 2 &&
       (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter)) {
     finishSpline(false);

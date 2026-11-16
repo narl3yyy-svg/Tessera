@@ -1,4 +1,5 @@
 #pragma once
+#include <TopoDS_Shape.hxx>
 // Sketch mode: draws, constrains and dimensions one sketch in the 3D view.
 //
 // The editor works on its own copy of the sketch and only touches the
@@ -43,7 +44,7 @@ public:
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
     RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc, ControlSpline, Conic, TextOnPath,
-    CircumscribedPolygon, EdgePolygon, Curvature,
+    CircumscribedPolygon, EdgePolygon, Curvature, ProjectSurface,
     Include3D, MidpointLine,
   };
 
@@ -140,6 +141,9 @@ private:
     enum Kind { None, Point, Entity, Label } kind = None;
     int index = -1;
   };
+  TopoDS_Shape surfaceFaces_;   // Project to Surface: the faces picked so far
+  void projectSurfacePick(double x, double y, const QPointF& widgetPos);
+  bool projectToSurfaceNow();
   bool sketch3d_ = false;
   std::optional<std::array<double, 3>> snap3d_;   // this click: a body corner (x, y, height)
   void press2d(double x, double y, Qt::KeyboardModifiers mods, const QPointF& widgetPos);

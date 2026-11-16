@@ -87,6 +87,10 @@ One line per item: id, what differs, why, and the phase that closes it.
 - A point's height is set by double-clicking it; the solver works in the plane, so constraints and dimensions act on the points as seen along the sketch normal (heights stay as set). The rubber-band preview is drawn in the plane.
 - Curves with a point off the plane bound no profile and are left out of sketch DXF export; they can serve as paths.
 
+## Project to Surface
+
+- Curves are projected along the sketch normal (both ways) onto the picked faces; Fusion's "closest point" and custom-direction options are not there yet. The result is fixed reference geometry (like Include 3D Geometry) and does not follow later changes to the curves or the body.
+
 ## Curvature (G2)
 
 - Curvature applies to open fit point splines (not control point splines or conics). A spline with a Curvature constraint is built as its own cubic through its points, matching the other curve's direction and curvature exactly at the joint; its shape away from the joint can differ a little from the same spline without the constraint.

@@ -11,6 +11,9 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <TopExp.hxx>
+#include <TopExp_Explorer.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 
@@ -362,6 +365,29 @@ void bindTsr(py::module_& m) {
   }, py::arg("data"), py::arg("plane"), py::arg("body"), py::arg("edges") = std::vector<int>{}, py::arg("offset") = 0.0,
      "Include 3D Geometry: a body's edges (all, or by index) in the sketch, as they are in space.");
 
+  m.def("sketch_project_to_surface", [](const std::string& data, const std::string& plane, const std::string& body,
+                                        std::array<double, 3> facePoint, const std::vector<int>& entities, double offset) {
+    const auto b = activeSession().document().body(body);
+    if (!b) throw std::runtime_error("no body named '" + body + "'");
+    // The face nearest the given point.
+    const gp_Pnt q(facePoint[0], facePoint[1], facePoint[2]);
+    TopoDS_Shape face;
+    double best = 1e300;
+    for (TopExp_Explorer x(b->shape, TopAbs_FACE); x.More(); x.Next()) {
+      BRepExtrema_DistShapeShape d(BRepBuilderAPI_MakeVertex(q).Vertex(), x.Current());
+      if (d.IsDone() && d.Value() < best) {
+        best = d.Value();
+        face = x.Current();
+      }
+    }
+    if (face.IsNull()) throw std::runtime_error("the body has no faces");
+    sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (sketch::projectToSurface(s, sketch::planeFrame(plane, offset), face, entities) == 0)
+      throw std::runtime_error("Project to Surface: nothing landed on that face");
+    return s.toJson();
+  }, py::arg("data"), py::arg("plane"), py::arg("body"), py::arg("face_point"), py::arg("entities"),
+     py::arg("offset") = 0.0,
+     "Project to Surface: sketch curves projected along the sketch normal onto the body face nearest face_point (cm).");
   m.def("bounding_box", [](const std::string& name) {
     const auto b = activeSession().document().body(name);
     if (!b) throw std::runtime_error("no body named '" + name + "'");

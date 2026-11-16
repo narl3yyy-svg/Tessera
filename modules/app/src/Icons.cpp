@@ -938,6 +938,28 @@ void polygonEdgeIcon(QPainter& p) {   // a hexagon drawn from one side
   dot(p, h[2].x(), h[2].y());
 }
 
+void projectSurfaceIcon(QPainter& p) {   // a curve dropped onto a curved face
+  p.setPen(QPen(kLine, 2));
+  p.setBrush(kTop);
+  QPainterPath face;
+  face.moveTo(6, 46);
+  face.cubicTo(20, 34, 44, 34, 58, 46);
+  face.lineTo(58, 58);
+  face.lineTo(6, 58);
+  face.closeSubpath();
+  p.drawPath(face);
+  p.setPen(QPen(kAccent, 1.5, Qt::DashLine));
+  for (double x : {18.0, 32.0, 46.0}) p.drawLine(QPointF(x, 12), QPointF(x, 38));
+  stroke(p);
+  p.drawLine(QPointF(14, 10), QPointF(50, 10));
+  p.setPen(QPen(kAccent, 3.5, Qt::SolidLine, Qt::RoundCap));
+  p.setBrush(Qt::NoBrush);
+  QPainterPath on;
+  on.moveTo(14, 41.5);
+  on.cubicTo(24, 36, 40, 36, 50, 41.5);
+  p.drawPath(on);
+}
+
 void polygonIcon(QPainter& p) {
   stroke(p);
   QPolygonF hex;
@@ -1351,6 +1373,7 @@ QPixmap render(const QString& name, int size) {
   else if (name == QLatin1String("presspull")) pressPullIcon(p);
   else if (name == QLatin1String("center-rectangle")) centerRectIcon(p);
   else if (name == QLatin1String("polygon")) polygonIcon(p);
+  else if (name == QLatin1String("project-surface")) projectSurfaceIcon(p);
   else if (name == QLatin1String("polygon-circumscribed")) polygonCircumscribedIcon(p);
   else if (name == QLatin1String("polygon-edge")) polygonEdgeIcon(p);
   else if (name == QLatin1String("slot")) slotIcon(p);
@@ -1449,7 +1472,7 @@ QIcon icon(const QString& name) {
 }
 
 QStringList iconNames() {
-  return {QStringLiteral("box"), QStringLiteral("cylinder"), QStringLiteral("cone"), QStringLiteral("sphere"), QStringLiteral("torus"), QStringLiteral("parameters"), QStringLiteral("orbit"), QStringLiteral("pan"), QStringLiteral("home"), QStringLiteral("fit"), QStringLiteral("sketch"), QStringLiteral("sketch-locked"), QStringLiteral("project"), QStringLiteral("history-marker"), QStringLiteral("extrude"), QStringLiteral("line"), QStringLiteral("rectangle"), QStringLiteral("circle"), QStringLiteral("arc"), QStringLiteral("rectangle-3pt"), QStringLiteral("circle-2pt"), QStringLiteral("circle-3pt"), QStringLiteral("arc-3pt"), QStringLiteral("arc-tangent"), QStringLiteral("circle-2tan"), QStringLiteral("circle-3tan"), QStringLiteral("slot-overall"), QStringLiteral("slot-arc"), QStringLiteral("ellipse"), QStringLiteral("text"), QStringLiteral("text-path"), QStringLiteral("sketch-rect-pattern"), QStringLiteral("sketch-circular-pattern"), QStringLiteral("sketch-move"), QStringLiteral("sketch-scale"), QStringLiteral("break"), QStringLiteral("intersect"), QStringLiteral("include-3d"), QStringLiteral("line-mid"), QStringLiteral("point"), QStringLiteral("dimension"), QStringLiteral("finish"), QStringLiteral("fillet"), QStringLiteral("chamfer"), QStringLiteral("revolve"), QStringLiteral("select"), QStringLiteral("construction"), QStringLiteral("shell"), QStringLiteral("sweep"), QStringLiteral("loft"), QStringLiteral("presspull"), QStringLiteral("center-rectangle"), QStringLiteral("polygon"), QStringLiteral("polygon-circumscribed"), QStringLiteral("polygon-edge"), QStringLiteral("slot"), QStringLiteral("trim"), QStringLiteral("spline"), QStringLiteral("spline-control"), QStringLiteral("conic"), QStringLiteral("pipe"), QStringLiteral("coil"), QStringLiteral("thread"), QStringLiteral("offset-face"), QStringLiteral("delete-face"), QStringLiteral("thicken"), QStringLiteral("rib"), QStringLiteral("accessibility"), QStringLiteral("appearance"), QStringLiteral("compute"), QStringLiteral("material"), QStringLiteral("min-radius"), QStringLiteral("isocurve"), QStringLiteral("web"), QStringLiteral("split-face"), QStringLiteral("sketch-fillet"), QStringLiteral("offset"), QStringLiteral("sketch-chamfer"), QStringLiteral("extend"), QStringLiteral("sketch-mirror"), QStringLiteral("hole"), QStringLiteral("pattern-rect"), QStringLiteral("pattern-path"), QStringLiteral("pattern-circ"), QStringLiteral("combine"), QStringLiteral("split"), QStringLiteral("move"), QStringLiteral("scale"), QStringLiteral("remove"), QStringLiteral("mirror"), QStringLiteral("measure"), QStringLiteral("interference"), QStringLiteral("section"), QStringLiteral("com"), QStringLiteral("insert"), QStringLiteral("insert-2d"), QStringLiteral("export"), QStringLiteral("print"), QStringLiteral("image"), QStringLiteral("preferences"), QStringLiteral("units"), QStringLiteral("grid"), QStringLiteral("body"), QStringLiteral("face"), QStringLiteral("edge"), QStringLiteral("vertex"), QStringLiteral("component"), QStringLiteral("joint"), QStringLiteral("joint-origin"), QStringLiteral("rigid"), QStringLiteral("motion"), QStringLiteral("configure"), QStringLiteral("plane"), QStringLiteral("look-at"), QStringLiteral("plane-angle"), QStringLiteral("plane-mid"), QStringLiteral("axis"), QStringLiteral("curvature"), QStringLiteral("zebra"), QStringLiteral("draft"), QStringLiteral("undo"), QStringLiteral("redo"), QStringLiteral("save"), QStringLiteral("file"), QStringLiteral("c-coincident"), QStringLiteral("c-horizontal-vertical"), QStringLiteral("c-parallel"), QStringLiteral("c-perpendicular"), QStringLiteral("c-equal"), QStringLiteral("c-tangent"), QStringLiteral("c-curvature"), QStringLiteral("c-fix")};
+  return {QStringLiteral("box"), QStringLiteral("cylinder"), QStringLiteral("cone"), QStringLiteral("sphere"), QStringLiteral("torus"), QStringLiteral("parameters"), QStringLiteral("orbit"), QStringLiteral("pan"), QStringLiteral("home"), QStringLiteral("fit"), QStringLiteral("sketch"), QStringLiteral("sketch-locked"), QStringLiteral("project"), QStringLiteral("history-marker"), QStringLiteral("extrude"), QStringLiteral("line"), QStringLiteral("rectangle"), QStringLiteral("circle"), QStringLiteral("arc"), QStringLiteral("rectangle-3pt"), QStringLiteral("circle-2pt"), QStringLiteral("circle-3pt"), QStringLiteral("arc-3pt"), QStringLiteral("arc-tangent"), QStringLiteral("circle-2tan"), QStringLiteral("circle-3tan"), QStringLiteral("slot-overall"), QStringLiteral("slot-arc"), QStringLiteral("ellipse"), QStringLiteral("text"), QStringLiteral("text-path"), QStringLiteral("sketch-rect-pattern"), QStringLiteral("sketch-circular-pattern"), QStringLiteral("sketch-move"), QStringLiteral("sketch-scale"), QStringLiteral("break"), QStringLiteral("intersect"), QStringLiteral("include-3d"), QStringLiteral("line-mid"), QStringLiteral("point"), QStringLiteral("dimension"), QStringLiteral("finish"), QStringLiteral("fillet"), QStringLiteral("chamfer"), QStringLiteral("revolve"), QStringLiteral("select"), QStringLiteral("construction"), QStringLiteral("shell"), QStringLiteral("sweep"), QStringLiteral("loft"), QStringLiteral("presspull"), QStringLiteral("center-rectangle"), QStringLiteral("polygon"), QStringLiteral("project-surface"), QStringLiteral("polygon-circumscribed"), QStringLiteral("polygon-edge"), QStringLiteral("slot"), QStringLiteral("trim"), QStringLiteral("spline"), QStringLiteral("spline-control"), QStringLiteral("conic"), QStringLiteral("pipe"), QStringLiteral("coil"), QStringLiteral("thread"), QStringLiteral("offset-face"), QStringLiteral("delete-face"), QStringLiteral("thicken"), QStringLiteral("rib"), QStringLiteral("accessibility"), QStringLiteral("appearance"), QStringLiteral("compute"), QStringLiteral("material"), QStringLiteral("min-radius"), QStringLiteral("isocurve"), QStringLiteral("web"), QStringLiteral("split-face"), QStringLiteral("sketch-fillet"), QStringLiteral("offset"), QStringLiteral("sketch-chamfer"), QStringLiteral("extend"), QStringLiteral("sketch-mirror"), QStringLiteral("hole"), QStringLiteral("pattern-rect"), QStringLiteral("pattern-path"), QStringLiteral("pattern-circ"), QStringLiteral("combine"), QStringLiteral("split"), QStringLiteral("move"), QStringLiteral("scale"), QStringLiteral("remove"), QStringLiteral("mirror"), QStringLiteral("measure"), QStringLiteral("interference"), QStringLiteral("section"), QStringLiteral("com"), QStringLiteral("insert"), QStringLiteral("insert-2d"), QStringLiteral("export"), QStringLiteral("print"), QStringLiteral("image"), QStringLiteral("preferences"), QStringLiteral("units"), QStringLiteral("grid"), QStringLiteral("body"), QStringLiteral("face"), QStringLiteral("edge"), QStringLiteral("vertex"), QStringLiteral("component"), QStringLiteral("joint"), QStringLiteral("joint-origin"), QStringLiteral("rigid"), QStringLiteral("motion"), QStringLiteral("configure"), QStringLiteral("plane"), QStringLiteral("look-at"), QStringLiteral("plane-angle"), QStringLiteral("plane-mid"), QStringLiteral("axis"), QStringLiteral("curvature"), QStringLiteral("zebra"), QStringLiteral("draft"), QStringLiteral("undo"), QStringLiteral("redo"), QStringLiteral("save"), QStringLiteral("file"), QStringLiteral("c-coincident"), QStringLiteral("c-horizontal-vertical"), QStringLiteral("c-parallel"), QStringLiteral("c-perpendicular"), QStringLiteral("c-equal"), QStringLiteral("c-tangent"), QStringLiteral("c-curvature"), QStringLiteral("c-fix")};
 }
 
 void setIconTheme(const Theme::Colors& c) {

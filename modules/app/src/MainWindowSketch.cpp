@@ -375,7 +375,8 @@ QWidget* MainWindow::buildSketchTab() {
   toolGroup(create, QStringLiteral("project"),
             {{T::Project, QStringLiteral("project"), tr("Project"), QStringLiteral("P")},
              {T::Intersect, QStringLiteral("intersect"), tr("Intersect"), {}},
-             {T::Include3D, QStringLiteral("include-3d"), tr("Include 3D Geometry"), {}}});
+             {T::Include3D, QStringLiteral("include-3d"), tr("Include 3D Geometry"), {}},
+             {T::ProjectSurface, QStringLiteral("project-surface"), tr("Project to Surface"), {}}});
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
   setIcon(construction, QStringLiteral("construction"));

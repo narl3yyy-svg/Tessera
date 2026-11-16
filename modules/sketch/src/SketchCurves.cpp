@@ -6,6 +6,8 @@
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRep_Tool.hxx>
+#include <TopExp_Explorer.hxx>
+#include <BRepProj_Projection.hxx>
 #include <GeomAPI.hxx>
 #include <Geom2dAPI_InterCurveCurve.hxx>
 #include <Geom2dAPI_ProjectPointOnCurve.hxx>
@@ -334,6 +336,24 @@ std::string setSplineHandle(Sketch& s, int spline, int index, double tx, double 
   for (const auto& h : e.handles) any = any || std::hypot(h.x, h.y) > 1e-12;
   if (!any) e.handles.clear();
   return {};
+}
+
+int projectToSurface(Sketch& s, const gp_Ax3& frame, const TopoDS_Shape& faces, const std::vector<int>& entities) {
+  if (faces.IsNull()) return 0;
+  std::vector<TopoDS_Edge> made;
+  for (int id : entities) {
+    if (id < 0 || id >= static_cast<int>(s.entities.size()) || s.entities[id].included) continue;
+    const TopoDS_Shape c = curve(s, frame, id);
+    if (c.IsNull()) continue;
+    try {
+      // Straight along the sketch normal (both ways), onto the faces.
+      BRepProj_Projection proj(c, faces, frame.Direction());
+      for (; proj.More(); proj.Next())
+        for (TopExp_Explorer x(proj.Current(), TopAbs_EDGE); x.More(); x.Next()) made.push_back(TopoDS::Edge(x.Current()));
+    } catch (const Standard_Failure&) {
+    }
+  }
+  return made.empty() ? 0 : includeEdges(s, frame, made);
 }
 
 int includeEdges(Sketch& s, const gp_Ax3& frame, const std::vector<TopoDS_Edge>& edges) {
