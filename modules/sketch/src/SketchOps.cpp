@@ -703,6 +703,7 @@ bool shapeRelation(ConstraintType t) {
     case ConstraintType::Concentric:
     case ConstraintType::Collinear:
     case ConstraintType::Symmetry:
+    case ConstraintType::Polygon:
     case ConstraintType::Angle:
       return true;
     default:

@@ -28,6 +28,7 @@ constexpr TypeName kTypeNames[] = {
     {ConstraintType::Fix, "fix"},
     {ConstraintType::Collinear, "collinear"},
     {ConstraintType::Symmetry, "symmetry"},
+    {ConstraintType::Polygon, "polygon"},
     {ConstraintType::Distance, "distance"},
     {ConstraintType::HorizontalDistance, "horizontalDistance"},
     {ConstraintType::VerticalDistance, "verticalDistance"},

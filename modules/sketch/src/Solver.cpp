@@ -14,6 +14,7 @@
 #include <Eigen/Dense>
 
 #include <cmath>
+#include <numbers>
 #include <set>
 
 namespace tsr::sketch {
@@ -274,6 +275,24 @@ private:
         const double mx = (P(p[0]).x + P(p[1]).x) / 2, my = (P(p[0]).y + P(p[1]).y) / 2;
         r.push_back((dx * (my - P(l.a).y) - dy * (mx - P(l.a).x)) / n);
         r.push_back((dx * (P(p[1]).x - P(p[0]).x) + dy * (P(p[1]).y - P(p[0]).y)) / n);
+        return;
+      }
+      case ConstraintType::Polygon: {
+        // Each corner is the first one turned about the centre by a whole
+        // number of sides' angles: equal sides and equal angles.
+        if (p.size() != 1 || e.size() < 3) bad();
+        for (int i : e)
+          if (isRound(i)) bad();
+        const int n = static_cast<int>(e.size());
+        const double sign = c.value < 0 ? -1.0 : 1.0;
+        const double vx = P(E(e[0]).a).x - P(p[0]).x, vy = P(E(e[0]).a).y - P(p[0]).y;
+        for (int k = 1; k < n; ++k) {
+          const double ang = sign * 2 * std::numbers::pi * k / n;
+          const double ex = P(p[0]).x + vx * std::cos(ang) - vy * std::sin(ang);
+          const double ey = P(p[0]).y + vx * std::sin(ang) + vy * std::cos(ang);
+          r.push_back(P(E(e[k]).a).x - ex);
+          r.push_back(P(E(e[k]).a).y - ey);
+        }
         return;
       }
       case ConstraintType::Fix:

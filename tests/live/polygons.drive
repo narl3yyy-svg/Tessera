@@ -1,0 +1,21 @@
+# Live: CREATE > Polygon > Circumscribed, Inscribed and Edge Polygon, as in
+# the familiar tool; each is held regular by one Polygon constraint.
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+menu sketch.group-polygon sketch.polygon-circumscribed
+sclick 0 0
+sclick 10 0               # the middle of a side: 10 mm out
+menu sketch.group-polygon sketch.polygon
+sclick 0 40
+sclick 10 40              # a corner: 10 mm out
+menu sketch.group-polygon sketch.polygon-edge
+sclick 40 0
+sclick 50 0               # one side, 10 mm
+sclick 45 5               # above it
+wait 400
+shot /tmp/live_polygons.png
+click palette.finish
+wait 600

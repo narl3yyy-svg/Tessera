@@ -233,7 +233,9 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Midpoint: emit message(tr("Midpoint: click a point, then a line.")); break;
     case Tool::Concentric: emit message(tr("Concentric: click two circles/arcs.")); break;
     case Tool::CenterRectangle: emit message(tr("Center Rectangle: click the centre, then a corner. Type sizes in the boxes (Tab, Enter).")); break;
-    case Tool::Polygon: emit message(tr("Polygon: click the centre, then a corner. The boxes take the diameter and the number of sides.")); break;
+    case Tool::Polygon: emit message(tr("Inscribed Polygon: click the centre, then a corner. The boxes take the diameter and the number of sides.")); break;
+    case Tool::CircumscribedPolygon: emit message(tr("Circumscribed Polygon: click the centre, then the middle of a side. The boxes take the diameter (across the flats) and the number of sides.")); break;
+    case Tool::EdgePolygon: emit message(tr("Edge Polygon: click both ends of one side, then the side the polygon goes on. The boxes take the side's length and the number of sides.")); break;
     case Tool::Slot: emit message(tr("Slot: click one end centre, then the other. The boxes take length and width.")); break;
     case Tool::ThreePointRectangle: emit message(tr("3-Point Rectangle: click both ends of one side, then a point for the width.")); break;
     case Tool::TwoPointCircle: emit message(tr("2-Point Circle: click both ends of a diameter.")); break;
@@ -1295,7 +1297,8 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
     // The click lands where the preview showed it: snapped like the cursor
     // (unless a size was typed), so a circle's radius follows the grid too.
     // (Line and Rectangle snap their own clicks.)
-    if (!locked && (tool_ == Tool::Circle || tool_ == Tool::CenterRectangle || tool_ == Tool::Polygon ||
+    if (!locked && (tool_ == Tool::Circle || tool_ == Tool::CenterRectangle || tool_ == Tool::Polygon || tool_ == Tool::CircumscribedPolygon || tool_ == Tool::EdgePolygon ||
+                    tool_ == Tool::CircumscribedPolygon || (tool_ == Tool::EdgePolygon && steps_.size() == 1) ||
                     tool_ == Tool::Slot)) {
       const Pick snap = pickPoint(x, y);
       x = snap.x;
@@ -1439,9 +1442,74 @@ void SketchEditor::press(double x, double y, Qt::KeyboardModifiers, const QPoint
         pts.push_back(sk_.addPoint(sk_.points[pc].x + r * std::cos(a), sk_.points[pc].y + r * std::sin(a)));
       }
       for (int i = 0; i < n; ++i) lines.push_back(sk_.addLine(pts[i], pts[(i + 1) % n], construction_));
-      for (int p : pts) sk_.addConstraint({ConstraintType::PointOnEntity, {p}, {circle}});
-      for (int i = 1; i < n; ++i) sk_.addConstraint({ConstraintType::Equal, {}, {lines[0], lines[i]}});
+      // One Polygon constraint keeps it regular; a corner on the circle sizes it.
+      sk_.addConstraint({ConstraintType::Polygon, {pc}, lines, 1.0});
+      sk_.addConstraint({ConstraintType::PointOnEntity, {pts[0]}, {circle}});
       if (lockD) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {circle}, d});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::CircumscribedPolygon: {
+      if (steps_.empty()) {
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      // The click is the middle of a side: the circle inside touches each side.
+      const Pick c = steps_.front();
+      const double apothem = std::hypot(x - c.x, y - c.y);
+      if (apothem < tolerance() / 2) return;
+      const int n = polygonSides();
+      const bool lockD = hudLocked(0);
+      const double d = hudValue(0);
+      const double a0 = std::atan2(y - c.y, x - c.x);
+      const double R = apothem / std::cos(kPi / n);
+      checkpoint();
+      const int pc = materialize(c);
+      const int circle = sk_.addCircleAt(pc, apothem, true);
+      std::vector<int> pts, lines;
+      for (int i = 0; i < n; ++i) {
+        const double a = a0 - kPi / n + 2 * kPi * i / n;
+        pts.push_back(sk_.addPoint(sk_.points[pc].x + R * std::cos(a), sk_.points[pc].y + R * std::sin(a)));
+      }
+      for (int i = 0; i < n; ++i) lines.push_back(sk_.addLine(pts[i], pts[(i + 1) % n], construction_));
+      sk_.addConstraint({ConstraintType::Polygon, {pc}, lines, 1.0});
+      sk_.addConstraint({ConstraintType::Tangent, {}, {lines[0], circle}});
+      if (lockD) (void)sketch::addConstraintChecked(sk_, {ConstraintType::Diameter, {}, {circle}, d});
+      resetSteps();
+      solveAndShow();
+      if (!res_.ok) undo();
+      return;
+    }
+    case Tool::EdgePolygon: {
+      if (steps_.size() < 2) {
+        if (!steps_.empty() && std::hypot(x - steps_[0].x, y - steps_[0].y) < tolerance() / 2) return;
+        steps_.push_back(pickPoint(x, y));
+        return;
+      }
+      // Third click: the side of the edge the polygon goes on.
+      const Pick p0 = steps_[0], p1 = steps_[1];
+      const double ex = p1.x - p0.x, ey = p1.y - p0.y, len = std::hypot(ex, ey);
+      if (len < 1e-12) return;
+      const double side = ex * (y - p0.y) - ey * (x - p0.x);
+      if (std::abs(side) < 1e-12) return;
+      const double sign = side > 0 ? 1.0 : -1.0;   // left of the edge: anticlockwise
+      const int n = polygonSides();
+      const double apothem = len / (2 * std::tan(kPi / n));
+      const double cx = (p0.x + p1.x) / 2 - sign * ey / len * apothem, cy = (p0.y + p1.y) / 2 + sign * ex / len * apothem;
+      checkpoint();
+      const int a = materialize(p0), b = materialize(p1);
+      const int pc = sk_.addPoint(cx, cy);
+      std::vector<int> pts = {a, b};
+      for (int i = 2; i < n; ++i) {
+        const double ang = sign * 2 * kPi * i / n;
+        const double vx = sk_.points[a].x - cx, vy = sk_.points[a].y - cy;
+        pts.push_back(sk_.addPoint(cx + vx * std::cos(ang) - vy * std::sin(ang), cy + vx * std::sin(ang) + vy * std::cos(ang)));
+      }
+      std::vector<int> lines;
+      for (int i = 0; i < n; ++i) lines.push_back(sk_.addLine(pts[i], pts[(i + 1) % n], construction_));
+      sk_.addConstraint({ConstraintType::Polygon, {pc}, lines, sign});
       resetSteps();
       solveAndShow();
       if (!res_.ok) undo();
@@ -2844,6 +2912,8 @@ bool SketchEditor::hudTool() const {
     case Tool::CenterRectangle:
     case Tool::Circle:
     case Tool::Polygon:
+    case Tool::CircumscribedPolygon:
+    case Tool::EdgePolygon:
     case Tool::Slot:
     case Tool::Fillet:
     case Tool::Chamfer:
@@ -2861,7 +2931,9 @@ bool SketchEditor::hudAnyLocked() const {
 }
 
 int SketchEditor::polygonSides() const {
-  if (tool_ == Tool::Polygon && hud_.size() > 1 && hud_[1].locked) return std::clamp(static_cast<int>(hud_[1].value), 3, 64);
+  if ((tool_ == Tool::Polygon || tool_ == Tool::CircumscribedPolygon || tool_ == Tool::EdgePolygon) && hud_.size() > 1 &&
+      hud_[1].locked)
+    return std::clamp(static_cast<int>(hud_[1].value), 3, 64);
   return 6;
 }
 
@@ -2887,7 +2959,9 @@ void SketchEditor::ensureHud() {
     case Tool::Rectangle:
     case Tool::CenterRectangle: fields = {{HudField::Length, tr("Width")}, {HudField::Length, tr("Height")}}; break;
     case Tool::Circle: fields = {{HudField::Length, tr("Diameter")}}; break;
-    case Tool::Polygon: fields = {{HudField::Length, tr("Diameter")}, {HudField::Count, tr("Sides")}}; break;
+    case Tool::Polygon:
+    case Tool::CircumscribedPolygon: fields = {{HudField::Length, tr("Diameter")}, {HudField::Count, tr("Sides")}}; break;
+    case Tool::EdgePolygon: fields = {{HudField::Length, tr("Length")}, {HudField::Count, tr("Sides")}}; break;
     case Tool::Slot: fields = {{HudField::Length, tr("Length")}, {HudField::Length, tr("Width")}}; break;
     case Tool::Fillet: fields = {{HudField::Length, tr("Radius")}}; break;
     case Tool::Chamfer: fields = {{HudField::Length, tr("Distance")}}; break;
@@ -2975,9 +3049,15 @@ std::pair<double, double> SketchEditor::hudTarget(double x, double y) const {
       return {a.x + sx * w, a.y + sy * h};
     }
     case Tool::Circle:
-    case Tool::Polygon: {
+    case Tool::Polygon:
+    case Tool::CircumscribedPolygon: {
       const double r = hudLocked(0) ? hudValue(0) / 2 : dist;
       return {a.x + ux * r, a.y + uy * r};
+    }
+    case Tool::EdgePolygon: {
+      if (steps_.size() != 1) return {x, y};   // the third click only picks a side
+      const double len = hudLocked(0) ? hudValue(0) : dist;
+      return {a.x + ux * len, a.y + uy * len};
     }
     case Tool::Slot: {
       const double len = hudLocked(0) ? hudValue(0) : dist;
@@ -3014,7 +3094,13 @@ void SketchEditor::updateHud(double x, double y) {
       live = {{2 * dist, {a.x + dist * 0.7071 + off, a.y + dist * 0.7071 + off}}};
       break;
     case Tool::Polygon:
+    case Tool::CircumscribedPolygon:
       live = {{2 * dist, {a.x + dist + off * 3, a.y}}, {static_cast<double>(polygonSides()), {a.x, a.y - off * 1.5}}};
+      break;
+    case Tool::EdgePolygon:
+      live = {{steps_.size() == 1 ? dist : std::hypot(steps_[1].x - steps_[0].x, steps_[1].y - steps_[0].y),
+               {(a.x + x) / 2, (a.y + y) / 2 + off * 2}},
+              {static_cast<double>(polygonSides()), {a.x, a.y - off * 1.5}}};
       break;
     case Tool::Slot:
       live = {{dist, {(a.x + x) / 2, (a.y + y) / 2 + off * 2}},
@@ -3779,6 +3865,8 @@ std::optional<std::pair<double, double>> SketchEditor::labelAnchor(int ci) const
     }
     case ConstraintType::Midpoint:
       return std::make_pair(P[c.points[0]].x + 9 * px, P[c.points[0]].y - 9 * px);
+    case ConstraintType::Polygon:
+      return std::make_pair(P[c.points[0]].x + 10 * px, P[c.points[0]].y + 10 * px);
     default: {
       if (c.entities.empty()) {   // e.g. horizontal between two points
         if (c.points.size() < 2) return std::nullopt;
@@ -4135,6 +4223,7 @@ QString SketchEditor::labelText(const Constraint& c) const {
     case ConstraintType::Concentric: return QString::fromUtf8("◎");
     case ConstraintType::Fix: return QString::fromUtf8("⌖");
     case ConstraintType::Midpoint: return QStringLiteral("M");
+    case ConstraintType::Polygon: return QString::fromUtf8("\u2B21");   // a hexagon
     case ConstraintType::Distance:
     case ConstraintType::HorizontalDistance:
     case ConstraintType::VerticalDistance:
@@ -4567,15 +4656,42 @@ void SketchEditor::updatePreview(double x, double y) {
       }
       break;
     }
-    case Tool::Polygon: {
-      const double r = std::hypot(x - a.x, y - a.y);
+    case Tool::Polygon:
+    case Tool::CircumscribedPolygon: {
       const int n = polygonSides();
-      const double a0 = std::atan2(y - a.y, x - a.x);
+      const double d = std::hypot(x - a.x, y - a.y);
+      // Inscribed: the cursor is a corner; circumscribed: the middle of a side.
+      const double r = tool_ == Tool::Polygon ? d : d / std::cos(kPi / n);
+      const double a0 = std::atan2(y - a.y, x - a.x) - (tool_ == Tool::Polygon ? 0 : kPi / n);
       if (r > 1e-9)
         for (int i = 0; i < n; ++i) {
           const double t0 = a0 + 2 * kPi * i / n, t1 = a0 + 2 * kPi * (i + 1) / n;
           tmp.addLine(a.x + r * std::cos(t0), a.y + r * std::sin(t0), a.x + r * std::cos(t1), a.y + r * std::sin(t1));
         }
+      break;
+    }
+    case Tool::EdgePolygon: {
+      // One click: the edge to the cursor, the polygon on its left; two: the
+      // side the cursor is on.
+      const Pick& p0 = steps_[0];
+      const double qx = steps_.size() > 1 ? steps_[1].x : x, qy = steps_.size() > 1 ? steps_[1].y : y;
+      const double ex = qx - p0.x, ey = qy - p0.y, len = std::hypot(ex, ey);
+      if (len < 1e-9) break;
+      double sign = 1;
+      if (steps_.size() > 1) sign = ex * (y - p0.y) - ey * (x - p0.x) < 0 ? -1.0 : 1.0;
+      const int n = polygonSides();
+      const double ap = len / (2 * std::tan(kPi / n));
+      const double cx = (p0.x + qx) / 2 - sign * ey / len * ap, cy = (p0.y + qy) / 2 + sign * ex / len * ap;
+      const double vx = p0.x - cx, vy = p0.y - cy;
+      auto corner = [&](int i) {
+        const double ang = sign * 2 * kPi * i / n;
+        return std::make_pair(cx + vx * std::cos(ang) - vy * std::sin(ang), cy + vx * std::sin(ang) + vy * std::cos(ang));
+      };
+      for (int i = 0; i < n; ++i) {
+        const auto [x0, y0] = corner(i);
+        const auto [x1, y1] = corner(i + 1);
+        tmp.addLine(x0, y0, x1, y1);
+      }
       break;
     }
     case Tool::Slot: {

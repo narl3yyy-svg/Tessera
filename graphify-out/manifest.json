@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794630062.2053018,
-    "seen": 1794630612.5219498,
-    "ast_hash": "8c6059db3da5266961431e70de718f34",
+    "mtime": 1794817158.1865923,
+    "seen": 1794817575.6288452,
+    "ast_hash": "519959cffc035cf7ee9359230fe166d8",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowSketch.cpp": {
-    "mtime": 1794629657.6760283,
-    "seen": 1794629991.5616608,
-    "ast_hash": "fb33a24c758846551911ef2970b9017f",
+    "mtime": 1794817158.1865923,
+    "seen": 1794817575.6288507,
+    "ast_hash": "a5a2a50d15f3bf23628f5613df8880c2",
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
@@ -192,15 +192,15 @@
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.cpp": {
-    "mtime": 1794816592.3637457,
-    "seen": 1794817023.1236217,
-    "ast_hash": "b9c849372bbb030c170c4b55ac8ae0ba",
+    "mtime": 1794817158.1865923,
+    "seen": 1794817575.6288602,
+    "ast_hash": "ec7d586104acbbe2ea577badb021a3db",
     "semantic_hash": ""
   },
   "modules/app/src/SketchEditor.h": {
-    "mtime": 1794624830.2790406,
-    "seen": 1794625296.6800334,
-    "ast_hash": "ea912d3f7ec980c0075aa9740ca4ad80",
+    "mtime": 1794817158.1757846,
+    "seen": 1794817575.628861,
+    "ast_hash": "581411d05d2cfd448ee0f8904acd3acb",
     "semantic_hash": ""
   },
   "modules/app/src/SketchPalette.cpp": {
@@ -414,9 +414,9 @@
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
-    "mtime": 1794613957.9711099,
-    "seen": 1794614637.4289992,
-    "ast_hash": "5fc1244de82ae7672789927e66081b14",
+    "mtime": 1794817158.1742804,
+    "seen": 1794817575.628893,
+    "ast_hash": "468ba1e1f9f55145ceecd4deffe954d0",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/SketchGeometry.h": {
@@ -432,9 +432,9 @@
     "semantic_hash": ""
   },
   "modules/sketch/src/Sketch.cpp": {
-    "mtime": 1794613957.9732502,
-    "seen": 1794614637.4290016,
-    "ast_hash": "51453182dcb1f1446d0e2c48aad2dae4",
+    "mtime": 1794817158.1742804,
+    "seen": 1794817575.6288955,
+    "ast_hash": "3f9aee77eb37aae88a70acffa59464d2",
     "semantic_hash": ""
   },
   "modules/sketch/src/SketchGeometry.cpp": {
@@ -444,15 +444,15 @@
     "semantic_hash": ""
   },
   "modules/sketch/src/SketchOps.cpp": {
-    "mtime": 1794816592.361743,
-    "seen": 1794817023.1236608,
-    "ast_hash": "597def2c0e4b48939f6a6758d68e3914",
+    "mtime": 1794817158.1742804,
+    "seen": 1794817575.6288984,
+    "ast_hash": "b1f51682598e3d686bf9b3971d58012e",
     "semantic_hash": ""
   },
   "modules/sketch/src/Solver.cpp": {
-    "mtime": 1794616713.435351,
-    "seen": 1794618238.11884,
-    "ast_hash": "51874251b5e8b8ccb17561c0341a3ca0",
+    "mtime": 1794817158.1742804,
+    "seen": 1794817575.6289,
+    "ast_hash": "1f24ff3bd96df4c13b44dc7208ebdbd8",
     "semantic_hash": ""
   },
   "scripts/build.sh": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794816796.2581065,
-    "seen": 1794817023.1239314,
-    "ast_hash": "8e583fb35aceb08b25f2ab2ec44ead24",
+    "mtime": 1794817344.4187353,
+    "seen": 1794817575.6291695,
+    "ast_hash": "51ce03079fb7c98068c5daee1fdac623",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,9 +1932,9 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794613160.7713628,
-    "seen": 1794613167.4197476,
-    "ast_hash": "079d3598628f53aabec156057ad0c4fb",
+    "mtime": 1794817344.4197385,
+    "seen": 1794817575.629172,
+    "ast_hash": "56ae896be5fe7d38ba6b2ea81d9ead4c",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794816796.2581065,
-    "seen": 1794817023.1239374,
-    "ast_hash": "3d96c8a2b79732a318433aefed45e5b3",
+    "mtime": 1794817344.4187353,
+    "seen": 1794817575.6291752,
+    "ast_hash": "5c489c4f46d51bbb26433f7930f066d1",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794816771.9440782,
-    "seen": 1794817023.123943,
-    "ast_hash": "998021d68089eb2ccbfac8ebfe2761a9",
+    "mtime": 1794817201.6665006,
+    "seen": 1794817575.6291814,
+    "ast_hash": "620bd34a2de61bc4081ef8e80929c57d",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2415,6 +2415,18 @@
     "mtime": 1794816759.3261673,
     "seen": 1794817023.1237175,
     "ast_hash": "a6dd9ce127840f569291fc2da810f538",
+    "semantic_hash": ""
+  },
+  "tests/api/test_polygon_constraint.py": {
+    "mtime": 1794817177.072552,
+    "seen": 1794817575.628932,
+    "ast_hash": "595511cf93b48bbcd16a7fa5990893c8",
+    "semantic_hash": ""
+  },
+  "tests/live/polygons_check.py": {
+    "mtime": 1794817201.1452987,
+    "seen": 1794817575.6289709,
+    "ast_hash": "1578ed1417185dd2d32a60a1eeb8d89d",
     "semantic_hash": ""
   }
 }

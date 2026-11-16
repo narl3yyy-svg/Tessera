@@ -74,6 +74,8 @@ enum class ConstraintType {
   Fix,                // points[0] stays at (value, value2)
   Collinear,          // entities[0], entities[1] (lines) on one infinite line
   Symmetry,           // points[0], points[1] mirror images across line entities[0]
+  Polygon,            // points[0] the centre, entities its sides in order: a regular polygon
+                      // (value +1: corners run anticlockwise, -1 clockwise)
   // Dimensions (value in cm or radians):
   Distance,           // points[0]-points[1]; or a line's length; or points[0] to line entities[0]
   HorizontalDistance, // signed x distance points[0] -> points[1] (or along a line)
