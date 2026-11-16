@@ -227,6 +227,14 @@ TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& fa
 // `symmetric`.
 TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, bool symmetric);
 
+// Emboss: flat profile faces (a sketch's regions) put onto `face` and grown
+// `depth` from it along its normal: outward for an emboss, into the body for
+// a deboss (negative depth). On a cylinder with `wrap`, the profiles are
+// rolled round it keeping their lengths (the sketch plane must be parallel to
+// the cylinder's axis); otherwise they are projected along their plane's
+// normal. Returns the solid to join (emboss) or cut (deboss).
+TopoDS_Shape embossTool(const std::vector<TopoDS_Shape>& profiles, const TopoDS_Shape& face, double depth, bool wrap);
+
 // Delete (faces): removes faces and lets their neighbours grow over the gap
 // (holes, fillets, chamfers, bosses ...), as the familiar Delete does.
 TopoDS_Shape deleteFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces);

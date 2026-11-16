@@ -41,6 +41,7 @@ inline constexpr const char* kCmdDeleteFaces = "tsr.feature.deleteFaces";
 inline constexpr const char* kCmdSplitFace = "tsr.feature.splitFace";
 inline constexpr const char* kCmdCoil = "tsr.feature.coil";
 inline constexpr const char* kCmdThicken = "tsr.feature.thicken";
+inline constexpr const char* kCmdEmboss = "tsr.feature.emboss";
 inline constexpr const char* kCmdRib = "tsr.feature.rib";
 inline constexpr const char* kCmdWeb = "tsr.feature.web";
 inline constexpr const char* kCmdOffsetPlane = "tsr.construct.offsetPlane";

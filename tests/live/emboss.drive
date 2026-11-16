@@ -1,0 +1,14 @@
+# Live: CREATE menu > Emboss, as in the familiar tool. The sketch's square
+# (the only profile) is taken; click the block's top face, OK: the square
+# stands 1 mm out of the top.
+waitfor tsr.feature.extrude
+wait 800
+menu panel.Create tsr.feature.emboss
+waitfor panelOk
+wait 400
+wclick 40 30 20        # the block's top face, clear of the square
+wait 400
+shot /tmp/live_emboss.png
+click panelOk
+wait 800
+shot /tmp/live_emboss_after.png

@@ -104,6 +104,12 @@
 #include <sstream>
 
 #include <memory>
+#include <Geom2dConvert.hxx>
+#include <Geom2d_BSplineCurve.hxx>
+#include <Geom2d_TrimmedCurve.hxx>
+#include <Geom_Plane.hxx>
+#include <ShapeFix_Face.hxx>
+#include <ShapeFix_Wire.hxx>
 
 namespace tsr::kernel {
 
@@ -1965,6 +1971,169 @@ TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, b
   });
   if (!isValid(result) || !TopExp_Explorer(result, TopAbs_SOLID).More())
     throw KernelError("Thicken: those faces cannot be thickened that much (try less)");
+  return result;
+}
+
+namespace {
+
+// A flat profile face rolled onto a cylinder: each point of the profile's
+// plane goes to the cylinder point at the same height along the axis, and as
+// far round it as it is across, from where the plane faces the cylinder. The
+// map is affine in the parameters, so the profile's curves (as B-splines in
+// the plane) map exactly. Null when the plane is not parallel to the axis.
+TopoDS_Face wrapOntoCylinder(const TopoDS_Face& profile, const gp_Cylinder& cyl) {
+  TopLoc_Location loc;
+  Handle(Geom_Plane) plane = Handle(Geom_Plane)::DownCast(BRep_Tool::Surface(profile, loc));
+  if (plane.IsNull()) return {};
+  gp_Ax3 pf = plane->Position();
+  if (!loc.IsIdentity()) pf.Transform(loc.Transformation());
+  const gp_Ax3 ca = cyl.Position();
+  const gp_Dir a = ca.Direction();
+  const gp_Dir n = pf.Direction();
+  if (std::abs(n.Dot(a)) > 1e-6) return {};
+  const gp_Pnt O = pf.Location(), L = ca.Location();
+  const double R = cyl.Radius();
+  const gp_Vec toO(L, O);
+  // The radial direction facing the profile's plane.
+  const gp_Dir d = toO.Dot(gp_Vec(n)) >= 0 ? n : n.Reversed();
+  const double u0 = std::atan2(gp_Vec(d).Dot(gp_Vec(ca.YDirection())), gp_Vec(d).Dot(gp_Vec(ca.XDirection())));
+  const gp_Vec t = gp_Vec(a).Crossed(gp_Vec(d));   // increasing u at u0
+  const gp_Vec px(pf.XDirection()), py(pf.YDirection());
+  // (x, y) in the plane -> (u, v) on the cylinder.
+  const double cu = u0 + toO.Dot(t) / R, ux = px.Dot(t) / R, uy = py.Dot(t) / R;
+  const double cv = toO.Dot(gp_Vec(a)), vx = px.Dot(gp_Vec(a)), vy = py.Dot(gp_Vec(a));
+  auto map = [&](const gp_Pnt2d& p) { return gp_Pnt2d(cu + ux * p.X() + uy * p.Y(), cv + vx * p.X() + vy * p.Y()); };
+  Handle(Geom_CylindricalSurface) surf = new Geom_CylindricalSurface(cyl);
+  std::optional<BRepBuilderAPI_MakeFace> mf;
+  for (TopExp_Explorer wx(profile, TopAbs_WIRE); wx.More(); wx.Next()) {
+    const TopoDS_Wire w = TopoDS::Wire(wx.Current());
+    BRepBuilderAPI_MakeWire mw;
+    for (BRepTools_WireExplorer ex(w, profile); ex.More(); ex.Next()) {
+      const TopoDS_Edge& e = ex.Current();
+      double f = 0, l = 0;
+      Handle(Geom2d_Curve) c2 = BRep_Tool::CurveOnSurface(e, profile, f, l);
+      if (c2.IsNull()) return {};
+      Handle(Geom2d_BSplineCurve) bs = Geom2dConvert::CurveToBSplineCurve(new Geom2d_TrimmedCurve(c2, f, l));
+      for (int i = 1; i <= bs->NbPoles(); ++i) bs->SetPole(i, map(bs->Pole(i)));
+      TopoDS_Edge me = BRepBuilderAPI_MakeEdge(bs, surf, bs->FirstParameter(), bs->LastParameter());
+      BRepLib::BuildCurve3d(me);
+      if (e.Orientation() == TopAbs_REVERSED) me.Reverse();
+      mw.Add(me);
+      if (!mw.IsDone()) return {};
+    }
+    if (!mw.IsDone()) return {};
+    if (!mf) mf.emplace(surf, mw.Wire(), true);
+    else mf->Add(mw.Wire());
+    if (!mf->IsDone()) return {};
+  }
+  if (!mf) return {};
+  ShapeFix_Face fix(mf->Face());
+  fix.FixOrientation();
+  fix.Perform();
+  return TopoDS::Face(fix.Face());
+}
+
+} // namespace
+
+TopoDS_Shape embossTool(const std::vector<TopoDS_Shape>& profiles, const TopoDS_Shape& face, double depth, bool wrap) {
+  if (profiles.empty()) throw KernelError("Emboss: select the sketch profiles to emboss");
+  if (face.IsNull() || face.ShapeType() != TopAbs_FACE) throw KernelError("Emboss: select the face to emboss on");
+  if (std::abs(depth) < 1e-9) throw KernelError("Emboss: the depth must not be zero");
+  const TopoDS_Face target = TopoDS::Face(face);
+  BRepAdaptor_Surface s(target, true);
+  if (wrap && s.GetType() == GeomAbs_Cylinder) {
+    const gp_Cylinder cyl = s.Cylinder();
+    std::vector<TopoDS_Shape> wrapped;
+    for (const auto& p : profiles) {
+      TopoDS_Face w = wrapOntoCylinder(TopoDS::Face(p), cyl);
+      if (w.IsNull())
+        throw KernelError("Emboss: to wrap onto a cylinder, sketch on a plane parallel to its axis "
+                          "(or turn off Wrap to Face)");
+      // Out of the body: the way the picked face looks.
+      if (target.Orientation() == TopAbs_REVERSED) w.Reverse();
+      wrapped.push_back(w);
+    }
+    // Wider than once round: the ends would overlap.
+    double umin = 1e100, umax = -1e100;
+    for (const auto& w : wrapped) {
+      double u0 = 0, u1 = 0, v0 = 0, v1 = 0;
+      BRepTools::UVBounds(TopoDS::Face(w), u0, u1, v0, v1);
+      umin = std::min(umin, u0);
+      umax = std::max(umax, u1);
+    }
+    if (umax - umin > 2 * M_PI - 1e-6) throw KernelError("Emboss: the profiles are longer than once round the cylinder");
+    TopoDS_Compound all;
+    BRep_Builder bb;
+    bb.MakeCompound(all);
+    for (const auto& w : wrapped) bb.Add(all, thicken({w}, depth, false));
+    return all;
+  }
+  // Projected: the face's slab of the given depth, where the profiles,
+  // swept along their normal through it, cross it.
+  const TopoDS_Shape slab = thicken({face}, depth, false);
+  Bnd_Box box;
+  BRepBndLib::Add(slab, box);
+  for (const auto& p : profiles) BRepBndLib::Add(p, box);
+  const double reach = std::sqrt(box.SquareExtent()) + 1;
+  TopoDS_Shape result = guarded("Emboss", [&]() -> TopoDS_Shape {
+    TopoDS_Compound all;
+    BRep_Builder bb;
+    bb.MakeCompound(all);
+    for (const auto& p : profiles) {
+      BRepAdaptor_Surface ps(TopoDS::Face(p), true);
+      if (ps.GetType() != GeomAbs_Plane) return TopoDS_Shape();
+      const gp_Vec n(ps.Plane().Axis().Direction());
+      gp_Trsf back;
+      back.SetTranslation(n * -reach);
+      const TopoDS_Shape start = BRepBuilderAPI_Transform(p, back, true).Shape();
+      const TopoDS_Shape prism = BRepPrimAPI_MakePrism(start, n * (2 * reach)).Shape();
+      BRepAlgoAPI_Common common(slab, prism);
+      if (!common.IsDone()) return TopoDS_Shape();
+      // Only what faces the sketch: a piece hidden behind a nearer one
+      // (the far side of a cylinder or sphere) is dropped. Ties (a sketch
+      // through the middle) keep the side the plane's normal points to.
+      struct Piece {
+        TopoDS_Shape shape;
+        double s;
+        double x0, x1, y0, y1;
+      };
+      const gp_Ax3 pf = ps.Plane().Position();
+      const gp_Vec px(pf.XDirection()), py(pf.YDirection());
+      std::vector<Piece> pieces;
+      for (TopExp_Explorer ex(common.Shape(), TopAbs_SOLID); ex.More(); ex.Next()) {
+        Piece pc{ex.Current(), 0, 1e100, -1e100, 1e100, -1e100};
+        const gp_Vec c(pf.Location(), pnt(massProperties(ex.Current()).centerOfMass));
+        pc.s = c.Dot(n);
+        Bnd_Box bx;
+        BRepBndLib::Add(ex.Current(), bx);
+        double a[6];
+        bx.Get(a[0], a[1], a[2], a[3], a[4], a[5]);
+        for (int k = 0; k < 8; ++k) {
+          const gp_Vec v(pf.Location(), gp_Pnt(a[(k & 1) ? 3 : 0], a[(k & 2) ? 4 : 1], a[(k & 4) ? 5 : 2]));
+          pc.x0 = std::min(pc.x0, v.Dot(px));
+          pc.x1 = std::max(pc.x1, v.Dot(px));
+          pc.y0 = std::min(pc.y0, v.Dot(py));
+          pc.y1 = std::max(pc.y1, v.Dot(py));
+        }
+        pieces.push_back(pc);
+      }
+      auto nearer = [](const Piece& a, const Piece& b) {
+        if (std::abs(std::abs(a.s) - std::abs(b.s)) > 1e-7) return std::abs(a.s) < std::abs(b.s);
+        return a.s > b.s + 1e-7;
+      };
+      for (const auto& pc : pieces) {
+        const bool hidden = std::any_of(pieces.begin(), pieces.end(), [&](const Piece& o) {
+          const double m = 1e-6;
+          return &o != &pc && nearer(o, pc) && o.x0 < pc.x1 - m && pc.x0 < o.x1 - m && o.y0 < pc.y1 - m &&
+                 pc.y0 < o.y1 - m;
+        });
+        if (!hidden) bb.Add(all, pc.shape);
+      }
+    }
+    return all;
+  });
+  if (result.IsNull() || massProperties(result).volume < 1e-12)
+    throw KernelError("Emboss: the profiles do not lie over the face (move the sketch or pick another face)");
   return result;
 }
 

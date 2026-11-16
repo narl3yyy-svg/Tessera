@@ -106,3 +106,9 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 - A text box aligns its lines between the corners but does not wrap or shrink text to fit; text longer than the box runs past it.
 - Text on Path starts at the curve's start (a circle: its rightmost point, anticlockwise); letters past the curve's end pile up at the end. No character spacing, bold or italic yet.
+
+## Emboss
+
+- Wrap to Face wraps onto cylinders only, and the sketch plane must be parallel to the cylinder's axis; on other curved faces (spheres, cones, free-form) the profiles are projected straight along the sketch normal, so they stretch where the face slopes away.
+- No in-canvas manipulator to slide or turn the profiles on the face (Horizontal / Vertical Distance, Rotation Angle): move the sketch instead.
+- One face per emboss.

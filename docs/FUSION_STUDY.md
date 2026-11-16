@@ -145,7 +145,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Chamfer types: Equal Distance, Two Distances, Distance and Angle, with Flip (Day 8).
 - [ ] Fillet: several radius sets in one fillet (+ in the panel) (Days 8, 9).
 - [ ] Sweep path: Chain Selection checkbox, on by default (Day 3); Loft rails (Day 4).
-- [ ] Emboss / Deboss (Days 7, 8); Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
+- [x] Emboss / Deboss (Days 7, 8): profiles or text on a face, wrapped round a cylinder.
+- [ ] Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [x] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).
 - [x] Select a feature in the timeline and press Delete (Day 20); right-click > Edit Profile Sketch.

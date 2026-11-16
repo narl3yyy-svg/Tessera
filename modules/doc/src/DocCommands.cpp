@@ -2628,6 +2628,88 @@ private:
   CommandDef def_;
 };
 
+// Emboss, as in the familiar Create menu: sketch profiles (shapes or text)
+// raised from a face of a body (Emboss) or sunk into it (Deboss), wrapped
+// round a cylinder or projected onto any other face.
+class Emboss final : public Command {
+public:
+  Emboss() {
+    commonDef(def_, kCmdEmboss, "Emboss", "Raises sketch profiles or text from a face, or sinks them into it: pick the "
+              "profiles, then the face.", "emboss", "Create");
+    def_.inputs = {
+        {.id = "sketch", .label = "Sketch", .tooltip = "Empty: the most recent sketch.", .type = InputType::Sketch,
+         .defaultValue = std::string{}, .optional = true},
+        {.id = "profiles", .label = "Sketch Profile", .tooltip = "Click regions or text of the sketch. None picked: all of them.",
+         .type = InputType::Profiles, .defaultValue = std::string{}, .optional = true},
+        {.id = "faces", .label = "Face", .tooltip = "The face to emboss on: flat, a cylinder (wrapped round it) or any other.",
+         .type = InputType::Faces, .defaultValue = std::string{}},
+        {.id = "depth", .label = "Depth", .tooltip = "How far the profiles stand out of (or sink into) the face.",
+         .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0, .minExclusive = true},
+        choice("effect", "Effect", {"Emboss", "Deboss"}, "Emboss: raised from the face. Deboss: sunk into it."),
+        {.id = "wrap", .label = "Wrap to Face", .tooltip = "On a cylinder: rolled round it, keeping their lengths. "
+         "Off: projected straight onto it.", .type = InputType::Bool, .defaultValue = true},
+        {.id = "target", .label = "Body", .tooltip = "The body of the face. Empty: the most recent body.",
+         .type = InputType::Body, .defaultValue = std::string{}, .optional = true}};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string name = getString(in, "sketch");
+    if (!sketchFor(doc, name))
+      return name.empty() ? "Sketch Profile: there is no sketch; create one first" : "Sketch: '" + name + "' does not exist";
+    if (getString(in, "faces").empty()) return "Face: click the face to emboss on";
+    const std::string target = getString(in, "target");
+    if (target.empty() ? doc.bodies().empty() : !doc.body(target)) return "Face: the body it belongs to does not exist";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "sketch").empty())
+      if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+    if (getString(in, "target").empty() && !doc.bodies().empty()) in["target"] = doc.bodies().back().name;
+    if (const auto b = doc.body(getString(in, "target"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Face: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const auto rec = sketchFor(doc, getString(in, "sketch"));
+    if (!rec) throw CommandError("Sketch: '" + getString(in, "sketch") + "' does not exist");
+    const std::string target = getString(in, "target");
+    const auto body = doc.body(target);
+    if (!body) throw CommandError("Face: body '" + target + "' does not exist");
+    const bool deboss = getString(in, "effect") == "Deboss";
+    TopoDS_Shape tool;
+    try {
+      const SketchProfiles sp = profilesOf(doc, *rec);
+      const auto profiles = pickedFaces(sp, getString(in, "profiles"), rec->name);
+      if (profiles.empty()) throw CommandError("Sketch Profile: " + rec->name + " has no closed profiles");
+      const auto faces = kernel::resolveFaces(body->shape, getString(in, "faces"));
+      if (faces.size() != 1) throw CommandError("Face: click one face");
+      const double depth = getReal(in, "depth");
+      tool = kernel::embossTool(profiles, faces.front(), deboss ? -depth : depth, !in.count("wrap") || getBool(in, "wrap"));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    } catch (const sketch::SketchError& e) {
+      throw CommandError(rec->name + ": " + e.what());
+    }
+    doc.noteTool(tool, deboss ? "cut" : "join", target);
+    try {
+      storeBodies(doc, target, kernel::boolean(deboss ? kernel::BooleanOp::Cut : kernel::BooleanOp::Join, body->shape, tool),
+                  false);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
 // Rib and Web: thin supports grown from a sketch's open curves to the body.
 class RibWeb final : public Command {
 public:
@@ -3461,6 +3543,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<RibWeb>(true));
   registry.add(std::make_unique<Joint>(true));
   registry.add(std::make_unique<RigidGroup>());
+  registry.add(std::make_unique<Emboss>());
 }
 
 } // namespace tsr::doc
