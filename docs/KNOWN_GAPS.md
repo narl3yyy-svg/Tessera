@@ -118,3 +118,8 @@ One line per item: id, what differs, why, and the phase that closes it.
 - Pattern Type Faces copies what the picked faces enclose with the rest of the body, closed by flat caps where they meet it: bosses, pockets, holes and slots. Faces that meet the body along a curved outline (a boss on a cylinder) are refused.
 - The copies keep their shape; they do not adapt to the body where they land (a boss copied past an edge hangs over it, a pocket copied onto a thinner part cuts as deep as the original).
 - Faces are picked in the canvas only (no box select of a feature's faces, no Select Chain).
+
+## Boundary Fill
+
+- Cells are ticked in the panel's list only; they are not shown or clickable in the canvas.
+- Tools are solid bodies and at most one plane (there are no surface bodies yet). Operations: New Body, Join and Cut (Join and Cut act on the first tool picked); no Intersect or New Component.

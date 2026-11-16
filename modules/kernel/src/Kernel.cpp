@@ -110,6 +110,7 @@
 #include <Geom_Plane.hxx>
 #include <ShapeFix_Face.hxx>
 #include <ShapeFix_Wire.hxx>
+#include <BOPAlgo_MakerVolume.hxx>
 
 namespace tsr::kernel {
 
@@ -2034,6 +2035,71 @@ TopoDS_Face wrapOntoCylinder(const TopoDS_Face& profile, const gp_Cylinder& cyl)
 }
 
 } // namespace
+
+std::vector<TopoDS_Shape> boundaryCells(const std::vector<TopoDS_Shape>& tools) {
+  if (tools.empty()) throw KernelError("Boundary Fill: select the tools (bodies, planes)");
+  std::vector<TopoDS_Shape> cells;
+  guarded("Boundary Fill", [&]() -> TopoDS_Shape {
+    BOPAlgo_MakerVolume mv;
+    TopTools_ListOfShape args;
+    for (const auto& t : tools) args.Append(t);
+    mv.SetArguments(args);
+    mv.SetIntersect(true);
+    mv.SetRunParallel(false);
+    mv.Perform();
+    if (mv.HasErrors()) return TopoDS_Shape();
+    for (TopExp_Explorer ex(mv.Shape(), TopAbs_SOLID); ex.More(); ex.Next())
+      if (massProperties(ex.Current()).volume > 1e-9) cells.push_back(ex.Current());
+    return mv.Shape();
+  });
+  if (cells.empty()) throw KernelError("Boundary Fill: the tools enclose no space");
+  struct Keyed {
+    MassProperties m;
+    TopoDS_Shape cell;
+  };
+  std::vector<Keyed> keyed;
+  for (const auto& c : cells) keyed.push_back({massProperties(c), c});
+  std::stable_sort(keyed.begin(), keyed.end(), [](const Keyed& a, const Keyed& b) {
+    const Vec3 &p = a.m.centerOfMass, &q = b.m.centerOfMass;
+    if (std::abs(p.x - q.x) > 1e-6) return p.x < q.x;
+    if (std::abs(p.y - q.y) > 1e-6) return p.y < q.y;
+    if (std::abs(p.z - q.z) > 1e-6) return p.z < q.z;
+    return a.m.volume < b.m.volume;   // one inside another (a tube and its hole): the smaller first
+  });
+  cells.clear();
+  for (auto& k : keyed) cells.push_back(k.cell);
+  return cells;
+}
+
+bool containsPoint(const TopoDS_Shape& solid, Vec3 p) {
+  BRepClass3d_SolidClassifier cls(solid, pnt(p), 1e-7);
+  return cls.State() == TopAbs_IN;
+}
+
+Vec3 interiorPoint(const TopoDS_Shape& solid) {
+  const Vec3 c = massProperties(solid).centerOfMass;
+  if (containsPoint(solid, c)) return c;
+  // Not convex (a ring): step in from the middle of each face in turn.
+  Bnd_Box box;
+  BRepBndLib::Add(solid, box);
+  const double step = std::sqrt(box.SquareExtent()) * 1e-3;
+  for (TopExp_Explorer ex(solid, TopAbs_FACE); ex.More(); ex.Next()) {
+    const TopoDS_Face f = TopoDS::Face(ex.Current());
+    BRepAdaptor_Surface s(f);
+    double u0 = 0, u1 = 0, v0 = 0, v1 = 0;
+    BRepTools::UVBounds(f, u0, u1, v0, v1);
+    BRepLProp_SLProps props(s, (u0 + u1) / 2, (v0 + v1) / 2, 1, 1e-9);
+    if (!props.IsNormalDefined()) continue;
+    gp_Dir n = props.Normal();
+    if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+    for (double k : {1.0, 10.0, 100.0}) {
+      const gp_Pnt q = props.Value().Translated(gp_Vec(n) * (-step * k));
+      const Vec3 v{q.X(), q.Y(), q.Z()};
+      if (containsPoint(solid, v)) return v;
+    }
+  }
+  throw KernelError("Boundary Fill: could not find a point inside a cell");
+}
 
 TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, bool& added) {
   if (faces.empty()) throw KernelError("Faces: click the faces to pattern");

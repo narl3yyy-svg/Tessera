@@ -1,8 +1,10 @@
 #pragma once
 #include <gp_Ax1.hxx>
+#include <TopoDS_Shape.hxx>
 #include "tsr/core/CommandRegistry.h"
 
 #include <string>
+#include <vector>
 
 namespace tsr::doc {
 
@@ -42,6 +44,7 @@ inline constexpr const char* kCmdSplitFace = "tsr.feature.splitFace";
 inline constexpr const char* kCmdCoil = "tsr.feature.coil";
 inline constexpr const char* kCmdThicken = "tsr.feature.thicken";
 inline constexpr const char* kCmdEmboss = "tsr.feature.emboss";
+inline constexpr const char* kCmdBoundaryFill = "tsr.feature.boundaryFill";
 inline constexpr const char* kCmdRib = "tsr.feature.rib";
 inline constexpr const char* kCmdWeb = "tsr.feature.web";
 inline constexpr const char* kCmdOffsetPlane = "tsr.construct.offsetPlane";
@@ -114,5 +117,15 @@ inline constexpr const char* kCmdCone = "tsr.primitive.cone";
 // Every Real/Integer input also takes an expression string ("width / 2");
 // see tsr::expressionKey and Document::recompute.
 void registerDocCommands(CommandRegistry& registry);
+
+// Boundary Fill's cells for tool bodies ("Body1;Body2") and an optional
+// plane: each cell's solid, a point inside it ("x,y,z", how the command
+// records a picked cell) and its volume (cm3). Throws CommandError.
+struct BoundaryCell {
+  TopoDS_Shape shape;
+  std::string ref;
+  double volume = 0;
+};
+std::vector<BoundaryCell> boundaryFillCells(const Document& doc, const std::string& tools, const std::string& plane);
 
 } // namespace tsr::doc

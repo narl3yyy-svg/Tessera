@@ -1,0 +1,19 @@
+# Live: CREATE menu > Boundary Fill, as in the familiar tool. Click the lid,
+# the tube and the plate; the panel lists their cells (plate, the space
+# inside, tube, lid); tick the space, OK: it becomes a new body.
+waitfor tsr.feature.extrude
+wait 800
+menu panel.Create tsr.feature.boundaryFill
+waitfor panelOk
+wait 400
+wclick 0 0 25                 # the lid's top
+wait 300
+wclick 14.1 -14.1 1           # the tube's outside, just above the plate (the lid hangs over higher up)
+wait 300
+wclick 27 -27 0               # the plate's top, outside the tube
+wait 600
+lcheck cells 1            # the space inside the tube
+wait 600
+shot /tmp/live_boundary_fill.png
+click panelOk
+wait 800

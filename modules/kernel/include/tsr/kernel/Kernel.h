@@ -235,6 +235,15 @@ TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, b
 // when an outline is not flat or the faces enclose nothing.
 TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, bool& added);
 
+// Boundary Fill: the closed cells that tool solids and faces divide space
+// into (every region they bound, inside a tool or between tools), ordered by
+// centre (x, then y, then z, then the smaller first). Throws KernelError when
+// they bound nothing.
+std::vector<TopoDS_Shape> boundaryCells(const std::vector<TopoDS_Shape>& tools);
+// A point strictly inside a solid, and whether a point is strictly inside.
+Vec3 interiorPoint(const TopoDS_Shape& solid);
+bool containsPoint(const TopoDS_Shape& solid, Vec3 p);
+
 // Emboss: flat profile faces (a sketch's regions) put onto `face` and grown
 // `depth` from it along its normal: outward for an emboss, into the body for
 // a deboss (negative depth). On a cylinder with `wrap`, the profiles are

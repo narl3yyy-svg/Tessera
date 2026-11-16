@@ -10,6 +10,7 @@
 #include "tsr/doc/DocCommands.h"
 #include "tsr/kernel/Kernel.h"
 
+#include <QAbstractItemView>
 #include <QAbstractButton>
 #include <QApplication>
 #include "Icons.h"
@@ -645,7 +646,8 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
   for (QWidget* x : w.findChildren<QWidget*>()) {
     if (x->objectName().isEmpty() || !x->isVisible()) continue;
     if (!qobject_cast<QAbstractButton*>(x) && !qobject_cast<QLineEdit*>(x) && !qobject_cast<QComboBox*>(x) &&
-        !qobject_cast<QAbstractSpinBox*>(x) && !qobject_cast<QAbstractSlider*>(x) && !x->property("panel").toBool())
+        !qobject_cast<QAbstractSpinBox*>(x) && !qobject_cast<QAbstractSlider*>(x) && !qobject_cast<QAbstractItemView*>(x) &&
+        !x->property("panel").toBool())
       continue;
     // The first visible one of a name wins (ribbon buttons before menu copies).
     if (!widgets.contains(x->objectName())) widgets[x->objectName()] = rect(x);

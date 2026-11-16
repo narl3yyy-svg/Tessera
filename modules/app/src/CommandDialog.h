@@ -15,6 +15,7 @@ class QLabel;
 class QDialogButtonBox;
 class QComboBox;
 class QFormLayout;
+class QListWidget;
 
 namespace tsr::app {
 
@@ -118,6 +119,11 @@ private:
   std::string featuresId_;
   QLabel* pointsLabel_ = nullptr;   // Hole positions
   std::string pointsId_;
+  // Boundary Fill: the cells the tools enclose, ticked to fill.
+  QListWidget* cellsList_ = nullptr;
+  std::string cellsId_;
+  bool fillingCells_ = false;
+  void refreshCells();
   QString stringInput(const std::string& id) const;
   void updateVisibility();
   void adjustAfterResize();

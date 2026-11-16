@@ -473,6 +473,23 @@ void bindTsr(py::module_& m) {
     return out;
   }, "Components: name and bodies; Rigid Groups too (rigid=True), whose 'bodies' are their member components.");
 
+  m.def("boundary_fill_cells", [](const std::string& tools, const std::string& plane) {
+    py::list out;
+    try {
+      for (const auto& c : doc::boundaryFillCells(activeSession().document(), tools, plane)) {
+        py::dict d;
+        d["ref"] = c.ref;
+        d["volume"] = c.volume;
+        out.append(d);
+      }
+    } catch (const std::exception& e) {
+      throw std::runtime_error(e.what());
+    }
+    return out;
+  }, py::arg("tools"), py::arg("plane") = "",
+     "Boundary Fill's cells for tool bodies ('Body1;Body2') and an optional plane: each cell's 'ref' (a point inside "
+     "it, what tsr.feature.boundaryFill's 'cells' takes) and 'volume' (cm3), ordered by centre.");
+
   m.def("export", [](const std::string& path, int refinement) {
     const auto format = kernel::formatForPath(path);
     if (!format) throw std::runtime_error("unsupported export type: " + path);

@@ -35,6 +35,9 @@
 #include <Geom_TrimmedCurve.hxx>
 #include <gp_Lin.hxx>
 #include <gp_Pln.hxx>
+#include <BRepBndLib.hxx>
+#include <Bnd_Box.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <gp_Ax2.hxx>
@@ -2775,6 +2778,91 @@ private:
   CommandDef def_;
 };
 
+// Boundary Fill, as in the familiar Create menu: the space that tool bodies
+// and a plane enclose, divided into cells; the ticked cells become a body
+// (or are joined to / cut from the first tool). Cells are recorded as points
+// inside them, so a replay finds the same cells.
+class BoundaryFill final : public Command {
+public:
+  BoundaryFill() {
+    commonDef(def_, kCmdBoundaryFill, "Boundary Fill", "Fills the space that bodies and a plane enclose: pick the tools, "
+              "then tick the cells to fill.", "boundary-fill", "Create");
+    def_.inputs = {
+        {.id = "tools", .label = "Tools", .tooltip = "Click the bodies that bound the space.", .type = InputType::Bodies,
+         .defaultValue = std::string{}},
+        // A plane tool behind a tick box: while the plane box shows, canvas
+        // clicks pick planes, not tool bodies.
+        {.id = "withPlane", .label = "Plane Tool", .tooltip = "Also divide the space by a plane.", .type = InputType::Bool,
+         .defaultValue = false},
+        {.id = "plane", .label = "Plane", .tooltip = "Click a plane or flat face, or choose one.", .type = InputType::Plane,
+         .defaultValue = std::string{}, .optional = true, .visibleWhen = "withPlane=true"},
+        {.id = "cells", .label = "Cells", .tooltip = "Tick the cells to fill.", .type = InputType::String,
+         .defaultValue = std::string{}},
+        {.id = "removeTools", .label = "Remove Tools", .tooltip = "Remove the tool bodies afterwards (New Body), or the "
+         "tools other than the first (Join, Cut).", .type = InputType::Bool, .defaultValue = true},
+        choice("operation", "Operation", {"New Body", "Join", "Cut"},
+               "New Body: the cells become a body. Join / Cut: joined to or cut from the first tool body.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  // Only input checks here: the tools are found in apply(), where (on
+  // replay) they still exist; editing validates against the model that
+  // Remove Tools already emptied.
+  std::string validate(const Inputs& in, CommandContext&) const override {
+    if (splitNames(getString(in, "tools")).empty()) return "Tools: click the bodies that bound the space";
+    if (getString(in, "cells").empty()) return "Cells: tick the cells to fill";
+    if (in.count("withPlane") && getBool(in, "withPlane") && getString(in, "plane").empty())
+      return "Plane: click a plane or flat face";
+    return {};
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const bool withPlane = in.count("withPlane") && getBool(in, "withPlane");
+    const auto cells = boundaryFillCells(doc, getString(in, "tools"), withPlane ? getString(in, "plane") : std::string());
+    std::vector<TopoDS_Shape> chosen;
+    for (const auto& item : splitNames(getString(in, "cells"))) {
+      kernel::Vec3 p;
+      if (std::sscanf(item.c_str(), "%lf,%lf,%lf", &p.x, &p.y, &p.z) != 3)
+        throw CommandError("Cells: '" + item + "' is not an x,y,z point");
+      const auto it = std::find_if(cells.begin(), cells.end(),
+                                   [&](const BoundaryCell& c) { return kernel::containsPoint(c.shape, p); });
+      if (it == cells.end()) throw CommandError("Cells: a picked cell no longer exists (the tools changed)");
+      if (std::none_of(chosen.begin(), chosen.end(), [&](const TopoDS_Shape& s) { return s.IsSame(it->shape); }))
+        chosen.push_back(it->shape);
+    }
+    TopoDS_Shape fill;
+    try {
+      fill = chosen.front();
+      for (size_t i = 1; i < chosen.size(); ++i) fill = kernel::boolean(kernel::BooleanOp::Join, fill, chosen[i]);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(std::string("Cells: ") + e.what());
+    }
+    const auto tools = splitNames(getString(in, "tools"));
+    const std::string op = getString(in, "operation");
+    const bool remove = !in.count("removeTools") || getBool(in, "removeTools");
+    if (op == "New Body") {
+      if (remove)
+        for (const auto& t : tools) doc.removeBody(t);
+      doc.noteTool(fill, "new", "");
+      storeBodies(doc, doc.nextBodyName(), fill, true);
+      return;
+    }
+    const std::string target = tools.front();
+    if (remove)
+      for (size_t i = 1; i < tools.size(); ++i) doc.removeBody(tools[i]);
+    doc.noteTool(fill, op == "Join" ? "join" : "cut", target);
+    try {
+      storeBodies(doc, target,
+                  kernel::boolean(op == "Join" ? kernel::BooleanOp::Join : kernel::BooleanOp::Cut, doc.body(target)->shape, fill),
+                  false);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
 // Rib and Web: thin supports grown from a sketch's open curves to the body.
 class RibWeb final : public Command {
 public:
@@ -3557,6 +3645,47 @@ private:
 };
 } // namespace
 
+std::vector<BoundaryCell> boundaryFillCells(const Document& doc, const std::string& tools, const std::string& plane) {
+  std::vector<TopoDS_Shape> shapes;
+  Bnd_Box box;
+  for (const auto& t : splitNames(tools)) {
+    const auto b = doc.body(t);
+    if (!b) throw CommandError("Tools: body '" + t + "' does not exist");
+    shapes.push_back(b->shape);
+    BRepBndLib::Add(b->shape, box);
+  }
+  if (shapes.empty()) throw CommandError("Tools: click the bodies that bound the space");
+  if (!plane.empty()) {
+    // The plane as a face reaching well past the bodies.
+    gp_Ax3 f;
+    try {
+      f = doc.planeFrame(plane, 0);
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string("Plane: ") + e.what());
+    }
+    double x0, y0, z0, x1, y1, z1;
+    box.Get(x0, y0, z0, x1, y1, z1);
+    const gp_Pnt mid((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    const double reach = std::sqrt(box.SquareExtent()) + 1;
+    const gp_Vec n(f.Direction());
+    const gp_Pnt on = mid.Translated(n * -gp_Vec(f.Location(), mid).Dot(n));
+    const gp_Pln pl(gp_Ax3(on, f.Direction(), f.XDirection()));
+    shapes.push_back(BRepBuilderAPI_MakeFace(pl, -reach, reach, -reach, reach).Face());
+  }
+  std::vector<BoundaryCell> out;
+  try {
+    for (const auto& c : kernel::boundaryCells(shapes)) {
+      const kernel::Vec3 p = kernel::interiorPoint(c);
+      char ref[96];
+      std::snprintf(ref, sizeof ref, "%.6g,%.6g,%.6g", p.x, p.y, p.z);
+      out.push_back({c, ref, kernel::massProperties(c).volume});
+    }
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(e.what());
+  }
+  return out;
+}
+
 void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CreateSketch>());
   registry.add(std::make_unique<Extrude>());
@@ -3609,6 +3738,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Joint>(true));
   registry.add(std::make_unique<RigidGroup>());
   registry.add(std::make_unique<Emboss>());
+  registry.add(std::make_unique<BoundaryFill>());
 }
 
 } // namespace tsr::doc

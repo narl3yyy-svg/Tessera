@@ -840,8 +840,14 @@ void MainWindow::buildShortcuts() {
     } else if (active_) active_->reject();
     else clearPreSelection();
   });
-  // Space: the last command again (in a sketch, the last sketch tool).
+  // Space: the last command again (in a sketch, the last sketch tool). In a
+  // list of tick boxes (Boundary Fill's cells) it ticks the current row.
   add(QKeySequence(Qt::Key_Space), [this] {
+    if (auto* list = qobject_cast<QListWidget*>(QApplication::focusWidget())) {
+      if (QListWidgetItem* it = list->currentItem(); it && (it->flags() & Qt::ItemIsUserCheckable))
+        it->setCheckState(it->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+      return;
+    }
     if (editor_) {
       if (editor_->tool() == SketchEditor::Tool::Select) {
         editor_->repeatLastTool();

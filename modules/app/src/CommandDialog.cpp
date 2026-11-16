@@ -9,12 +9,16 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
 #include "tsr/core/Expression.h"
+#include "tsr/doc/DocCommands.h"
+#include "tsr/kernel/Kernel.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -166,6 +170,23 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         break;
       }
       case InputType::String: {
+        if (id == "cells") {
+          // Boundary Fill: every cell the tools enclose, with a tick box,
+          // as in the familiar panel's cell list.
+          cellsList_ = new QListWidget;
+          cellsList_->setObjectName(QStringLiteral("cellsList"));
+          cellsList_->setMaximumHeight(130);
+          cellsId_ = id;
+          connect(cellsList_, &QListWidget::itemChanged, this, [this] {
+            if (fillingCells_) return;
+            QStringList refs;
+            for (int i = 0; i < cellsList_->count(); ++i)
+              if (cellsList_->item(i)->checkState() == Qt::Checked) refs << cellsList_->item(i)->data(Qt::UserRole).toString();
+            onInputChanged(cellsId_, refs.join(QLatin1Char(';')).toStdString());
+          });
+          w = cellsList_;
+          break;
+        }
         if (id == "points") {
           // Hole positions are clicked on the body: shown as a selection
           // ("2 selected") with Clear, as in the familiar panel.
@@ -391,7 +412,48 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
   layout->addWidget(error_);
   layout->addWidget(buttons_);
 
+  refreshCells();
   refreshPreview();
+}
+
+void CommandDialog::refreshCells() {
+  if (!cellsList_) return;
+  cmd_->clearPreview();   // the tools as they are, not as a preview left them
+  std::vector<doc::BoundaryCell> cells;
+  try {
+    const auto w = cmd_->inputs().find("withPlane");
+    const bool withPlane = w != cmd_->inputs().end() && std::get_if<bool>(&w->second) && std::get<bool>(w->second);
+    cells = doc::boundaryFillCells(session_.document(), stringInput("tools").toStdString(),
+                                   withPlane ? stringInput("plane").toStdString() : std::string());
+  } catch (const std::exception&) {   // no tools yet, or they enclose nothing: an empty list
+  }
+  // Ticks stay on the cells that still hold a ticked point.
+  std::vector<tsr::kernel::Vec3> ticked;
+  for (const QString& r : stringInput(cellsId_).split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+    const QStringList xyz = r.split(QLatin1Char(','));
+    if (xyz.size() == 3) ticked.push_back({xyz[0].toDouble(), xyz[1].toDouble(), xyz[2].toDouble()});
+  }
+  fillingCells_ = true;
+  cellsList_->clear();
+  QStringList kept;
+  for (size_t i = 0; i < cells.size(); ++i) {
+    auto* item = new QListWidgetItem(tr("Cell %1   (%2 mm³)").arg(i + 1).arg(cells[i].volume * 1000.0, 0, 'g', 5));
+    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+    item->setData(Qt::UserRole, QString::fromStdString(cells[i].ref));
+    const bool on = std::any_of(ticked.begin(), ticked.end(),
+                                [&](const tsr::kernel::Vec3& p) { return tsr::kernel::containsPoint(cells[i].shape, p); });
+    item->setCheckState(on ? Qt::Checked : Qt::Unchecked);
+    if (on) kept << QString::fromStdString(cells[i].ref);
+    cellsList_->addItem(item);
+  }
+  if (cells.empty()) {
+    auto* item = new QListWidgetItem(tr("Pick the tools: their cells are listed here"));
+    item->setFlags(Qt::NoItemFlags);
+    cellsList_->addItem(item);
+  }
+  fillingCells_ = false;
+  const std::string now = kept.join(QLatin1Char(';')).toStdString();
+  if (now != stringInput(cellsId_).toStdString()) cmd_->setInput(cellsId_, now);
 }
 
 CommandDialog::~CommandDialog() {
@@ -406,6 +468,7 @@ void CommandDialog::onInputChanged(const std::string& id, const Value& v) {
     showError(err);
     return;
   }
+  if (cellsList_ && (id == "tools" || id == "plane" || id == "withPlane")) refreshCells();
   refreshPreview();
 }
 

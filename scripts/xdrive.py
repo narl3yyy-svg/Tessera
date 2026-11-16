@@ -320,6 +320,18 @@ def main():
                 sys.exit("xdrive: line %d: no widget %s" % (n, a[0]))
             click(r[0] + 9, r[1] + r[3] / 2)   # the box itself, at the left
             time.sleep(0.3)
+        elif cmd == "lcheck":
+            # Ticks row N of a list of tick boxes: the first row, down N, Space.
+            r = geometry()["widgets"].get(a[0])
+            if not r:
+                sys.exit("xdrive: line %d: no widget %s" % (n, a[0]))
+            click(r[0] + r[2] / 2, r[1] + 12)
+            time.sleep(0.2)
+            key("Home")
+            for _ in range(int(a[1])):
+                key("Down")
+            key("space")
+            time.sleep(0.3)
         elif cmd == "choose":
             click(*widget(a[0]))
             time.sleep(0.3)
