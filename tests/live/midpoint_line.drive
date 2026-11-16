@@ -5,7 +5,7 @@ click tsr.sketch.create
 plane XY
 waitfor sketch.line
 wait 500
-click sketch.line-mid
+menu sketch.panel-create sketch.menu-line-mid
 sclick 20 20
 sclick 40 30
 key Escape

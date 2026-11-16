@@ -7,7 +7,7 @@ click tsr.sketch.create
 plane XY
 waitfor sketch.line
 wait 500
-click sketch.conic
+menu sketch.panel-create sketch.menu-conic
 sclick 0 0
 sclick 40 0
 sclick 20 20              # the vertex: a parabola (rho 0.5) peaking at 10 mm

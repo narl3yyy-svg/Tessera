@@ -23,7 +23,7 @@ menu sketch.group-circle sketch.circle
 sclick -35 -12
 sclick -30 -12
 key Escape
-click sketch.break
+menu sketch.panel-modify sketch.menu-break
 sclick -42 20             # the level line, left of the crossing
 sclick -30 -12            # the circle, right side
 key Escape

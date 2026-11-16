@@ -161,6 +161,17 @@ private:
     const auto& p = c.points;
     const auto& e = c.entities;
     auto bad = [&] { throw SketchError(std::string("malformed '") + typeName(c.type) + "' constraint"); };
+    // Curvature (G2) at a spline's end: the solver keeps the ends together;
+    // the spline's shape there (direction and bend) is matched when it is
+    // built (SketchGeometry).
+    if (c.type == ConstraintType::Curvature) {
+      if (p.size() != 2 || e.size() != 2 || E(e[0]).type != EntityType::Spline || E(e[0]).kind != SplineKind::Fit ||
+          e[0] == e[1])
+        bad();
+      r.push_back(P(p[0]).x - P(p[1]).x);
+      r.push_back(P(p[0]).y - P(p[1]).y);
+      return;
+    }
     // Splines follow their fit points; constraints act on those points only.
     for (int i : e)
       if (E(i).type == EntityType::Spline)
@@ -171,6 +182,8 @@ private:
       if (E(i).type == EntityType::Ellipse && c.type != ConstraintType::PointOnEntity && c.type != ConstraintType::Radius)
         throw SketchError(std::string("'") + typeName(c.type) + "' cannot apply to an ellipse; constrain its centre and axis point");
     switch (c.type) {
+      case ConstraintType::Curvature:   // handled above
+        return;
       case ConstraintType::Coincident:
         if (p.size() != 2) bad();
         r.push_back(P(p[0]).x - P(p[1]).x);
@@ -448,7 +461,15 @@ std::string addConstraintChecked(Sketch& s, const Constraint& c) {
   trial.constraints.push_back(c);
   const SolveResult after = solve(trial);
   if (!after.ok) return "That would over-constrain the sketch (it conflicts with existing constraints).";
-  if (after.dof >= before.dof) return "That constraint is already implied by the existing ones.";
+  // Curvature shapes the spline where it is built, not through the points the
+  // solver moves: it may take no freedom from them (ends already joined).
+  if (c.type == ConstraintType::Curvature) {
+    for (const auto& k : s.constraints)
+      if (k.type == ConstraintType::Curvature && k.entities == c.entities && k.points == c.points)
+        return "That joint already has a Curvature constraint.";
+  } else if (after.dof >= before.dof) {
+    return "That constraint is already implied by the existing ones.";
+  }
   s = std::move(trial);
   return {};
 }

@@ -227,39 +227,65 @@ QWidget* MainWindow::buildSketchTab() {
   group->setExclusive(true);
   toolButtons_.clear();
 
+  // A ribbon panel, as the familiar sketch tab has: its everyday tools in a
+  // row, and its title (CREATE \u25be) a menu of every tool in it.
+  struct Panel {
+    QHBoxLayout* row;
+    QMenu* menu;
+  };
+  constexpr int kIcon = 24;
   auto panel = [&](const QString& title) {
     auto* box = new QWidget;
     auto* col = new QVBoxLayout(box);
-    col->setContentsMargins(4, 0, 4, 0);
+    col->setContentsMargins(3, 0, 3, 0);
     col->setSpacing(0);
     auto* buttons = new QHBoxLayout;
     buttons->setSpacing(0);
     col->addLayout(buttons);
-    auto* label = new QLabel(title);
+    auto* label = new QToolButton;
+    label->setObjectName(QStringLiteral("sketch.panel-") + title.toLower());
+    label->setText(title + QStringLiteral(" \u25be"));
+    label->setAutoRaise(true);
+    label->setPopupMode(QToolButton::InstantPopup);
+    label->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    label->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; width: 0; }"));
     QFont f = label->font();
     f.setPointSizeF(f.pointSizeF() * 0.85);
     label->setFont(f);
-    label->setAlignment(Qt::AlignHCenter);
-    col->addWidget(label);
+    auto* menu = new QMenu(label);
+    label->setMenu(menu);
+    col->addWidget(label, 0, Qt::AlignHCenter);
     row->addWidget(box);
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::VLine);
     sep->setFrameShadow(QFrame::Sunken);
     row->addWidget(sep);
-    return buttons;
+    return Panel{buttons, menu};
   };
-  auto toolButton = [&](QHBoxLayout* into, SketchEditor::Tool tool, const QString& iconName, const QString& name,
-                        const QString& key) {
+  // A tool in the panel's menu; `inRow` also gives it a button in the row.
+  auto menuEntry = [&](const Panel& into, SketchEditor::Tool tool, const QString& iconName, const QString& name,
+                       const QString& key) {
+    QAction* a = into.menu->addAction(key.isEmpty() ? name : name + QLatin1Char('\t') + key);
+    a->setObjectName(QStringLiteral("sketch.menu-") + iconName);
+    setIcon(a, iconName);
+    connect(a, &QAction::triggered, this, [this, tool] {
+      if (editor_) editor_->setTool(tool);
+    });
+  };
+  auto toolButton = [&](const Panel& into, SketchEditor::Tool tool, const QString& iconName, const QString& name,
+                        const QString& key, bool inRow = true) {
+    menuEntry(into, tool, iconName, name, key);
+    if (!inRow) return;
     auto* b = new QToolButton;
     b->setObjectName(QStringLiteral("sketch.") + iconName);
     setIcon(b, iconName);
-    b->setIconSize(QSize(30, 30));
+    b->setIconSize(QSize(kIcon, kIcon));
     b->setAutoRaise(true);
     b->setCheckable(true);
     b->setToolTip(key.isEmpty() ? name : QStringLiteral("%1 (%2)").arg(name, key));
     b->setAccessibleName(name);
     group->addButton(b);
-    into->addWidget(b);
+    into.row->addWidget(b);
     connect(b, &QToolButton::clicked, this, [this, tool] {
       if (editor_) editor_->setTool(tool);
     });
@@ -273,10 +299,11 @@ QWidget* MainWindow::buildSketchTab() {
     SketchEditor::Tool tool;
     QString icon, name, key;
   };
-  auto toolGroup = [&](QHBoxLayout* into, const QString& id, const std::vector<Item>& items) {
+  auto toolGroup = [&](const Panel& into, const QString& id, const std::vector<Item>& items) {
+    for (const Item& it : items) menuEntry(into, it.tool, it.icon, it.name, it.key);
     auto* b = new QToolButton;
     b->setObjectName(QStringLiteral("sketch.group-") + id);
-    b->setIconSize(QSize(30, 30));
+    b->setIconSize(QSize(kIcon, kIcon));
     b->setAutoRaise(true);
     b->setCheckable(true);
     b->setPopupMode(QToolButton::MenuButtonPopup);
@@ -300,17 +327,17 @@ QWidget* MainWindow::buildSketchTab() {
     }
     b->setMenu(menu);
     group->addButton(b);
-    into->addWidget(b);
+    into.row->addWidget(b);
     connect(b, &QToolButton::clicked, this, [this, b] {
       if (editor_) editor_->setTool(static_cast<SketchEditor::Tool>(b->property("tool").toInt()));
     });
   };
 
   using T = SketchEditor::Tool;
-  QHBoxLayout* create = panel(tr("CREATE"));
+  const Panel create = panel(tr("CREATE"));
   toolButton(create, T::Select, QStringLiteral("select"), tr("Select / move"), QStringLiteral("Q"));
   toolButton(create, T::Line, QStringLiteral("line"), tr("Line"), QStringLiteral("L"));
-  toolButton(create, T::MidpointLine, QStringLiteral("line-mid"), tr("Midpoint Line"), {});
+  toolButton(create, T::MidpointLine, QStringLiteral("line-mid"), tr("Midpoint Line"), {}, false);
   toolGroup(create, QStringLiteral("rectangle"),
             {{T::Rectangle, QStringLiteral("rectangle"), tr("2-Point Rectangle"), QStringLiteral("R")},
              {T::ThreePointRectangle, QStringLiteral("rectangle-3pt"), tr("3-Point Rectangle"), {}},
@@ -329,7 +356,7 @@ QWidget* MainWindow::buildSketchTab() {
             {{T::CircumscribedPolygon, QStringLiteral("polygon-circumscribed"), tr("Circumscribed Polygon"), {}},
              {T::Polygon, QStringLiteral("polygon"), tr("Inscribed Polygon"), {}},
              {T::EdgePolygon, QStringLiteral("polygon-edge"), tr("Edge Polygon"), {}}});
-  toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {});
+  toolButton(create, T::Ellipse, QStringLiteral("ellipse"), tr("Ellipse"), {}, false);
   toolGroup(create, QStringLiteral("slot"),
             {{T::Slot, QStringLiteral("slot"), tr("Center to Center Slot"), {}},
              {T::OverallSlot, QStringLiteral("slot-overall"), tr("Overall Slot"), {}},
@@ -337,10 +364,10 @@ QWidget* MainWindow::buildSketchTab() {
   toolGroup(create, QStringLiteral("spline"),
             {{T::Spline, QStringLiteral("spline"), tr("Fit Point Spline"), {}},
              {T::ControlSpline, QStringLiteral("spline-control"), tr("Control Point Spline"), {}}});
-  toolButton(create, T::Conic, QStringLiteral("conic"), tr("Conic Curve"), {});
+  toolButton(create, T::Conic, QStringLiteral("conic"), tr("Conic Curve"), {}, false);
   toolButton(create, T::Mirror, QStringLiteral("sketch-mirror"), tr("Mirror"), {});
-  toolButton(create, T::CircPattern, QStringLiteral("sketch-circular-pattern"), tr("Circular Pattern"), {});
-  toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {});
+  toolButton(create, T::CircPattern, QStringLiteral("sketch-circular-pattern"), tr("Circular Pattern"), {}, false);
+  toolButton(create, T::RectPattern, QStringLiteral("sketch-rect-pattern"), tr("Rectangular Pattern"), {}, false);
   toolButton(create, T::Point, QStringLiteral("point"), tr("Point"), {});
   toolGroup(create, QStringLiteral("text"),
             {{T::Text, QStringLiteral("text"), tr("Text"), {}},
@@ -352,27 +379,28 @@ QWidget* MainWindow::buildSketchTab() {
   auto* construction = new QToolButton;
   construction->setObjectName(QStringLiteral("sketch.construction"));
   setIcon(construction, QStringLiteral("construction"));
-  construction->setIconSize(QSize(30, 30));
+  construction->setIconSize(QSize(kIcon, kIcon));
   construction->setAutoRaise(true);
   construction->setCheckable(true);
   construction->setToolTip(tr("Construction geometry (X): new curves are reference only, not profiles"));
   connect(construction, &QToolButton::toggled, this, [this](bool on) {
     if (editor_) editor_->setConstruction(on);
   });
-  create->addWidget(construction);
+  create.row->addWidget(construction);
   constructionButton_ = construction;
 
-  QHBoxLayout* modify = panel(tr("MODIFY"));
+  // MODIFY: Fillet, Trim and Offset in the row; the rest in its menu.
+  const Panel modify = panel(tr("MODIFY"));
   toolButton(modify, T::Fillet, QStringLiteral("sketch-fillet"), tr("Fillet"), {});
-  toolButton(modify, T::Chamfer, QStringLiteral("sketch-chamfer"), tr("Chamfer"), {});
   toolButton(modify, T::Trim, QStringLiteral("trim"), tr("Trim"), QStringLiteral("T"));
-  toolButton(modify, T::Break, QStringLiteral("break"), tr("Break"), {});
-  toolButton(modify, T::Extend, QStringLiteral("extend"), tr("Extend"), {});
   toolButton(modify, T::Offset, QStringLiteral("offset"), tr("Offset"), QStringLiteral("O"));
-  toolButton(modify, T::MoveCopy, QStringLiteral("sketch-move"), tr("Move/Copy"), QStringLiteral("M"));
-  toolButton(modify, T::SketchScale, QStringLiteral("sketch-scale"), tr("Sketch Scale"), {});
+  toolButton(modify, T::Chamfer, QStringLiteral("sketch-chamfer"), tr("Chamfer"), {}, false);
+  toolButton(modify, T::Extend, QStringLiteral("extend"), tr("Extend"), {}, false);
+  toolButton(modify, T::Break, QStringLiteral("break"), tr("Break"), {}, false);
+  toolButton(modify, T::MoveCopy, QStringLiteral("sketch-move"), tr("Move/Copy"), QStringLiteral("M"), false);
+  toolButton(modify, T::SketchScale, QStringLiteral("sketch-scale"), tr("Sketch Scale"), {}, false);
 
-  QHBoxLayout* constraints = panel(tr("CONSTRAINTS"));
+  const Panel constraints = panel(tr("CONSTRAINTS"));
   toolButton(constraints, T::Dimension, QStringLiteral("dimension"), tr("Sketch Dimension"), QStringLiteral("D"));
   toolButton(constraints, T::Coincident, QStringLiteral("c-coincident"), tr("Coincident"), {});
   toolButton(constraints, T::HorizontalVertical, QStringLiteral("c-horizontal-vertical"), tr("Horizontal/Vertical"), {});
@@ -380,22 +408,30 @@ QWidget* MainWindow::buildSketchTab() {
   toolButton(constraints, T::Perpendicular, QStringLiteral("c-perpendicular"), tr("Perpendicular"), {});
   toolButton(constraints, T::Equal, QStringLiteral("c-equal"), tr("Equal"), {});
   toolButton(constraints, T::Tangent, QStringLiteral("c-tangent"), tr("Tangent"), {});
+  toolButton(constraints, T::Curvature, QStringLiteral("c-curvature"), tr("Curvature"), {});
   toolButton(constraints, T::Concentric, QStringLiteral("c-concentric"), tr("Concentric"), {});
   toolButton(constraints, T::Midpoint, QStringLiteral("c-midpoint"), tr("Midpoint"), {});
   toolButton(constraints, T::Collinear, QStringLiteral("c-collinear"), tr("Collinear"), {});
   toolButton(constraints, T::Symmetry, QStringLiteral("c-symmetry"), tr("Symmetry"), {});
   toolButton(constraints, T::Fix, QStringLiteral("c-fix"), tr("Fix/Unfix"), {});
 
-  QHBoxLayout* view = panel(tr("VIEW"));
+  const Panel view = panel(tr("VIEW"));
   auto* look = new QToolButton;
   setIcon(look, QStringLiteral("sketch"));
-  look->setIconSize(QSize(30, 30));
+  look->setIconSize(QSize(kIcon, kIcon));
   look->setAutoRaise(true);
   look->setToolTip(tr("Look at the sketch plane"));
   connect(look, &QToolButton::clicked, this, [this] {
     if (editor_) viewport_->lookAt(editor_->frame());
   });
-  view->addWidget(look);
+  view.row->addWidget(look);
+  {
+    QAction* a = view.menu->addAction(tr("Look At"));
+    setIcon(a, QStringLiteral("sketch"));
+    connect(a, &QAction::triggered, this, [this] {
+      if (editor_) viewport_->lookAt(editor_->frame());
+    });
+  }
 
   row->addStretch();
   auto* finish = new QPushButton(tr("FINISH SKETCH"));

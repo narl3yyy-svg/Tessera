@@ -76,6 +76,8 @@ enum class ConstraintType {
   Symmetry,           // points[0], points[1] mirror images across line entities[0]
   Polygon,            // points[0] the centre, entities its sides in order: a regular polygon
                       // (value +1: corners run anticlockwise, -1 clockwise)
+  Curvature,          // entities[0] a fit point spline, entities[1] any curve, joined at points[0]
+                      // (the spline's end) and points[1]: smooth there, tangent and equally curved (G2)
   // Dimensions (value in cm or radians):
   Distance,           // points[0]-points[1]; or a line's length; or points[0] to line entities[0]
   HorizontalDistance, // signed x distance points[0] -> points[1] (or along a line)

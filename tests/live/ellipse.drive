@@ -5,7 +5,7 @@ click tsr.sketch.create
 plane XY
 waitfor sketch.line
 wait 500
-click sketch.ellipse
+menu sketch.panel-create sketch.menu-ellipse
 sclick 20 20              # centre
 sclick 50 20              # one axis: 30 mm
 smove 30 36

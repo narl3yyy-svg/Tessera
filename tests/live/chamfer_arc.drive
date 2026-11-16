@@ -13,7 +13,7 @@ menu sketch.group-arc sketch.arc-tangent
 sclick 20 0               # the line's end
 sclick 20 20              # a half circle up
 key Escape
-click sketch.sketch-chamfer
+menu sketch.panel-modify sketch.menu-sketch-chamfer
 sclick 20 0               # the corner
 wait 300
 type 5

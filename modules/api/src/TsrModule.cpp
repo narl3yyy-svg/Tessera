@@ -9,6 +9,7 @@
 #include "tsr/sketch/SketchGeometry.h"
 #include "tsr/sketch/SketchOps.h"
 
+#include <BRepAdaptor_Curve.hxx>
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
@@ -318,6 +319,23 @@ void bindTsr(py::module_& m) {
     return s.toJson();
   }, py::arg("data"), py::arg("spline"), py::arg("index"), py::arg("tx"), py::arg("ty"),
      "Set a fit point spline's tangent handle (derivative; 1 = natural speed; (0, 0) frees it).");
+  m.def("sketch_curve_end", [](const std::string& data, int entity, bool atEnd) {
+    // The curve as built (Curvature constraints applied), at its start or
+    // end: the point, the unit direction it runs and its signed curvature.
+    const sketch::Sketch s = sketch::Sketch::fromJson(data);
+    if (entity < 0 || entity >= static_cast<int>(s.entities.size())) throw std::runtime_error("no such entity");
+    const gp_Ax3 xy(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0));
+    const TopoDS_Shape sh = sketch::curve(s, xy, entity);
+    if (sh.IsNull()) throw std::runtime_error("that curve has no shape");
+    BRepAdaptor_Curve c(TopoDS::Edge(sh));
+    gp_Pnt p;
+    gp_Vec v, a;
+    c.D2(atEnd ? c.LastParameter() : c.FirstParameter(), p, v, a);
+    const double sp = v.Magnitude();
+    if (sp < 1e-12) throw std::runtime_error("the curve has no direction there");
+    return py::make_tuple(p.X(), p.Y(), v.X() / sp, v.Y() / sp, (v.X() * a.Y() - v.Y() * a.X()) / (sp * sp * sp));
+  }, py::arg("data"), py::arg("entity"), py::arg("at_end") = false,
+     "A sketch curve at its start (or end): (x, y, dx, dy, curvature), running its own way (cm).");
   m.def("sketch_spline_handles", [](const std::string& data, int spline) {
     std::vector<py::tuple> out;
     for (const auto& h : sketch::splineHandles(sketch::Sketch::fromJson(data), spline))

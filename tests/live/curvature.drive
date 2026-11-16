@@ -1,0 +1,24 @@
+# Live: sketch CONSTRAINTS > Curvature, as in the familiar tool. A line, a
+# fit point spline drawn on from its end; click the spline, then the line:
+# the spline leaves the line straight on, unbent (G2).
+waitfor tsr.sketch.create
+click tsr.sketch.create
+plane XY
+waitfor sketch.line
+wait 500
+click sketch.line
+sclick -30 0
+sclick 0 0
+key Escape
+menu sketch.group-spline sketch.spline
+sclick 0 0
+sclick 20 20
+sclick 40 0
+key Return
+click sketch.c-curvature
+sclick 20 20              # on the spline (a point it passes through)
+sclick -24 0              # the line (clear of its H glyph at the middle)
+wait 500
+shot /tmp/live_curvature.png
+click palette.finish
+wait 600

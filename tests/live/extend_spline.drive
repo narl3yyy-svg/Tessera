@@ -15,7 +15,7 @@ sclick 0 0
 sclick 10 0
 sclick 20 0
 key Return
-click sketch.extend
+menu sketch.panel-modify sketch.menu-extend
 sclick 19 0               # near the spline's right end
 wait 400
 shot /tmp/live_extend_spline.png

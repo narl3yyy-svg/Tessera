@@ -81,6 +81,11 @@ One line per item: id, what differs, why, and the phase that closes it.
 - Offset of a spline or ellipse is a fit point spline through offset points (24 round a closed curve); it does not follow later changes to the original, and an ellipse offset inward past its tightest curve is refused.
 - Extend of a spline carries it on along its circle of curvature at the end (straight where it is flat) and adds the meeting point as its new end, the old end staying as a fit (or frame) point; the true natural continuation of the curve may differ slightly. Conics and full ellipses cannot be extended.
 
+## Curvature (G2)
+
+- Curvature applies to open fit point splines (not control point splines or conics). A spline with a Curvature constraint is built as its own cubic through its points, matching the other curve's direction and curvature exactly at the joint; its shape away from the joint can differ a little from the same spline without the constraint.
+- The joined curve is taken as it is: two splines joined to each other match each other's unconstrained shape at the joint.
+
 ## Include 3D Geometry
 
 - Body edges come in as they are in space, fixed (purple) and never part of a profile; lines and circles / arcs parallel to the sketch plane stay exact, other edges become fit point splines through 33 points along them.

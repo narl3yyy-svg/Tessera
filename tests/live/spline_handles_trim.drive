@@ -17,7 +17,7 @@ wait 300
 shot /tmp/live_spline_handles.png
 sdrag 27.45 10 20 20          # the handle's front end (a third of the chord out), straight up
 wait 300
-click sketch.ellipse
+menu sketch.panel-create sketch.menu-ellipse
 sclick 70 0
 sclick 100 0                  # one half axis: 30 mm
 sclick 70 20                  # the other: 20 mm

@@ -43,7 +43,7 @@ public:
     ThreePointRectangle, TwoPointCircle, ThreePointCircle, ThreePointArc,
     TwoTangentCircle, ThreeTangentCircle, OverallSlot, ArcSlot, Ellipse, Text,
     RectPattern, CircPattern, MoveCopy, SketchScale, Break, Intersect, TangentArc, ControlSpline, Conic, TextOnPath,
-    CircumscribedPolygon, EdgePolygon,
+    CircumscribedPolygon, EdgePolygon, Curvature,
     Include3D, MidpointLine,
   };
 

@@ -10,7 +10,7 @@ menu sketch.group-circle sketch.circle
 sclick 30 0
 sclick 40 0               # radius 10 (on the 10 mm grid)
 key Escape
-click sketch.sketch-circular-pattern
+menu sketch.panel-create sketch.menu-sketch-circular-pattern
 sclick 40 0               # the circle
 key Return
 sclick 0 0                # round the origin
@@ -25,7 +25,7 @@ sclick -50 30
 key Escape
 key q
 sdrag -65 15 -45 35       # window round the rectangle
-click sketch.sketch-rect-pattern
+menu sketch.panel-create sketch.menu-sketch-rect-pattern
 key Return
 waitfor sketchValues
 wait 300

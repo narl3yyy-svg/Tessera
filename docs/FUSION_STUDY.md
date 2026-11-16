@@ -119,6 +119,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] The constraint toolbar greys out constraints that cannot apply to the selection (Day 14).
 - [x] Fully defined sketch shows a lock icon in the Browser (Days 6, 7, 8).
 - [x] Fully defined curves change colour (black in the light theme, near-white in the dark one); under-defined stay blue.
+- [x] Sketch ribbon as in the familiar sketch tab: the everyday tools in each panel's row, and every tool in the panel's title menu (CREATE ▾, MODIFY ▾, CONSTRAINTS ▾); the row fits a 1440 px window.
+- [x] Curvature (G2) constraint: a fit point spline joined to a line, arc, elliptical arc or spline runs on in the same direction, equally bent.
 - [x] Circumscribed / inscribed / edge polygon, the side count typed after Tab (Day 6); one Polygon constraint keeps it regular.
 - [ ] Text box drawn corner to corner (Day 7: done; dragging its corners after is the sketch's usual point drag); Centerline linetype (Day 8). (3-point arc: done.)
 - [x] Spline: Enter or a double-click commits, Esc throws an unfinished spline away (Days 2, 4). Control Point Spline (cubic on a dashed frame) and Conic Curve (start, end, vertex; rho, double-click to change) in CREATE.

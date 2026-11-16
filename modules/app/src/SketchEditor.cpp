@@ -229,6 +229,7 @@ void SketchEditor::setTool(Tool t) {
     case Tool::Perpendicular: emit message(tr("Perpendicular: click two lines.")); break;
     case Tool::Equal: emit message(tr("Equal: click two lines, or two circles/arcs.")); break;
     case Tool::Tangent: emit message(tr("Tangent: click a line and a circle/arc, or two circles/arcs.")); break;
+    case Tool::Curvature: emit message(tr("Curvature: click a spline and the curve joined to its end: smooth there, equally bent (G2).")); break;
     case Tool::Fix: emit message(tr("Fix: click a point or curve to lock it in place.")); break;
     case Tool::Midpoint: emit message(tr("Midpoint: click a point, then a line.")); break;
     case Tool::Concentric: emit message(tr("Concentric: click two circles/arcs.")); break;
@@ -2544,7 +2545,8 @@ void SketchEditor::autoHorizontalVertical(int line) {
 void SketchEditor::constraintPick(double x, double y) {
   const bool wantsEntity = tool_ == Tool::Parallel || tool_ == Tool::Perpendicular || tool_ == Tool::Equal ||
                            tool_ == Tool::Collinear || (tool_ == Tool::Symmetry && picks_.size() == 2) ||
-                           tool_ == Tool::Tangent || tool_ == Tool::Concentric || tool_ == Tool::HorizontalVertical ||
+                           tool_ == Tool::Tangent || tool_ == Tool::Curvature || tool_ == Tool::Concentric ||
+                           tool_ == Tool::HorizontalVertical ||
                            (tool_ == Tool::Midpoint && !picks_.empty());
   Hit h = wantsEntity ? hitEntity(x, y) : hitTest(x, y);
   if (h.kind == Hit::Label || h.kind == Hit::None) return;
@@ -2557,7 +2559,7 @@ bool SketchEditor::isConstraintTool(Tool t) {
   switch (t) {
     case Tool::Coincident: case Tool::HorizontalVertical: case Tool::Parallel: case Tool::Perpendicular:
     case Tool::Equal: case Tool::Tangent: case Tool::Fix: case Tool::Midpoint: case Tool::Concentric:
-    case Tool::Collinear: case Tool::Symmetry:
+    case Tool::Collinear: case Tool::Symmetry: case Tool::Curvature:
       return true;
     default:
       return false;
@@ -2670,6 +2672,37 @@ void SketchEditor::evaluateConstraintPicks() {
         internal = d < std::max(e1.radius, e2.radius) ? 1 : 0;
       }
       return done({{ConstraintType::Tangent, {}, {a.index, b.index}, internal}});
+    }
+    case Tool::Curvature: {
+      // A fit point spline and a curve: joined at the nearest pair of ends.
+      if (a.kind != Hit::Entity || b.kind != Hit::Entity || a.index == b.index)
+        return fail(tr("Curvature: pick a spline and the curve at its end."));
+      auto isFitSpline = [&](int i) {
+        return sk_.entities[i].type == EntityType::Spline && sk_.entities[i].kind == sketch::SplineKind::Fit &&
+               sk_.entities[i].fit.front() != sk_.entities[i].fit.back();
+      };
+      int sp = a.index, ot = b.index;
+      if (!isFitSpline(sp)) std::swap(sp, ot);
+      if (!isFitSpline(sp)) return fail(tr("Curvature: one of the two must be an open fit point spline."));
+      const auto& se = sk_.entities[sp];
+      std::vector<int> otherEnds;
+      const auto& oe = sk_.entities[ot];
+      if (oe.type == EntityType::Line || oe.type == EntityType::Arc) otherEnds = {oe.a, oe.b};
+      else if (oe.type == EntityType::Spline) otherEnds = {oe.fit.front(), oe.fit.back()};
+      else if (oe.isEllipticalArc()) otherEnds = {oe.fit[0], oe.fit[1]};
+      if (otherEnds.empty()) return fail(tr("Curvature: the other curve must have ends (a line, arc or spline)."));
+      int best0 = -1, best1 = -1;
+      double bestD = 1e300;
+      for (int p0 : {se.fit.front(), se.fit.back()})
+        for (int p1 : otherEnds) {
+          const double d = std::hypot(sk_.points[p0].x - sk_.points[p1].x, sk_.points[p0].y - sk_.points[p1].y);
+          if (d < bestD) {
+            bestD = d;
+            best0 = p0;
+            best1 = p1;
+          }
+        }
+      return done({{ConstraintType::Curvature, {best0, best1}, {sp, ot}}});
     }
     case Tool::Concentric:
       if (!isRound(a) || !isRound(b) || a.index == b.index) return fail(tr("Pick two circles/arcs."));
@@ -3867,6 +3900,8 @@ std::optional<std::pair<double, double>> SketchEditor::labelAnchor(int ci) const
       return std::make_pair(P[c.points[0]].x + 9 * px, P[c.points[0]].y - 9 * px);
     case ConstraintType::Polygon:
       return std::make_pair(P[c.points[0]].x + 10 * px, P[c.points[0]].y + 10 * px);
+    case ConstraintType::Curvature:   // by the joint
+      return std::make_pair(P[c.points[0]].x + 10 * px, P[c.points[0]].y - 12 * px);
     default: {
       if (c.entities.empty()) {   // e.g. horizontal between two points
         if (c.points.size() < 2) return std::nullopt;
@@ -4224,6 +4259,7 @@ QString SketchEditor::labelText(const Constraint& c) const {
     case ConstraintType::Fix: return QString::fromUtf8("⌖");
     case ConstraintType::Midpoint: return QStringLiteral("M");
     case ConstraintType::Polygon: return QString::fromUtf8("\u2B21");   // a hexagon
+    case ConstraintType::Curvature: return QStringLiteral("G2");
     case ConstraintType::Distance:
     case ConstraintType::HorizontalDistance:
     case ConstraintType::VerticalDistance:

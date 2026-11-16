@@ -17,6 +17,9 @@
 #include <TColgp_Array1OfVec.hxx>
 #include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <GeomAPI_Interpolate.hxx>
+#include <Eigen/Dense>
+#include <math_Matrix.hxx>
+#include <BSplCLib.hxx>
 #include <NCollection_UtfIterator.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <GCPnts_AbscissaPoint.hxx>
@@ -39,6 +42,7 @@
 #include <gp_Elips.hxx>
 
 #include <algorithm>
+#include <optional>
 #include <array>
 #include <map>
 #include <cmath>
@@ -94,6 +98,159 @@ void toSketch(const gp_Ax3& f, const gp_Pnt& p, double& x, double& y) {
   x = d.Dot(gp_Vec(f.XDirection()));
   y = d.Dot(gp_Vec(f.YDirection()));
 }
+
+namespace {
+
+// Signed curvature travelling with velocity v (acceleration a).
+double signedCurvature(const gp_Vec& v, const gp_Vec& a) {
+  const double sp = v.Magnitude();
+  return sp < 1e-12 ? 0 : (v.X() * a.Y() - v.Y() * a.X()) / (sp * sp * sp);
+}
+
+// A spline end held to another curve (Curvature, G2): the first and second
+// derivatives it must have there, in the spline's own direction (unit speed).
+struct G2End {
+  bool set = false;
+  gp_Vec d1, d2;
+};
+
+std::pair<G2End, G2End> g2Ends(const Sketch& s, int id) {
+  const Entity& e = s.entities.at(id);
+  std::pair<G2End, G2End> out;
+  if (e.type != EntityType::Spline || e.kind != SplineKind::Fit || e.fit.size() < 2 || e.fit.front() == e.fit.back())
+    return out;
+  bool any = false;
+  for (const auto& c : s.constraints)
+    any = any || (c.type == ConstraintType::Curvature && c.entities.size() == 2 && c.entities[0] == id);
+  if (!any) return out;
+  // The other curves as they are, without these constraints (no loops when
+  // two splines are joined to each other).
+  Sketch plain = s;
+  std::erase_if(plain.constraints, [](const Constraint& c) { return c.type == ConstraintType::Curvature; });
+  const gp_Ax3 flat(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0));
+  for (const auto& c : s.constraints) {
+    if (c.type != ConstraintType::Curvature || c.entities.size() != 2 || c.points.size() != 2 || c.entities[0] != id) continue;
+    const bool atStart = c.points[0] == e.fit.front();
+    if (!atStart && c.points[0] != e.fit.back()) continue;
+    const int other = c.entities[1];
+    if (other < 0 || other >= static_cast<int>(s.entities.size()) || other == id) continue;
+    const TopoDS_Shape os = curve(plain, flat, other);
+    if (os.IsNull()) continue;
+    BRepAdaptor_Curve oc(TopoDS::Edge(os));
+    const gp_Pnt joint(s.points.at(c.points[1]).x, s.points.at(c.points[1]).y, 0);
+    const bool atOtherEnd = oc.Value(oc.LastParameter()).Distance(joint) < oc.Value(oc.FirstParameter()).Distance(joint);
+    gp_Pnt q;
+    gp_Vec d1, d2;
+    oc.D2(atOtherEnd ? oc.LastParameter() : oc.FirstParameter(), q, d1, d2);
+    if (d1.Magnitude() < 1e-12) continue;
+    // Travelling along the other curve into the joint, then on into the spline.
+    const gp_Vec arrive = atOtherEnd ? d1 : -d1;
+    const double k = signedCurvature(arrive, d2);
+    const gp_Vec u = arrive.Normalized();
+    const gp_Vec left(-u.Y(), u.X(), 0);
+    G2End g;
+    g.set = true;
+    g.d1 = atStart ? u : -u;   // the spline's own direction
+    g.d2 = left * k;           // the same whichever way it is run
+    (atStart ? out.first : out.second) = g;
+  }
+  return out;
+}
+
+// A cubic spline through the fit points (chord-length parameters) that meets
+// every condition exactly: handles fix the derivative at their points, G2
+// ends fix the first and second derivatives, free ends are natural. Each
+// condition past one per end gets a knot of its own, so the system is square.
+Handle(Geom_BSplineCurve) conditionedSpline(const Sketch& s, const gp_Ax3& f, const Entity& e, const G2End& g0,
+                                            const G2End& g1) {
+  std::vector<gp_Vec> pts, hand;
+  for (size_t i = 0; i < e.fit.size(); ++i) {
+    const gp_Vec p(s.points.at(e.fit[i]).x, s.points.at(e.fit[i]).y, 0);
+    if (!pts.empty() && (pts.back() - p).Magnitude() < 1e-7) continue;
+    pts.push_back(p);
+    hand.push_back(i < e.handles.size() ? gp_Vec(e.handles[i].x, e.handles[i].y, 0) : gp_Vec(0, 0, 0));
+  }
+  const int n = static_cast<int>(pts.size());
+  if (n < 2) return nullptr;
+  std::vector<double> u(n, 0);
+  for (int i = 1; i < n; ++i) u[i] = u[i - 1] + (pts[i] - pts[i - 1]).Magnitude();
+  struct Cond {
+    double t;
+    int order;
+    gp_Vec v;
+  };
+  std::vector<Cond> conds;
+  std::vector<int> extraInSpan(n - 1, 0);
+  for (int i = 0; i < n; ++i) conds.push_back({u[i], 0, pts[i]});
+  // The ends.
+  for (int end = 0; end < 2; ++end) {
+    const G2End& g = end == 0 ? g0 : g1;
+    const int i = end == 0 ? 0 : n - 1;
+    if (g.set) {
+      conds.push_back({u[i], 1, g.d1});
+      conds.push_back({u[i], 2, g.d2});
+      ++extraInSpan[end == 0 ? 0 : n - 2];
+    } else if (hand[i].Magnitude() > 1e-9) {
+      conds.push_back({u[i], 1, hand[i]});
+    } else {
+      conds.push_back({u[i], 2, gp_Vec(0, 0, 0)});   // natural
+    }
+  }
+  // Handles inside.
+  for (int i = 1; i < n - 1; ++i)
+    if (hand[i].Magnitude() > 1e-9) {
+      conds.push_back({u[i], 1, hand[i]});
+      ++extraInSpan[i];
+    }
+  std::vector<double> flat = {u[0], u[0], u[0], u[0]};
+  for (int i = 0; i < n - 1; ++i) {
+    if (i > 0) flat.push_back(u[i]);
+    for (int k = 1; k <= extraInSpan[i]; ++k) flat.push_back(u[i] + (u[i + 1] - u[i]) * k / (extraInSpan[i] + 1));
+  }
+  for (int k = 0; k < 4; ++k) flat.push_back(u[n - 1]);
+  const int np = static_cast<int>(flat.size()) - 4;
+  if (np != static_cast<int>(conds.size())) return nullptr;
+  TColStd_Array1OfReal fk(1, static_cast<int>(flat.size()));
+  for (size_t i = 0; i < flat.size(); ++i) fk.SetValue(static_cast<int>(i) + 1, flat[i]);
+  Eigen::MatrixXd A = Eigen::MatrixXd::Zero(np, np);
+  Eigen::MatrixXd b(np, 2);
+  for (int r = 0; r < np; ++r) {
+    const Cond& c = conds[r];
+    math_Matrix basis(1, 3, 1, 4);
+    int first = 0;
+    if (BSplCLib::EvalBsplineBasis(2, 4, fk, c.t, first, basis) != 0) return nullptr;
+    for (int k = 0; k < 4; ++k) {
+      const int col = first - 1 + k;
+      if (col >= 0 && col < np) A(r, col) = basis(c.order + 1, k + 1);
+    }
+    b(r, 0) = c.v.X();
+    b(r, 1) = c.v.Y();
+  }
+  const Eigen::FullPivLU<Eigen::MatrixXd> lu(A);
+  if (!lu.isInvertible()) return nullptr;
+  const Eigen::MatrixXd x = lu.solve(b);
+  // Knots and their multiplicities from the flat list.
+  std::vector<double> kv;
+  std::vector<int> km;
+  for (double k : flat) {
+    if (!kv.empty() && std::abs(k - kv.back()) < 1e-12) ++km.back();
+    else {
+      kv.push_back(k);
+      km.push_back(1);
+    }
+  }
+  TColgp_Array1OfPnt poles(1, np);
+  for (int i = 0; i < np; ++i) poles.SetValue(i + 1, toWorld(f, x(i, 0), x(i, 1)));
+  TColStd_Array1OfReal knots(1, static_cast<int>(kv.size()));
+  TColStd_Array1OfInteger mults(1, static_cast<int>(km.size()));
+  for (size_t i = 0; i < kv.size(); ++i) {
+    knots.SetValue(static_cast<int>(i) + 1, kv[i]);
+    mults.SetValue(static_cast<int>(i) + 1, km[i]);
+  }
+  return new Geom_BSplineCurve(poles, knots, mults, 3);
+}
+
+} // namespace
 
 TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
   const Entity& e = s.entities.at(id);
@@ -173,7 +330,12 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         }
         // Fit points, without repeats; a closed spline is periodic. Tangent
         // handles that are set fix the derivative there (chord-length
-        // parameters, so length 1 is the natural speed).
+        // parameters, so length 1 is the natural speed). An end held by a
+        // Curvature (G2) constraint matches the curve it joins exactly.
+        if (const auto [g0, g1] = g2Ends(s, id); g0.set || g1.set)
+          if (const Handle(Geom_BSplineCurve) g = conditionedSpline(s, f, e, g0, g1); !g.IsNull())
+            return BRepBuilderAPI_MakeEdge(g).Edge();
+        const std::vector<Point>& handles = e.handles;
         const bool closed = e.fit.size() > 2 && e.fit.front() == e.fit.back();
         std::vector<gp_Pnt> pts;
         std::vector<gp_Vec> tans;
@@ -181,7 +343,7 @@ TopoDS_Shape curve(const Sketch& s, const gp_Ax3& f, int id) {
         for (size_t i = 0; i < e.fit.size() - (closed ? 1 : 0); ++i) {
           const gp_Pnt p = P(e.fit[i]);
           gp_Vec t(0, 0, 0);
-          if (i < e.handles.size()) t = gp_Vec(f.XDirection()) * e.handles[i].x + gp_Vec(f.YDirection()) * e.handles[i].y;
+          if (i < handles.size()) t = gp_Vec(f.XDirection()) * handles[i].x + gp_Vec(f.YDirection()) * handles[i].y;
           if (pts.empty() || pts.back().Distance(p) > 1e-7) {
             pts.push_back(p);
             tans.push_back(t);
