@@ -263,6 +263,9 @@ signals:
   void dragArrowMoved(double value);      // while the arrow is dragged
   void dragArrowReleased(double value);   // mouse released
   void dragArrowTyped(const QString& text);   // Enter in the value box
+  // Typing in a value box (each change, before Enter): the panel and the
+  // preview follow at once, so OK without Enter keeps what was typed.
+  void arrowValueEdited(const QString& text, int which);
   void secondArrowMoved(double value);        // the second arrow, while dragged
   void secondArrowTyped(const QString& text); // Enter in the second value box
 

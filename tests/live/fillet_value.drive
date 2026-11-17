@@ -1,0 +1,27 @@
+# Live: Fillet's value box in the canvas, as in the familiar tool. F, click
+# three edges; type 40 over the selected 1 mm (too big for the box): the
+# panel explains, and grows so its fields stay readable. Type 4 instead and
+# click OK without Enter: typing applies at once, so the fillet is 4 mm.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key f
+waitfor panelOk
+wait 300
+wclick 20 0 20                # top front edge
+wait 400
+wclick 40 15 20               # top right edge
+wait 400
+wclick 40 0 10                # front right vertical edge
+wait 600
+type 40
+wait 800
+shot /tmp/live_fillet_too_big.png
+expectheight radius 20
+expectheight clearEdges 20
+key ctrl+a
+type 4
+wait 800
+shot /tmp/live_fillet_value.png
+click panelOk
+wait 800

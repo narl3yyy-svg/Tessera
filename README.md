@@ -71,7 +71,7 @@ never needs the network.
 | Visual style | *Display > Visual Style* on the navigation bar: Shaded, Shaded with Hidden Edges, Shaded with Visible Edges Only (default), Wireframe, Wireframe with Hidden Edges, Wireframe with Visible Edges Only; *Display > Environment*: Grey Room, Dark Sky, White Studio, Warm Light (or the theme's) |
 | Sketch | *Create Sketch*, click a plane or flat face, draw, **FINISH SKETCH** |
 | Give a shape exact sizes | After the first click type the value, **Tab** to the next box, **Enter** |
-| Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it |
+| Pull a value in the canvas | Extrude, Press Pull, Fillet, Chamfer, Section Analysis: drag the blue arrow, or type into the box beside it (it applies as you type; Enter or OK) |
 | Snap while sketching | Points, midpoints (△), curves (○), body vertices/edges (◆ ◇, projected in purple), horizontal/vertical (H/V), tangent (T) and perpendicular (⟂) from the curve you start on, and alignment guides; grid snap is on by default (Sketch Palette > Snap) |
 | Tangent arc while drawing lines | Press on the last point of the line chain and drag; release to place the arc, then keep clicking for lines |
 | Shape a spline | Select a fit point spline (or one of its points): a handle shows at each point; drag a handle's end to set the direction and fullness, double-click it to free it |

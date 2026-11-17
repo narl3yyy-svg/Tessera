@@ -66,6 +66,7 @@ void Viewport::setDragArrow(const gp_Pnt& base, const gp_Dir& dir, double value,
         "QLineEdit { background: #ffffff; color: #1d1f22; border: 1px solid #9aa3ad; border-radius: 2px;"
         " padding: 2px 4px; selection-background-color: #2f8fe8; selection-color: #ffffff; }"
         " QLineEdit:focus { border: 1px solid #2f8fe8; }"));
+    connect(box, &QLineEdit::textEdited, this, [this, which](const QString& t) { emit arrowValueEdited(t.trimmed(), which); });
     connect(box, &QLineEdit::returnPressed, this, [this, which] {
       const QString t = arrowBoxes_[which]->text().trimmed();
       if (which == 0) emit dragArrowTyped(t);

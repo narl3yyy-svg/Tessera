@@ -174,7 +174,6 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           // Boundary Fill: every cell the tools enclose, with a tick box,
           // as in the familiar panel's cell list.
           cellsList_ = new QListWidget;
-          cellsList_->setObjectName(QStringLiteral("cellsList"));
           cellsList_->setMaximumHeight(130);
           cellsId_ = id;
           connect(cellsList_, &QListWidget::itemChanged, this, [this] {
@@ -502,9 +501,7 @@ void CommandDialog::refreshPreview() {
   if (waitingForSelection()) {
     cmd_->clearPreview();
     emit inputsChanged();
-    error_->setText(tr("Select sketch profiles or planar faces to extrude."));
-    error_->setVisible(true);
-    buttons_->button(QDialogButtonBox::Ok)->setEnabled(false);
+    showError(tr("Select sketch profiles or planar faces to extrude.").toStdString());
     session_.notifyChanged();
     return;
   }
@@ -514,9 +511,17 @@ void CommandDialog::refreshPreview() {
 }
 
 void CommandDialog::showError(const std::string& err) {
-  error_->setText(QString::fromStdString(err));
+  const QString text = QString::fromStdString(err);
+  const bool changed = text != error_->text() || error_->isVisible() != !err.empty();
+  error_->setText(text);
   error_->setVisible(!err.empty());
   buttons_->button(QDialogButtonBox::Ok)->setEnabled(err.empty());
+  // The panel grows (or shrinks back) with the message, so the fields keep
+  // their size and stay readable.
+  if (changed) {
+    adjustSize();
+    adjustAfterResize();
+  }
 }
 
 void CommandDialog::accept() {

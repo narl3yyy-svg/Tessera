@@ -283,6 +283,19 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     }
     viewport_->setFocus();
   });
+  // Typing in a canvas value box applies each complete value at once, as in
+  // the familiar tool (OK without Enter keeps it); half-typed expressions
+  // wait. The box keeps the focus.
+  connect(viewport_, &Viewport::arrowValueEdited, this, [this](const QString& text, int which) {
+    const QString& id = which == 0 ? arrowInput_ : arrowInput2_;
+    if (!active_ || id.isEmpty() || text.isEmpty()) return;
+    try {
+      (void)session_.document().evaluate(text.toStdString(), Unit::Millimeter);
+    } catch (const std::exception&) {
+      return;
+    }
+    active_->setInputForTest(id, text);
+  });
   // The second arrow (Two Sides extrude) drives its own input.
   connect(viewport_, &Viewport::secondArrowMoved, this, [this](double value) {
     if (!active_ || arrowInput2_.isEmpty()) return;

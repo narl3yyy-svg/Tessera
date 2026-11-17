@@ -389,6 +389,13 @@ def main():
         elif cmd == "expect":
             if a[0] not in geometry()["widgets"]:
                 sys.exit("xdrive: line %d: expected '%s' to be visible" % (n, a[0]))
+        elif cmd == "expectheight":
+            # A widget is at least N pixels tall (not squashed by its panel).
+            r = geometry()["widgets"].get(a[0])
+            if not r:
+                sys.exit("xdrive: line %d: no widget %s" % (n, a[0]))
+            if r[3] < int(a[1]):
+                sys.exit("xdrive: line %d: %s is %d px tall, expected at least %s" % (n, a[0], r[3], a[1]))
         elif cmd == "expecttip":
             text = " ".join(a)
             end = time.time() + 4
