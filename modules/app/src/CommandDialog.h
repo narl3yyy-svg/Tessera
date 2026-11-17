@@ -16,6 +16,7 @@ class QDialogButtonBox;
 class QComboBox;
 class QFormLayout;
 class QListWidget;
+class QScrollArea;
 
 namespace tsr::app {
 
@@ -127,6 +128,8 @@ private:
   QString stringInput(const std::string& id) const;
   void updateVisibility();
   void adjustAfterResize();
+  void fitToContents();   // the size the fields need, within the canvas
+  QScrollArea* scroll_ = nullptr;
   QFormLayout* form_ = nullptr;
   std::vector<std::pair<QWidget*, std::string>> conditional_;
   void updateProfilesLabel();

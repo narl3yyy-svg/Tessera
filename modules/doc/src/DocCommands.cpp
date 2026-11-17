@@ -249,9 +249,66 @@ void storeBodies(Document& doc, const std::string& name, const TopoDS_Shape& sha
   for (size_t i = 1; i < solids.size(); ++i) doc.addBody(doc.nextBodyName(), solids[i]);
 }
 
+// Participant Bodies: Join merges the tool with every listed body it touches
+// (into one body); Cut and Intersect act on each listed body in turn (a body
+// cut away entirely, or not overlapping an Intersect, is removed).
+void applyToParticipants(Document& doc, const std::string& op, const std::vector<std::string>& names,
+                         const TopoDS_Shape& tool) {
+  std::vector<std::string> live;
+  for (const auto& n : names)
+    if (doc.body(n)) live.push_back(n);
+  if (live.empty()) throw CommandError("Participant Bodies: none of them exists");
+  try {
+    if (op == "Join") {
+      TopoDS_Shape all = tool;
+      std::string into;
+      for (const auto& n : live) {
+        const TopoDS_Shape s = doc.body(n)->shape;
+        if (!kernel::touching(s, tool)) continue;
+        all = kernel::boolean(kernel::BooleanOp::Join, all, s);
+        if (into.empty()) into = n;
+        else doc.removeBody(n);
+      }
+      if (into.empty()) {   // touches none: joined to the first anyway (separate solids, separate bodies)
+        into = live.front();
+        all = kernel::boolean(kernel::BooleanOp::Join, all, doc.body(into)->shape);
+      }
+      doc.noteTool(tool, "join", into);
+      storeBodies(doc, into, all, false);
+      return;
+    }
+    const auto kind = op == "Cut" ? kernel::BooleanOp::Cut : kernel::BooleanOp::Intersect;
+    doc.noteTool(tool, op == "Cut" ? "cut" : "intersect", live.front());
+    for (const auto& n : live) {
+      const TopoDS_Shape s = doc.body(n)->shape;
+      if (op == "Cut" && !kernel::touching(s, tool)) continue;   // untouched: left as it is
+      TopoDS_Shape r;
+      try {
+        r = kernel::boolean(kind, s, tool);
+      } catch (const kernel::KernelError&) {   // nothing left of it
+        doc.removeBody(n);
+        continue;
+      }
+      storeBodies(doc, n, r, false);
+    }
+  } catch (const kernel::KernelError& e) {
+    throw CommandError(e.what());
+  }
+}
+
 void applyOperation(Document& doc, const Inputs& in, const TopoDS_Shape& tool, const std::string& what) {
   if (!kernel::isValid(tool)) throw CommandError(what + ": kernel produced an invalid body");
   const std::string op = getString(in, "operation");
+  if (op != "New Body" && in.count("participants")) {
+    std::vector<std::string> names;
+    std::stringstream ss(getString(in, "participants"));
+    for (std::string n; std::getline(ss, n, ';');)
+      if (!n.empty()) names.push_back(n);
+    if (!names.empty()) {
+      applyToParticipants(doc, op, names, tool);
+      return;
+    }
+  }
   if (op == "New Body") {
     doc.noteTool(tool, "new", "");
     storeBodies(doc, doc.nextBodyName(), tool, true);
@@ -504,8 +561,9 @@ public:
         choice("direction", "Direction", {"One Side", "Two Sides", "Symmetric"},
                "Symmetric: the distance both ways. Two Sides: a distance each way."),
         choice("extent", "Extent Type", {"Distance", "All", "To Object"},
-               "All: through everything. To Object: up to a plane or flat face, or a body (click a curved face)."),
-        {.id = "toObject", .label = "Object", .tooltip = "The plane, flat face or body to extrude up to: click it.",
+               "All: through everything. To Object: up to a plane or a face (a curved face's surface is extended "
+               "past its edges)."),
+        {.id = "toObject", .label = "Object", .tooltip = "The plane or face to extrude up to: click it.",
          .type = InputType::Plane, .defaultValue = std::string{}, .optional = true, .visibleWhen = "extent=To Object"},
         {.id = "distance", .label = "Distance", .tooltip = "Negative extrudes the other way.",
          .type = InputType::Real, .defaultValue = 1.0, .unit = Unit::Millimeter, .visibleWhen = "extent=Distance"},
@@ -523,6 +581,12 @@ public:
     };
     def_.inputs[def_.inputs.size() - 2].visibleWhen = "thin=true";
     addOperationInputs(def_);
+    // Participant Bodies, as in the familiar panel: the bodies a Join, Cut or
+    // Intersect acts on (ticked in a list). Empty: the target body.
+    def_.inputs.push_back({.id = "participants", .label = "Participant Bodies",
+                           .tooltip = "The bodies this joins, cuts or intersects.", .type = InputType::Bodies,
+                           .defaultValue = std::string{}, .optional = true,
+                           .visibleWhen = "operation=Join|Cut|Intersect"});
   }
   const CommandDef& def() const override { return def_; }
 
@@ -569,11 +633,30 @@ public:
           throw CommandError(std::string("Faces: ") + e.what());
         }
       }
+      completeToObject(in, doc);
       return;
     }
+    completeToObject(in, doc);
     // Record which sketch was meant, so later sketches do not change it.
     if (getString(in, "sketch").empty())
       if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+  }
+
+  // A picked face to extrude up to, as a full reference (found again after
+  // its body changes).
+  static void completeToObject(Inputs& in, const Document& doc) {
+    if (!in.count("toObject")) return;
+    const std::string spec = getString(in, "toObject");
+    if (spec.rfind("face:", 0) != 0) return;
+    const auto bar = spec.find('|');
+    if (bar == std::string::npos) return;
+    if (const auto b = doc.body(spec.substr(5, bar - 5))) {
+      try {
+        in["toObject"] = spec.substr(0, bar + 1) + kernel::completeFaceReferences(b->shape, spec.substr(bar + 1));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Object: ") + e.what());
+      }
+    }
   }
 
   // Flat faces of the target body and their common outward normal.
@@ -663,6 +746,24 @@ public:
       auto it = in.find(id);
       return it == in.end() ? std::string(fallback) : getString(in, id);
     };
+    if (str("extent", "Distance") == "To Object" && getString(in, "toObject").rfind("face:", 0) == 0) {
+      // Up to a (curved) face: its surface extended past its edges.
+      const std::string spec = getString(in, "toObject").substr(5);
+      const auto bar = spec.find('|');
+      const std::string name = spec.substr(0, bar);
+      const auto body = doc.body(name);
+      if (!body || bar == std::string::npos) throw CommandError("Object: body '" + name + "' does not exist");
+      TopoDS_Shape tool;
+      try {
+        const auto picked = kernel::resolveFaces(body->shape, spec.substr(bar + 1));
+        if (picked.empty()) throw CommandError("Object: the face no longer exists");
+        tool = kernel::extrudeToFace(faces, {n.X(), n.Y(), n.Z()}, picked.front());
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(e.what());
+      }
+      applyOperation(doc, in, tool, "Extrude");
+      return;
+    }
     if (str("extent", "Distance") == "To Object" && getString(in, "toObject").rfind("body:", 0) == 0) {
       // Up to a body: wherever the profile first meets it (curved faces too).
       const std::string name = getString(in, "toObject").substr(5);

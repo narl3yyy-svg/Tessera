@@ -111,6 +111,10 @@
 #include <ShapeFix_Face.hxx>
 #include <ShapeFix_Wire.hxx>
 #include <BOPAlgo_MakerVolume.hxx>
+#include <GeomLib.hxx>
+#include <Precision.hxx>
+#include <Geom_BoundedSurface.hxx>
+#include <Geom_RectangularTrimmedSurface.hxx>
 
 namespace tsr::kernel {
 
@@ -2035,6 +2039,83 @@ TopoDS_Face wrapOntoCylinder(const TopoDS_Face& profile, const gp_Cylinder& cyl)
 }
 
 } // namespace
+
+bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b) {
+  BRepExtrema_DistShapeShape d(a, b);
+  return d.IsDone() && d.Value() < 1e-7;
+}
+
+TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dirv, const TopoDS_Shape& target) {
+  if (faces.empty()) throw KernelError("Extrude: no profile");
+  if (target.IsNull() || target.ShapeType() != TopAbs_FACE) throw KernelError("Extrude: pick the face to extrude up to");
+  const gp_Dir dir(dirv.x, dirv.y, dirv.z);
+  Bnd_Box box;
+  BRepBndLib::Add(target, box);
+  for (const auto& f : faces) BRepBndLib::Add(f, box);
+  const double reach = 2 * std::sqrt(box.SquareExtent()) + 1;
+  // The face's surface, extended past its edges.
+  const TopoDS_Face tf = TopoDS::Face(target);
+  TopLoc_Location loc;
+  Handle(Geom_Surface) s = BRep_Tool::Surface(tf, loc);
+  if (auto t = Handle(Geom_RectangularTrimmedSurface)::DownCast(s); !t.IsNull()) s = t->BasisSurface();
+  double u0 = 0, u1 = 0, v0 = 0, v1 = 0;
+  s->Bounds(u0, u1, v0, v1);
+  double fu0 = 0, fu1 = 0, fv0 = 0, fv1 = 0;
+  BRepTools::UVBounds(tf, fu0, fu1, fv0, fv1);
+  auto finite = [&](double& lo, double& hi, double flo, double fhi) {
+    if (Precision::IsInfinite(lo)) lo = flo - reach;
+    if (Precision::IsInfinite(hi)) hi = fhi + reach;
+  };
+  finite(u0, u1, fu0, fu1);
+  finite(v0, v1, fv0, fv1);
+  if (auto bs = Handle(Geom_BoundedSurface)::DownCast(s); !bs.IsNull() && !s->IsUPeriodic() && !s->IsVPeriodic()) {
+    // Free-form: grown by the reach at each side.
+    Handle(Geom_BoundedSurface) grown = Handle(Geom_BoundedSurface)::DownCast(bs->Copy());
+    for (bool inU : {true, false})
+      for (bool after : {true, false}) GeomLib::ExtendSurfByLength(grown, reach, 1, inU, after);
+    s = grown;
+    s->Bounds(u0, u1, v0, v1);
+  }
+  TopoDS_Face big = BRepBuilderAPI_MakeFace(s, u0, u1, v0, v1, 1e-7).Face();
+  if (!loc.IsIdentity()) big.Move(loc);
+  TopoDS_Shape result = guarded("Extrude", [&]() -> TopoDS_Shape {
+    TopoDS_Compound prisms;
+    BRep_Builder bb;
+    bb.MakeCompound(prisms);
+    std::vector<gp_Pnt> probes;
+    double full = 0;
+    for (const auto& f : faces) {
+      const TopoDS_Shape p = BRepPrimAPI_MakePrism(f, gp_Vec(dir) * reach).Shape();
+      bb.Add(prisms, p);
+      full += massProperties(p).volume;
+      // A point inside the profile, a hair along: the start of its prism.
+      const Vec3 c = interiorPoint(BRepPrimAPI_MakePrism(f, gp_Vec(dir) * 1e-3).Shape());
+      probes.push_back(pnt(c));
+    }
+    BRepAlgoAPI_Splitter split;
+    TopTools_ListOfShape objects, tools;
+    objects.Append(prisms);
+    tools.Append(big);
+    split.SetArguments(objects);
+    split.SetTools(tools);
+    split.Build();
+    if (!split.IsDone()) return TopoDS_Shape();
+    TopoDS_Compound out;
+    bb.MakeCompound(out);
+    double kept = 0;
+    for (TopExp_Explorer x(split.Shape(), TopAbs_SOLID); x.More(); x.Next()) {
+      bool hit = false;
+      for (const auto& p : probes) hit = hit || BRepClass3d_SolidClassifier(x.Current(), p, 1e-7).State() == TopAbs_IN;
+      if (!hit) continue;
+      bb.Add(out, x.Current());
+      kept += massProperties(x.Current()).volume;
+    }
+    if (kept < 1e-12) return TopoDS_Shape();
+    if (kept > full * (1 - 1e-9)) throw KernelError("Extrude: that face's surface is not in the way of the profile");
+    return out;
+  });
+  return result;
+}
 
 std::vector<TopoDS_Shape> boundaryCells(const std::vector<TopoDS_Shape>& tools) {
   if (tools.empty()) throw KernelError("Boundary Fill: select the tools (bodies, planes)");

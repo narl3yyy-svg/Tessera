@@ -235,6 +235,15 @@ TopoDS_Shape thicken(const std::vector<TopoDS_Shape>& faces, double thickness, b
 // when an outline is not flat or the faces enclose nothing.
 TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, bool& added);
 
+// Extrude To Object, a face: the profiles swept along `dir` up to where they
+// meet the face's surface, extended past the face's edges (a cylinder all
+// the way round and along, a plane without end, a free-form face grown at
+// its sides). Throws KernelError when the surface is not in the way.
+TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dir, const TopoDS_Shape& face);
+
+// Whether two solids overlap or touch.
+bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b);
+
 // Boundary Fill: the closed cells that tool solids and faces divide space
 // into (every region they bound, inside a tool or between tools), ordered by
 // centre (x, then y, then z, then the smaller first). Throws KernelError when

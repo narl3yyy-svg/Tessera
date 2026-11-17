@@ -10,6 +10,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -85,6 +87,23 @@ private:
   Evaluate eval_;
   QString expression_;
 };
+
+namespace {
+// The panel's fields in a scroll area as tall as they are, so a long panel
+// (Extrude with its options) scrolls when the canvas is shorter than it.
+class FitScroll : public QScrollArea {
+public:
+  QSize sizeHint() const override {
+    if (!widget()) return QScrollArea::sizeHint();
+    const QSize s = widget()->sizeHint();
+    const int bar = verticalScrollBar()->isVisible() ? verticalScrollBar()->sizeHint().width() : 0;
+    return {s.width() + bar, s.height()};
+  }
+  QSize minimumSizeHint() const override {
+    return {widget() ? widget()->minimumSizeHint().width() : 0, 80};
+  }
+};
+} // namespace
 
 CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSession> cmd, QWidget* parent)
     : QDialog(parent), session_(session), cmd_(std::move(cmd)) {
@@ -231,6 +250,7 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
           if (combo->findData(name) < 0)
             combo->addItem(name.startsWith(QLatin1String("custom:")) ? tr("Picked face")
                            : name.startsWith(QLatin1String("body:")) ? tr("Body %1").arg(name.mid(5))
+                           : name.startsWith(QLatin1String("face:")) ? tr("Face of %1").arg(name.mid(5).section(QLatin1Char('|'), 0, 0))
                                                                      : name,
                            name);
           combo->setCurrentIndex(combo->findData(name));
@@ -314,6 +334,36 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
       case InputType::Faces:
       case InputType::Vertices:
       case InputType::Bodies: {
+        if (id == "participants") {
+          // Participant Bodies, as in the familiar panel: every body with a
+          // tick box. A new command starts with all of them ticked.
+          auto* list = new QListWidget;
+          std::string value = std::get_if<std::string>(&cur) ? std::get<std::string>(cur) : std::string();
+          const bool fresh = value.empty() && !cmd_->def().id.empty() && !isEditingFeature();
+          QStringList ticked = QString::fromStdString(value).split(QLatin1Char(';'), Qt::SkipEmptyParts);
+          QStringList all;
+          for (const auto& b : session_.document().bodies()) all << QString::fromStdString(b.name);
+          if (fresh) ticked = all;
+          for (const auto& b : session_.document().bodies()) {
+            auto* item = new QListWidgetItem(QString::fromStdString(b.display));
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setData(Qt::UserRole, QString::fromStdString(b.name));
+            item->setCheckState(ticked.contains(QString::fromStdString(b.name)) ? Qt::Checked : Qt::Unchecked);
+            list->addItem(item);
+          }
+          // As tall as its rows (up to five), then it scrolls.
+          const int rows = std::clamp(list->count(), 1, 5);
+          list->setFixedHeight(rows * list->sizeHintForRow(0) + 2 * list->frameWidth() + 2);
+          if (fresh && !all.isEmpty()) cmd_->setInput(id, all.join(QLatin1Char(';')).toStdString());
+          connect(list, &QListWidget::itemChanged, this, [this, id, list] {
+            QStringList on;
+            for (int i = 0; i < list->count(); ++i)
+              if (list->item(i)->checkState() == Qt::Checked) on << list->item(i)->data(Qt::UserRole).toString();
+            onInputChanged(id, on.join(QLatin1Char(';')).toStdString());
+          });
+          w = list;
+          break;
+        }
         // Filled by clicking in the 3D view.
         auto* box = new QWidget;
         auto* row = new QHBoxLayout(box);
@@ -406,8 +456,19 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
   auto* title = new QLabel(QStringLiteral("—  ") + QString::fromStdString(def.name).toUpper());
   title->setObjectName(QStringLiteral("panelTitle"));
   layout->addWidget(title);
-  layout->addLayout(form);
+  auto* fields = new QWidget;
+  fields->setLayout(form);
   form->setContentsMargins(0, 4, 0, 4);
+  auto* scroll = new FitScroll;
+  scroll_ = scroll;
+  scroll->setObjectName(QStringLiteral("panelScroll"));
+  scroll->setFrameShape(QFrame::NoFrame);
+  scroll->setWidgetResizable(true);
+  scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll->setWidget(fields);
+  scroll->viewport()->setAutoFillBackground(false);
+  fields->setAutoFillBackground(false);
+  layout->addWidget(scroll, 1);
   layout->addWidget(error_);
   layout->addWidget(buttons_);
 
@@ -472,8 +533,13 @@ void CommandDialog::onInputChanged(const std::string& id, const Value& v) {
 }
 
 void CommandDialog::adjustAfterResize() {
-  // Embedded panels keep their right edge when rows appear or disappear.
-  if (QWidget* p = parentWidget(); p && !isWindow()) move(p->width() - width() - 12, y());
+  // Embedded panels keep their right edge when rows appear or disappear, and
+  // stay inside the canvas: taller than it, the fields scroll.
+  if (QWidget* p = parentWidget(); p && !isWindow()) {
+    const int room = p->height() - y() - 12;
+    if (room > 120 && height() > room) resize(width(), room);
+    move(p->width() - width() - 12, y());
+  }
 }
 
 void CommandDialog::updateVisibility() {
@@ -481,6 +547,22 @@ void CommandDialog::updateVisibility() {
     InputDef d;
     d.visibleWhen = rule;
     form_->setRowVisible(w, isInputVisible(d, cmd_->inputs()));
+  }
+  fitToContents();
+}
+
+void CommandDialog::fitToContents() {
+  // Rows just shown or hidden: the fields' layout settles first, so the size
+  // asked for is the new one.
+  form_->invalidate();
+  form_->activate();
+  if (scroll_) {
+    if (scroll_->widget()) scroll_->widget()->adjustSize();
+    scroll_->updateGeometry();   // its size request follows the fields
+  }
+  if (layout()) {
+    layout()->invalidate();
+    layout()->activate();
   }
   adjustSize();
   adjustAfterResize();
@@ -518,10 +600,7 @@ void CommandDialog::showError(const std::string& err) {
   buttons_->button(QDialogButtonBox::Ok)->setEnabled(err.empty());
   // The panel grows (or shrinks back) with the message, so the fields keep
   // their size and stay readable.
-  if (changed) {
-    adjustSize();
-    adjustAfterResize();
-  }
+  if (changed) fitToContents();
 }
 
 void CommandDialog::accept() {

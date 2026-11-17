@@ -1,0 +1,19 @@
+# Live: Extrude with Operation Cut lists the Participant Bodies, all ticked,
+# as in the familiar panel. Untick the first cube, type -10 in the canvas
+# box, OK: the slot is cut into the second cube only.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 400
+choose operation 2            # Cut
+wait 600
+lcheck participants 0         # the first cube out
+wait 500
+click arrowValue
+key ctrl+a
+type -10
+wait 800
+shot /tmp/live_participants.png
+click panelOk
+wait 800

@@ -1,0 +1,14 @@
+# Live: Extrude To Object, click the cylinder's round face: the disc runs up
+# to the cylinder's underside, as in the familiar tool.
+waitfor tsr.feature.extrude
+wait 500
+click tsr.feature.extrude
+waitfor panelOk
+wait 400
+choose extent 2
+wait 600
+wclick 50 -14.1 64.1          # the cylinder's round face, top front
+wait 800
+shot /tmp/live_to_face.png
+click panelOk
+wait 800
