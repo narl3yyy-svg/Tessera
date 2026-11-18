@@ -14,6 +14,7 @@ add_executable(tessera
   src/SketchPalette.h
   src/ViewportSketch.cpp
   src/ViewportArrow.cpp
+  src/ViewportTriad.cpp
   src/ViewportAnalysis.cpp
   src/CommandDialog.cpp
   src/CommandDialog.h

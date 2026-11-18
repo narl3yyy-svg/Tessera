@@ -34,6 +34,9 @@ class QLabel;
 
 namespace tsr::app {
 
+// Move/Copy's inputs in triad order: the X / Y / Z distances and angles.
+extern const char* const kMoveInputs[6];
+
 class CommandDialog;
 class ParametersDialog;
 class SketchEditor;

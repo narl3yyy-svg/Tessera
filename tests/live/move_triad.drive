@@ -1,0 +1,20 @@
+# Live: Move/Copy shows the triad, as in the familiar tool. Drag the X arrow,
+# then the XY square, then the Z ring; type 45 into the box (the ring's
+# angle); OK.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key m
+waitfor panelOk
+wait 600
+trdrag 0 60 35                # the X arrow, along X
+wait 400
+trdrag 8 40 -30               # the XY square
+wait 400
+trdrag 5 -30 -30              # the Z ring
+wait 600
+type 45
+wait 600
+shot /tmp/live_move_triad.png
+click panelOk
+wait 800

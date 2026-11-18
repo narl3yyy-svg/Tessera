@@ -473,6 +473,7 @@ void Viewport::paintGL() {
   FlushViewEvents(context_, view_, true);
   // The camera may have moved: keep the drag arrow's value box beside it.
   if (anyArrow()) QTimer::singleShot(0, this, [this] { placeArrowBoxes(); });
+  if (triad_) QTimer::singleShot(0, this, [this] { rebuildTriad(); });
 }
 
 void Viewport::paintEvent(QPaintEvent* e) {
@@ -510,6 +511,7 @@ void Viewport::mousePressEvent(QMouseEvent* e) {
   hoverTimer_->stop();
   QToolTip::hideText();
   pressPos_ = e->position();
+  if (triadMousePress(e)) return;
   if (arrowMousePress(e)) return;
   if (interactor_ && e->button() == Qt::LeftButton) {
     interactor_->mousePress(e);
@@ -567,6 +569,7 @@ void Viewport::keyPressEvent(QKeyEvent* e) {
 
 void Viewport::mouseReleaseEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseReleaseEvent(e);
+  if (triadMouseRelease(e)) return;
   if (arrowMouseRelease(e)) return;
   if (e->button() == Qt::RightButton && (e->position() - pressPos_).manhattanLength() < 6) {
     emit contextMenuRequested(e->globalPosition().toPoint());
@@ -603,6 +606,7 @@ void Viewport::mouseReleaseEvent(QMouseEvent* e) {
 
 void Viewport::mouseMoveEvent(QMouseEvent* e) {
   QOpenGLWidget::mouseMoveEvent(e);
+  if (triadMouseMove(e)) return;
   if (arrowMouseMove(e)) return;
   if (e->buttons() == Qt::NoButton && !interactor_ && pickTypes_.empty()) {
     if ((e->position() - hoverPos_).manhattanLength() > 4) QToolTip::hideText();
@@ -647,6 +651,7 @@ void Viewport::wheelEvent(QWheelEvent* e) {
   if (UpdateZoom(Aspect_ScrollDelta(toPixels(e->position()), delta))) updateView();
   // The arrow keeps its size on screen; rebuild once the zoom has applied.
   if (anyArrow()) QTimer::singleShot(0, this, [this] { rebuildArrows(); });
+  if (triad_) QTimer::singleShot(0, this, [this] { rebuildTriad(); });
 }
 
 void Viewport::OnSelectionChanged(const Handle(AIS_InteractiveContext)&, const Handle(V3d_View)&) {

@@ -123,3 +123,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 - Cells are ticked in the panel's list only; they are not shown or clickable in the canvas.
 - Tools are solid bodies and at most one plane (there are no surface bodies yet). Operations: New Body, Join and Cut (Join and Cut act on the first tool picked); no Intersect or New Component.
+
+## Move/Copy
+
+- Free Move only: no Translate / Rotate / Point to Point / Point to Position move types, and the triad is aligned with the world axes (it cannot be re-oriented or snapped to geometry). It moves bodies, not components or faces.

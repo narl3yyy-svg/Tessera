@@ -1339,17 +1339,29 @@ private:
 class MoveCopy final : public Command {
 public:
   MoveCopy() {
-    commonDef(def_, kCmdMove, "Move/Copy", "Moves or copies a body: translate, then rotate about an axis through its centre.", "move");
+    commonDef(def_, kCmdMove, "Move/Copy", "Moves or copies a body: drag the triad's arrows, rings and squares, or "
+              "type the distances and angles.", "move");
     def_.shortcut = "M";
     auto len = [](const char* id, const char* label) {
       return InputDef{.id = id, .label = label, .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
                       .unit = Unit::Millimeter};
     };
-    def_.inputs = {bodyInput(), len("x", "X distance"), len("y", "Y distance"), len("z", "Z distance"),
-                   choice("axis", "Rotate about", {"Z", "Y", "X"}, "Axis through the body centre."),
-                   {.id = "angle", .label = "Angle", .tooltip = {}, .type = InputType::Real, .defaultValue = 0.0,
-                    .unit = Unit::Degree},
-                   {.id = "copy", .label = "Create copy", .tooltip = "Keep the original and add a moved copy.",
+    auto ang = [](const char* id, const char* label) {
+      return InputDef{.id = id, .label = label, .tooltip = "About the body's centre.", .type = InputType::Real,
+                      .defaultValue = 0.0, .unit = Unit::Degree};
+    };
+    // As the familiar Free Move: X / Y / Z distance, then X / Y / Z angle
+    // (turned about X, then Y, then Z through the body's centre, before the
+    // move). Rotate about / Angle are kept, hidden, for designs made before.
+    InputDef axis = choice("axis", "Rotate about", {"Z", "Y", "X"}, "Axis through the body centre.");
+    axis.visibleWhen = "axis=-";
+    InputDef angle = ang("angle", "Angle");
+    angle.visibleWhen = "axis=-";
+    def_.inputs = {bodyInput(),
+                   len("x", "X Distance"), len("y", "Y Distance"), len("z", "Z Distance"),
+                   ang("xAngle", "X Angle"), ang("yAngle", "Y Angle"), ang("zAngle", "Z Angle"),
+                   axis, angle,
+                   {.id = "copy", .label = "Create Copy", .tooltip = "Keep the original and add a moved copy.",
                     .type = InputType::Bool, .defaultValue = false}};
   }
   const CommandDef& def() const override { return def_; }
@@ -1359,11 +1371,21 @@ public:
     Document& doc = docOf(ctx);
     const std::string name = bodyName(in, doc);
     const TopoDS_Shape s = doc.body(name)->shape;
-    const std::string a = getString(in, "axis");
-    const kernel::Vec3 dir = a == "X" ? kernel::Vec3{1, 0, 0} : a == "Y" ? kernel::Vec3{0, 1, 0} : kernel::Vec3{0, 0, 1};
-    TopoDS_Shape r;
+    TopoDS_Shape r = s;
     try {
-      r = kernel::moved(s, {getReal(in, "x"), getReal(in, "y"), getReal(in, "z")}, bodyCentre(s), dir, getReal(in, "angle"));
+      const kernel::Vec3 c = bodyCentre(s);
+      auto real = [&](const char* id) { return in.count(id) ? getReal(in, id) : 0.0; };
+      // Turned about X, then Y, then Z through the centre; then moved.
+      const kernel::Vec3 axes[3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+      const char* ids[3] = {"xAngle", "yAngle", "zAngle"};
+      for (int k = 0; k < 3; ++k)
+        if (std::abs(real(ids[k])) > 1e-12) r = kernel::moved(r, {}, c, axes[k], real(ids[k]));
+      // Designs made before: one turn about the chosen axis.
+      if (std::abs(real("angle")) > 1e-12) {
+        const std::string a = in.count("axis") ? getString(in, "axis") : "Z";
+        r = kernel::moved(r, {}, c, a == "X" ? axes[0] : a == "Y" ? axes[1] : axes[2], real("angle"));
+      }
+      r = kernel::moved(r, {real("x"), real("y"), real("z")}, c, axes[2], 0);
     } catch (const kernel::KernelError& e) {
       throw CommandError(e.what());
     }

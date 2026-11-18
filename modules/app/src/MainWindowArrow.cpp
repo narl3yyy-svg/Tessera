@@ -146,6 +146,8 @@ std::optional<gp_Pnt> MainWindow::patternCentre() {
   return centreOf(viewport_->bodyShape(body));
 }
 
+const char* const kMoveInputs[6] = {"x", "y", "z", "xAngle", "yAngle", "zAngle"};
+
 void MainWindow::updateDragArrow() {
   if (sectionPanel_) return;   // Section Analysis drives the arrow itself
   auto off = [this] {
@@ -177,10 +179,37 @@ void MainWindow::updateDragArrow() {
       hint = active_->currentFaces().isEmpty() ? tr("Select faces to offset") : tr("Specify distance");
   }
   viewport_->setCursorHint(hint);
+  if (!active_ || active_->commandId() != QLatin1String(doc::kCmdMove)) viewport_->clearTriad();
   if (!active_) return off();
   if (active_->waitingForSelection()) return off();
   const QString id = active_->commandId();
   const auto& doc = session_.document();
+  if (id == QLatin1String(doc::kCmdMove)) {
+    // Move/Copy: the triad at the body's centre, carried along by the move.
+    viewport_->clearDragArrow();
+    arrowInput_.clear();
+    arrowInput2_.clear();
+    QString body = active_->currentBody();
+    if (body.isEmpty() && !doc.bodies().empty()) body = QString::fromStdString(doc.bodies().back().name);
+    TopoDS_Shape shape;
+    if (auto it = shapesBeforeCommand_.find(body.toStdString()); it != shapesBeforeCommand_.end()) shape = it->second;
+    else shape = viewport_->bodyShape(body);
+    if (shape.IsNull()) {
+      viewport_->clearTriad();
+      return;
+    }
+    const auto bb = kernel::boundingBox(shape);
+    std::array<double, 6> v{};
+    QStringList texts;
+    for (int i = 0; i < 6; ++i) {
+      const QString in = QString::fromLatin1(kMoveInputs[i]);
+      v[i] = active_->realInput(in).value_or(0.0);
+      texts << active_->displayText(in);
+    }
+    const gp_Pnt origin((bb.min.x + bb.max.x) / 2 + v[0], (bb.min.y + bb.max.y) / 2 + v[1], (bb.min.z + bb.max.z) / 2 + v[2]);
+    viewport_->setTriad(origin, v, texts);
+    return;
+  }
   std::optional<ArrowPlacement> place;
   QString input;
 

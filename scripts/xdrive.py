@@ -364,6 +364,16 @@ def main():
         elif cmd == "wdrag":
             x, y = widget(a[0])
             drag(x, y, x + float(a[1]), y + float(a[2]))
+        elif cmd == "trdrag":
+            # Drags Move/Copy's triad handle N (0-2 arrows, 3-5 rings,
+            # 6-8 plane squares) by dx dy pixels.
+            end = time.time() + 5
+            while "triad" not in geometry():
+                if time.time() > end:
+                    sys.exit("xdrive: line %d: no triad" % n)
+                time.sleep(0.1)
+            x, y = geometry()["triad"][int(a[0])]
+            drag(x, y, x + float(a[1]), y + float(a[2]), steps=30)
         elif cmd in ("adrag", "a2drag"):
             name = "arrow" if cmd == "adrag" else "arrow2"
             end = time.time() + 5

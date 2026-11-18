@@ -5,6 +5,8 @@
 // Shift+middle-drag orbits, the wheel zooms about the cursor, left click/drag
 // selects, right click opens the context menu. The ViewCube (top right)
 // snaps to standard views.
+#include <QVector>
+#include <array>
 #include "tsr/doc/Document.h"
 #include "tsr/sketch/SketchGeometry.h"
 
@@ -238,6 +240,16 @@ public:
   void dragArrowForTest(double value, int which = 0);
   // Where to grab the arrow (widget coordinates), when there is one.
   std::optional<QPointF> dragArrowHandle(int which = 0) const;
+
+  // Move/Copy's triad, as in the familiar tool, at `origin`: handles 0-2 the
+  // X / Y / Z arrows, 3-5 the rings about them, 6-8 the squares of the YZ,
+  // ZX and XY planes. `values` are x, y, z (cm) and the X / Y / Z angles
+  // (rad); `texts` how the box shows each of the six.
+  void setTriad(const gp_Pnt& origin, const std::array<double, 6>& values, const QStringList& texts);
+  void clearTriad();
+  bool triadShown() const { return triad_.has_value(); }
+  void setTriadActive(int handle);   // whose value the box shows
+  std::optional<QPointF> triadHandle(int handle) const;   // where to grab it (widget coordinates)
   // A short instruction that follows the cursor ("Select sketch profiles or
   // planar faces to extrude"); empty hides it.
   void setCursorHint(const QString& text);
@@ -268,6 +280,8 @@ signals:
   void arrowValueEdited(const QString& text, int which);
   void secondArrowMoved(double value);        // the second arrow, while dragged
   void secondArrowTyped(const QString& text); // Enter in the second value box
+  void triadDragged(int handle, const QVector<double>& values);   // all six values, while dragged
+  void triadTyped(int handle, const QString& text);                // typing in the triad's box
 
 protected:
   void initializeGL() override;
@@ -427,6 +441,29 @@ private:
     double radius = 0;
     gp_Pnt handle() const;
   };
+  struct Triad {
+    gp_Pnt origin;
+    std::array<double, 6> values{};
+    QStringList texts;
+  };
+  std::optional<Triad> triad_;
+  int triadDrag_ = -1, triadHover_ = -1, triadActive_ = 0;
+  gp_Pnt triadDragOrigin_;
+  std::pair<double, double> triadGrab_{0, 0};
+  double triadLastAngle_ = 0;
+  std::array<double, 6> triadStart_{};
+  std::vector<Handle(AIS_InteractiveObject)> triadObjects_;
+  QLineEdit* triadBox_ = nullptr;
+  void rebuildTriad();
+  void placeTriadBox();
+  gp_Pnt triadPoint(int handle) const;
+  int triadAt(const QPointF& pos) const;
+  std::optional<gp_Pnt> rayOnPlane(const QPointF& pos, const gp_Pnt& p0, const gp_Dir& n) const;
+  std::optional<std::pair<double, double>> triadReading(int handle, const QPointF& pos) const;
+  bool triadMousePress(QMouseEvent* e);
+  bool triadMouseMove(QMouseEvent* e);
+  bool triadMouseRelease(QMouseEvent* e);
+
   std::optional<DragArrow> arrows_[2];   // 0: main arrow, 1: second side
   int arrowDragging_ = -1;                // index of the arrow being dragged
   int arrowHover_ = -1;

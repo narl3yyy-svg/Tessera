@@ -713,6 +713,14 @@ void writeLiveGeometry(tsr::app::MainWindow& w, const QString& file) {
     const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
     o[QStringLiteral("arrow")] = QJsonArray{g.x(), g.y()};
   }
+  if (w.viewport()->triadShown()) {
+    QJsonArray handles;
+    for (int i = 0; i < 9; ++i) {
+      const QPoint g = w.viewport()->mapToGlobal(w.viewport()->triadHandle(i).value_or(QPointF()).toPoint());
+      handles.append(QJsonArray{g.x(), g.y()});
+    }
+    o[QStringLiteral("triad")] = handles;
+  }
   if (const auto h = w.viewport()->dragArrowHandle(1)) {
     const QPoint g = w.viewport()->mapToGlobal(h->toPoint());
     o[QStringLiteral("arrow2")] = QJsonArray{g.x(), g.y()};

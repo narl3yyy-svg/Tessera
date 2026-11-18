@@ -296,6 +296,24 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     }
     active_->setInputForTest(id, text);
   });
+  // Move/Copy's triad: a drag sets the values it changed; typing in its box
+  // sets the value of the handle used last.
+  connect(viewport_, &Viewport::triadDragged, this, [this](int, const QVector<double>& v) {
+    if (!active_ || active_->commandId() != QLatin1String(doc::kCmdMove)) return;
+    for (int i = 0; i < 6 && i < v.size(); ++i) {
+      const QString id = QString::fromLatin1(kMoveInputs[i]);
+      if (std::abs(active_->realInput(id).value_or(0.0) - v[i]) > 1e-12) active_->setRealInput(id, v[i]);
+    }
+  });
+  connect(viewport_, &Viewport::triadTyped, this, [this](int handle, const QString& text) {
+    if (!active_ || handle < 0 || handle > 5 || text.isEmpty()) return;
+    try {
+      (void)session_.document().evaluate(text.toStdString(), Unit::Millimeter);
+    } catch (const std::exception&) {
+      return;
+    }
+    active_->setInputForTest(QString::fromLatin1(kMoveInputs[handle]), text);
+  });
   // The second arrow (Two Sides extrude) drives its own input.
   connect(viewport_, &Viewport::secondArrowMoved, this, [this](double value) {
     if (!active_ || arrowInput2_.isEmpty()) return;
