@@ -16,6 +16,7 @@
 #include <nlohmann/json.hpp>
 
 #include "tsr/doc/DocCommands.h"
+#include "tsr/kernel/Kernel.h"
 #include "tsr/sketch/Sketch.h"
 #include "tsr/sketch/SketchGeometry.h"
 
@@ -731,10 +732,15 @@ std::vector<Body> Document::bodies() const {
     if (!it.Value().FindAttribute(TNaming_NamedShape::GetID(), ns) || ns->IsEmpty()) continue;
     const std::string n = nameOf(it.Value());
     std::string shown = names.IsNull() ? std::string() : stringOf(names, ("show:" + n).c_str());
-    Body b{n, ns->Get(), shown.empty() ? n : shown, {}, {}};
+    Body b{n, ns->Get(), shown.empty() ? n : shown, {}, {}, {}};
     if (!looks.IsNull()) {
       b.color = stringOf(looks, ("color:" + n).c_str());
       b.material = stringOf(looks, ("material:" + n).c_str());
+      // "ref<TAB>#rrggbb" lines.
+      std::stringstream ss(stringOf(looks, ("faces:" + n).c_str()));
+      for (std::string line; std::getline(ss, line);)
+        if (const auto tab = line.find('\t'); tab != std::string::npos)
+          b.faceColors.emplace_back(line.substr(0, tab), line.substr(tab + 1));
     }
     out.push_back(std::move(b));
   }
@@ -772,6 +778,45 @@ void Document::setBodyColor(const std::string& name, const std::string& color) {
   const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, true);
   if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
   nd->SetString(ext("color:" + internal), ext(color));
+}
+
+void Document::setFaceColor(const std::string& name, const std::string& faces, const std::string& color) {
+  requireTransaction("setFaceColor");
+  const std::string internal = bodyName(name);
+  const auto b = body(internal);
+  if (!b) throw DocumentError("no body named '" + name + "'");
+  if (!color.empty()) {
+    const bool ok = color.size() == 7 && color[0] == '#' &&
+                    std::all_of(color.begin() + 1, color.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+    if (!ok) throw DocumentError("Appearance: a colour is written #rrggbb");
+  }
+  std::vector<TopoDS_Shape> picked;
+  try {
+    picked = kernel::resolveFaces(b->shape, faces);
+  } catch (const kernel::KernelError& e) {
+    throw DocumentError(std::string("Appearance: ") + e.what());
+  }
+  if (picked.empty()) throw DocumentError("Appearance: no face picked");
+  // Earlier colours of the same faces give way.
+  std::vector<std::pair<std::string, std::string>> kept;
+  for (const auto& [ref, c] : b->faceColors) {
+    bool same = false;
+    try {
+      for (const auto& f : kernel::resolveFaces(b->shape, ref))
+        same = same || std::any_of(picked.begin(), picked.end(), [&](const TopoDS_Shape& p) { return p.IsSame(f); });
+    } catch (const kernel::KernelError&) {   // that face is gone: drop it
+      same = true;
+    }
+    if (!same) kept.emplace_back(ref, c);
+  }
+  if (!color.empty())
+    for (const auto& f : picked) kept.emplace_back(kernel::faceReference(b->shape, f), color);
+  std::string text;
+  for (const auto& [ref, c] : kept) text += ref + "\t" + c + "\n";
+  Handle(TDataStd_NamedData) nd;
+  const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, true);
+  if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
+  nd->SetString(ext("faces:" + internal), ext(text));
 }
 
 void Document::setBodyMaterial(const std::string& name, const std::string& material) {

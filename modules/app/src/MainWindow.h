@@ -197,6 +197,10 @@ private:
   void insertDxf(bool svg = false);
   std::vector<std::string> lookTargets() const;
   void editAppearance();
+  // The Appearance panel: Apply To Bodies or Faces; the swatch picked paints
+  // what is clicked (and the selection when it is picked).
+  void paintBody(const QString& body);
+  void paintFace(const QString& body, const TopoDS_Shape& face);
   void editMaterial();
   void runScript();
 
@@ -237,6 +241,9 @@ private:
   };
   std::vector<UiCommand> uiCommands_;
   QPointer<QDialog> measure_;
+  QPointer<QDialog> appearancePanel_;
+  QString appearanceColour_;          // "#rrggbb", "" for the default; null: no swatch picked
+  bool appearanceFaces_ = false;      // Apply To: Faces
   QPointer<QDialog> analysisPanel_;
   std::vector<TopoDS_Shape> combEdges_;
   double combScale_ = 1.0;

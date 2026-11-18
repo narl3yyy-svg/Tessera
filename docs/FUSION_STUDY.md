@@ -87,7 +87,7 @@ Behaviour already known to differ, before the videos; findings from the videos a
 - [ ] Taper Tapped (pipe threads), fine pitches, inch sizes.
 - [ ] Rib, Web, Emboss, Thicken, Boundary Fill, Rule fillet / setback.
 - [ ] Combine with Keep Tools (done) and New Component output.
-- [ ] Appearance (drag materials onto faces) and Physical Material (affects mass in Properties).
+- [x] Appearance on bodies and single faces (Apply To), from a panel of swatches; Physical Material (affects mass in Properties).
 
 ### Navigation and display
 - [ ] Orbit around a picked point (Shift + middle on a point); continuous orbit; free orbit vs constrained.
@@ -159,7 +159,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [ ] Ground / Unground components (thumbtack in the Browser); drag components in the canvas; As-Built Joint (Shift+J); joint limits with drag flags; right-click a joint > Animate / Lock (Day 23).
 - [x] V hides / shows the selected bodies, or the Browser item (Day 6).
 - [ ] Shift-click a range of bodies in the Browser (Day 7).
-- [ ] Appearance (A): drag a material onto a body or onto selected faces (Days 2, 7, 9).
+- [x] Appearance (A): a swatch onto a body or onto selected faces (Days 2, 7, 9); click to paint rather than drag.
 - [ ] Insert > Canvas (reference image) with Calibrate (Day 2).
 - [ ] Capture Design History on an imported STEP file; Create Components from Bodies (Day 10).
 

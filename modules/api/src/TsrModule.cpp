@@ -420,6 +420,30 @@ void bindTsr(py::module_& m) {
   m.def("set_appearance", [](const std::string& body, const std::string& color) {
     if (auto err = activeSession().setBodyLooks({body}, &color, nullptr); !err.empty()) throw std::runtime_error(err);
   }, py::arg("body"), py::arg("color"), "A body's colour, \"#rrggbb\" (empty: the default).");
+  m.def("set_face_appearance", [](const std::string& body, const std::string& faces, const std::string& color) {
+    if (auto err = activeSession().setFaceColor(body, faces, color); !err.empty()) throw std::runtime_error(err);
+  }, py::arg("body"), py::arg("faces"), py::arg("color"),
+     "Appearance on single faces of a body (faces as points 'x,y,z;...' or references), \"#rrggbb\"; empty: back "
+     "to the body's own.");
+  m.def("face_appearances", [](const std::string& body) {
+    const auto b = activeSession().document().body(body);
+    if (!b) throw std::runtime_error("no body named '" + body + "'");
+    std::vector<py::tuple> out;
+    for (const auto& [ref, c] : b->faceColors) {
+      kernel::Vec3 centre{};
+      try {
+        const auto f = kernel::resolveFaces(b->shape, ref);
+        if (!f.empty()) {
+          const auto bb = kernel::boundingBox(f.front());
+          centre = {(bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2};
+        }
+      } catch (const kernel::KernelError&) {
+        continue;   // that face is gone
+      }
+      out.push_back(py::make_tuple(py::make_tuple(centre.x, centre.y, centre.z), c));
+    }
+    return out;
+  }, py::arg("body"), "A body's face appearances: ((x, y, z) at the centre of the face's box, \"#rrggbb\").");
   m.def("set_material", [](const std::string& body, const std::string& material) {
     if (auto err = activeSession().setBodyLooks({body}, nullptr, &material); !err.empty()) throw std::runtime_error(err);
   }, py::arg("body"), py::arg("material"), "A body's physical material (empty: none).");

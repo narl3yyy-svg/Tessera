@@ -329,7 +329,11 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     viewport_->setFocus();
   });
   connect(viewport_, &Viewport::subShapeClicked, this, [this](const QString& body, const TopoDS_Shape& shape) {
-    (void)body;
+    if (appearancePanel_ && appearanceFaces_ && shape.ShapeType() == TopAbs_FACE) {
+      paintFace(body, shape);
+      viewport_->clearSelection();
+      return;
+    }
     if (measure_) {
       measurePick(shape);
     } else if (combPicking_ && shape.ShapeType() == TopAbs_EDGE) {
@@ -356,6 +360,11 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
   });
   connect(viewport_, &Viewport::statusMessage, this, [this](const QString& m) { statusBar()->showMessage(m, 5000); });
   connect(viewport_, &Viewport::bodyClicked, this, [this](const QString& name) {
+    if (appearancePanel_ && !appearanceFaces_) {
+      paintBody(name);
+      viewport_->clearSelection();
+      return;
+    }
     if (measure_) {
       measurePick(viewport_->bodyShape(name));
       viewport_->clearSelection();

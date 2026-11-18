@@ -15,6 +15,11 @@
 #include "tsr/kernel/Kernel.h"
 #include "tsr/sketch/SketchGeometry.h"
 
+#include <QButtonGroup>
+#include <QGridLayout>
+#include <QPainter>
+#include <QToolButton>
+#include <QPixmap>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
@@ -80,7 +85,8 @@ void MainWindow::buildUiCommands() {
   auto planned = [&](const char* panel, const char* id, const char* name, const char* icon, const char* shortcut = "") {
     add(panel, id, name, icon, "Planned: see docs/ROADMAP.md.", shortcut, nullptr);
   };
-  add("Modify", "ui.appearance", "Appearance", "appearance", "Colours the selected bodies (or every body).", "A",
+  add("Modify", "ui.appearance", "Appearance", "appearance",
+      "Colours bodies or single faces: pick a swatch, then click them.", "A",
       [this] { editAppearance(); });
   add("Modify", "ui.physicalMaterial", "Physical Material", "material",
       "Gives the selected bodies (or every body) a material: its density gives their mass.", "", [this] { editMaterial(); });
@@ -152,17 +158,180 @@ std::vector<std::string> MainWindow::lookTargets() const {
 }
 
 void MainWindow::editAppearance() {
-  const auto targets = lookTargets();
-  if (targets.empty()) {
+  if (appearancePanel_) {
+    appearancePanel_->raise();
+    return;
+  }
+  if (session_.document().bodies().empty()) {
     statusBar()->showMessage(tr("Appearance: there is no body yet."), 3000);
     return;
   }
-  QColor start(188, 194, 202);
-  if (const auto b = session_.document().body(targets.front()); b && !b->color.empty()) start = QColor(qs(b->color));
-  const QColor c = QColorDialog::getColor(start, this, tr("Appearance"));
-  if (!c.isValid()) return;
-  const std::string hex = c.name(QColor::HexRgb).toStdString();
-  if (auto err = session_.setBodyLooks(targets, &hex, nullptr); !err.empty()) statusBar()->showMessage(qs(err), 4000);
+  if (editor_ || active_) {
+    statusBar()->showMessage(tr("Finish the current command first."), 3000);
+    return;
+  }
+  // What was selected before: painted when a swatch is picked.
+  const auto preBodies = viewport_->selectedBodies();
+  std::vector<std::pair<QString, TopoDS_Shape>> preFaces;
+  for (const auto& [b, s] : viewport_->selectedSubShapes())
+    if (s.ShapeType() == TopAbs_FACE) preFaces.emplace_back(b, s);
+
+  auto* d = new QDialog(viewport_);
+  d->setParent(viewport_, Qt::Widget);
+  d->setProperty("panel", true);
+  d->setAutoFillBackground(true);
+  d->setObjectName(QStringLiteral("appearancePanel"));
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  appearancePanel_ = d;
+  appearanceColour_ = QString();
+  appearanceFaces_ = !preFaces.empty();
+  auto* title = new QLabel(QStringLiteral("—  ") + tr("APPEARANCE"));
+  title->setObjectName(QStringLiteral("panelTitle"));
+  auto* applyTo = new QComboBox;
+  applyTo->setObjectName(QStringLiteral("appearanceApplyTo"));
+  applyTo->addItems({tr("Bodies/Components"), tr("Faces")});
+  applyTo->setCurrentIndex(appearanceFaces_ ? 1 : 0);
+  auto* hint = new QLabel;
+  hint->setWordWrap(true);
+  // The library: the default, plain paints, then the materials' looks.
+  struct Swatch {
+    QString name, colour;
+  };
+  std::vector<Swatch> swatches = {{tr("Default"), QString()},
+                                  {tr("Paint - Red"), QStringLiteral("#c8302c")},
+                                  {tr("Paint - Orange"), QStringLiteral("#e07a1f")},
+                                  {tr("Paint - Yellow"), QStringLiteral("#e8c62e")},
+                                  {tr("Paint - Green"), QStringLiteral("#3f9a4a")},
+                                  {tr("Paint - Blue"), QStringLiteral("#2f6fc4")},
+                                  {tr("Paint - Black"), QStringLiteral("#1f2124")},
+                                  {tr("Paint - White"), QStringLiteral("#f2f2ee")}};
+  for (const auto& m : doc::physicalMaterials()) swatches.push_back({qs(m.name), qs(m.color)});
+  auto* grid = new QGridLayout;
+  grid->setSpacing(4);
+  auto* group = new QButtonGroup(d);
+  group->setExclusive(true);
+  auto swatchIcon = [](const QString& colour) {
+    QPixmap px(26, 26);
+    px.fill(Qt::transparent);
+    QPainter p(&px);
+    p.setRenderHint(QPainter::Antialiasing);
+    if (colour.isEmpty()) {   // the default: grey, struck through
+      p.setBrush(QColor(188, 194, 202));
+      p.setPen(QPen(QColor(60, 60, 60), 1));
+      p.drawRoundedRect(QRectF(2, 2, 22, 22), 4, 4);
+      p.setPen(QPen(QColor(200, 50, 50), 2));
+      p.drawLine(QPointF(5, 21), QPointF(21, 5));
+    } else {
+      p.setBrush(QColor(colour));
+      p.setPen(QPen(QColor(60, 60, 60), 1));
+      p.drawRoundedRect(QRectF(2, 2, 22, 22), 4, 4);
+    }
+    return QIcon(px);
+  };
+  // The selection made before the panel: the first swatch picked paints it.
+  struct Pre {
+    QStringList bodies;
+    std::vector<std::pair<QString, TopoDS_Shape>> faces;
+  };
+  auto pre = std::make_shared<Pre>(Pre{preBodies, preFaces});
+  auto pick = [this, pre](const QString& colour) {
+    appearanceColour_ = colour.isEmpty() ? QStringLiteral("") : colour;
+    if (appearanceFaces_)
+      for (const auto& [b, f] : pre->faces) paintFace(b, f);
+    else
+      for (const QString& b : pre->bodies) paintBody(b);
+    pre->faces.clear();
+    pre->bodies.clear();
+  };
+  for (size_t i = 0; i < swatches.size(); ++i) {
+    auto* b = new QToolButton;
+    b->setObjectName(QStringLiteral("swatch.%1").arg(i));
+    b->setCheckable(true);
+    b->setAutoRaise(true);
+    b->setIconSize(QSize(26, 26));
+    b->setIcon(swatchIcon(swatches[i].colour));
+    b->setToolTip(swatches[i].name);
+    group->addButton(b);
+    grid->addWidget(b, static_cast<int>(i) / 6, static_cast<int>(i) % 6);
+    const QString colour = swatches[i].colour;
+    connect(b, &QToolButton::clicked, d, [pick, colour] { pick(colour); });
+  }
+  auto* custom = new QPushButton(tr("Custom..."));
+  custom->setObjectName(QStringLiteral("swatchCustom"));
+  connect(custom, &QPushButton::clicked, d, [this, d, pick, group] {
+    const QColor c = QColorDialog::getColor(QColor(188, 194, 202), d, tr("Custom Appearance"));
+    if (!c.isValid()) return;
+    if (auto* b = group->checkedButton()) {
+      group->setExclusive(false);
+      b->setChecked(false);
+      group->setExclusive(true);
+    }
+    pick(c.name(QColor::HexRgb));
+  });
+  auto updateMode = [this, hint] {
+    hint->setText(appearanceFaces_ ? tr("Pick a swatch, then click faces to paint them.")
+                                   : tr("Pick a swatch, then click bodies to paint them."));
+    viewport_->clearSelection();
+    viewport_->setSubShapePicking(appearanceFaces_ ? std::vector<TopAbs_ShapeEnum>{TopAbs_FACE}
+                                                   : std::vector<TopAbs_ShapeEnum>{});
+  };
+  connect(applyTo, &QComboBox::currentIndexChanged, d, [this, updateMode](int i) {
+    appearanceFaces_ = i == 1;
+    updateMode();
+  });
+  auto* close = new QDialogButtonBox(QDialogButtonBox::Close);
+  close->button(QDialogButtonBox::Close)->setObjectName(QStringLiteral("appearanceClose"));
+  connect(close, &QDialogButtonBox::rejected, d, &QDialog::reject);
+  auto* form = new QFormLayout;
+  form->addRow(tr("Apply To"), applyTo);
+  auto* lay = new QVBoxLayout(d);
+  lay->setContentsMargins(10, 6, 10, 8);
+  lay->addWidget(title);
+  lay->addLayout(form);
+  lay->addLayout(grid);
+  lay->addWidget(custom);
+  lay->addWidget(hint);
+  lay->addWidget(close);
+  connect(d, &QDialog::finished, this, [this, d] {
+    viewport_->setSubShapePicking({});
+    appearanceColour_ = QString();
+    d->hide();
+    d->deleteLater();
+  });
+  // Pre-selected faces keep their highlight for the first swatch.
+  hint->setText(appearanceFaces_ ? tr("Pick a swatch, then click faces to paint them.")
+                                 : tr("Pick a swatch, then click bodies to paint them."));
+  if (appearanceFaces_) viewport_->setSubShapePicking({TopAbs_FACE});
+  d->show();
+  placeDialog(d);
+}
+
+void MainWindow::paintBody(const QString& body) {
+  if (appearanceColour_.isNull()) {
+    statusBar()->showMessage(tr("Appearance: pick a swatch first."), 3000);
+    return;
+  }
+  const std::string hex = appearanceColour_.toStdString();
+  if (auto err = session_.setBodyLooks({body.toStdString()}, &hex, nullptr); !err.empty())
+    statusBar()->showMessage(qs(err), 4000);
+}
+
+void MainWindow::paintFace(const QString& body, const TopoDS_Shape& face) {
+  if (appearanceColour_.isNull()) {
+    statusBar()->showMessage(tr("Appearance: pick a swatch first."), 3000);
+    return;
+  }
+  const auto b = session_.document().body(body.toStdString());
+  if (!b) return;
+  std::string ref;
+  try {
+    ref = kernel::faceReference(b->shape, face);
+  } catch (const std::exception& e) {
+    statusBar()->showMessage(QString::fromUtf8(e.what()), 4000);
+    return;
+  }
+  if (auto err = session_.setFaceColor(body.toStdString(), ref, appearanceColour_.toStdString()); !err.empty())
+    statusBar()->showMessage(qs(err), 4000);
 }
 
 void MainWindow::editMaterial() {

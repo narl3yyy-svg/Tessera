@@ -1,0 +1,27 @@
+# Live: Appearance (A), as in the familiar tool. Apply To: Faces, pick the
+# red paint swatch, click the block's top face and its front face; then
+# Apply To: Bodies, pick blue, click the block: the body is blue, the two
+# faces stay red.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key a
+waitfor appearancePanel
+wait 400
+choose appearanceApplyTo 1    # Faces
+wait 300
+click swatch.1                # Paint - Red
+wait 300
+wclick 20 15 20               # the top face
+wait 500
+wclick 20 0 10                # the front face
+wait 500
+choose appearanceApplyTo 0    # Bodies
+wait 300
+click swatch.5                # Paint - Blue
+wait 300
+wclick 40 15 10               # the block (its right face)
+wait 600
+shot /tmp/live_face_appearance.png
+click appearanceClose
+wait 400

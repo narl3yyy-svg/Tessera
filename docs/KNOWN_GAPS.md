@@ -127,3 +127,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Move/Copy
 
 - Free Move only: no Translate / Rotate / Point to Point / Point to Position move types, and the triad is aligned with the world axes (it cannot be re-oriented or snapped to geometry). It moves bodies, not components or faces.
+
+## Appearance
+
+- Swatches are plain colours (paints and the physical materials' looks): no textures, no glossy / metallic finishes, no In This Design list. Swatches are clicked onto bodies and faces rather than dragged.

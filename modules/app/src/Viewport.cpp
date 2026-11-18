@@ -2,6 +2,8 @@
 #include "Theme.h"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_ColoredShape.hxx>
+#include "tsr/kernel/Kernel.h"
 #include <AIS_ViewCube.hxx>
 #include <V3d_AmbientLight.hxx>
 #include <V3d_DirectionalLight.hxx>
@@ -1067,7 +1069,10 @@ void Viewport::rebuild() {
 
   for (const auto& b : bodies_) {
     const auto ov = overrides_.find(b.name);
-    Handle(AIS_Shape) s = new AIS_Shape(ov != overrides_.end() ? ov->second : b.shape);
+    const TopoDS_Shape shown = ov != overrides_.end() ? ov->second : b.shape;
+    // Bodies with coloured faces draw through AIS_ColoredShape; the rest as before.
+    Handle(AIS_ColoredShape) coloured = b.faceColors.empty() ? Handle(AIS_ColoredShape)() : new AIS_ColoredShape(shown);
+    Handle(AIS_Shape) s = coloured.IsNull() ? new AIS_Shape(shown) : Handle(AIS_Shape)(coloured);
     s->SetMaterial(bodyMaterial());
     if (!b.color.empty()) {
       // Appearance: the body's own colour, same finish.
@@ -1083,6 +1088,27 @@ void Viewport::rebuild() {
     if (ghosted_) s->SetTransparency(0.78);
     if (sectionOn_ && !clip_.IsNull()) s->AddClipPlane(clip_);
     applyStyle(s);
+    // Appearance on single faces, over the body's own (same finish, edges kept).
+    if (!coloured.IsNull())
+      for (const auto& [ref, colour] : b.faceColors) {
+        const QColor q(QString::fromStdString(colour));
+        if (!q.isValid()) continue;
+        try {
+          for (const auto& f : kernel::resolveFaces(shown, ref)) {
+            const Quantity_Color base(q.redF(), q.greenF(), q.blueF(), Quantity_TOC_sRGB);
+            Handle(AIS_ColoredDrawer) dr = coloured->CustomAspects(f);
+            Graphic3d_MaterialAspect m = bodyMaterial();
+            m.SetDiffuseColor(base);
+            m.SetAmbientColor(Quantity_Color(base.Rgb() * 0.45f));
+            dr->SetShadingAspect(new Prs3d_ShadingAspect());
+            dr->ShadingAspect()->SetMaterial(m);
+            dr->ShadingAspect()->SetColor(base);
+            dr->SetFaceBoundaryDraw(s->Attributes()->FaceBoundaryDraw());
+            if (s->Attributes()->HasOwnFaceBoundaryAspect()) dr->SetFaceBoundaryAspect(s->Attributes()->FaceBoundaryAspect());
+          }
+        } catch (const std::exception&) {   // the face is not there (a preview changed it)
+        }
+      }
     shapes_[b.name] = s;
     // Under a surface analysis the coloured meshes stand in for the bodies.
     if (!hidden_[b.name] && (analysis_.kind == AnalysisKind::None || analysis_.kind == AnalysisKind::Isocurve)) {

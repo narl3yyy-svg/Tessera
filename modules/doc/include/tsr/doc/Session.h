@@ -49,6 +49,8 @@ public:
   std::string renameBody(const std::string& name, const std::string& newName);
   // Appearance / Physical Material of bodies: one undo step each call.
   std::string setBodyLooks(const std::vector<std::string>& bodies, const std::string* color, const std::string* material);
+  // Appearance on single faces of `body` ("" colour: back to the body's own).
+  std::string setFaceColor(const std::string& body, const std::string& faces, const std::string& color);
   std::string renameSketch(const std::string& name, const std::string& newName);
   std::string renameFeature(int featureId, const std::string& newName);
   std::string setFeatureSuppressed(int featureId, bool suppressed);

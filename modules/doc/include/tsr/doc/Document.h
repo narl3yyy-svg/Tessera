@@ -90,6 +90,8 @@ struct Body {
   std::string display;   // what the person called it (Browser, API); name if never renamed
   std::string color;     // Appearance: "#rrggbb", empty for the default grey
   std::string material;  // Physical Material: a name from physicalMaterials(), empty for none
+  // Appearance on single faces: (face reference, "#rrggbb"), over the body's own.
+  std::vector<std::pair<std::string, std::string>> faceColors;
 };
 
 // Physical materials: name and density (g/cm^3).
@@ -300,6 +302,9 @@ public:
   // Appearance and Physical Material of a body (kept by body name, outside
   // the timeline, as in the familiar tool). Empty clears. Need a transaction.
   void setBodyColor(const std::string& name, const std::string& color);
+  // Appearance on single faces of a body (references as the kernel writes
+  // them); an empty colour takes the faces' own appearance away again.
+  void setFaceColor(const std::string& body, const std::string& faces, const std::string& color);
   void setBodyMaterial(const std::string& name, const std::string& material);
   std::string bodyName(const std::string& nameOrAlias) const;   // the internal name
   void renameSketch(const std::string& name, const std::string& newName);
