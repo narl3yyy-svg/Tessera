@@ -1,0 +1,19 @@
+# Live: Fillet with Radius Type Chord Length, as in the familiar panel: the
+# field becomes Chord Length and the canvas arrow drives it. Type 4, OK.
+waitfor tsr.feature.extrude
+wait 600
+vclick 0.05 0.95
+key f
+waitfor panelOk
+wait 300
+wclick 20 0 20                # top front edge
+wait 500
+choose radiusType 1           # Chord Length
+wait 500
+click arrowValue
+key ctrl+a
+type 4
+wait 800
+shot /tmp/live_fillet_chord.png
+click panelOk
+wait 800

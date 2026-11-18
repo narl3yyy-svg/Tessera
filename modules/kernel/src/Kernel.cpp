@@ -963,6 +963,49 @@ TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& 
   return r;
 }
 
+TopoDS_Shape filletChord(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double chord) {
+  requirePositive(chord, "fillet chord length");
+  if (edges.empty()) throw KernelError("Fillet: select at least one edge");
+  TopTools_IndexedDataMapOfShapeListOfShape edgeFaces;
+  TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, edgeFaces);
+  std::vector<double> radii;
+  for (const auto& e : edges) {
+    const TopoDS_Edge edge = TopoDS::Edge(e);
+    const int i = edgeFaces.FindIndex(edge);
+    if (i == 0 || edgeFaces(i).Extent() != 2) throw KernelError("Fillet: an edge does not join two faces");
+    std::vector<gp_Dir> normals;
+    for (const auto& fs : edgeFaces(i)) {
+      const TopoDS_Face f = TopoDS::Face(fs);
+      double a = 0, b = 0;
+      Handle(Geom2d_Curve) pc = BRep_Tool::CurveOnSurface(edge, f, a, b);
+      if (pc.IsNull()) throw KernelError("Fillet: could not measure the angle at an edge");
+      const gp_Pnt2d uv = pc->Value((a + b) / 2);
+      BRepAdaptor_Surface s(f);
+      BRepLProp_SLProps props(s, uv.X(), uv.Y(), 1, 1e-9);
+      if (!props.IsNormalDefined()) throw KernelError("Fillet: could not measure the angle at an edge");
+      gp_Dir n = props.Normal();
+      if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+      normals.push_back(n);
+    }
+    const double angle = normals[0].Angle(normals[1]);
+    if (angle < 1e-6) throw KernelError("Fillet: an edge between faces that meet flat cannot be rounded");
+    radii.push_back(chord / (2 * std::sin(angle / 2)));
+  }
+  TopoDS_Shape r;
+  try {
+    r = guarded("Fillet", [&]() -> TopoDS_Shape {
+      BRepFilletAPI_MakeFillet mk(shape);
+      for (size_t i = 0; i < edges.size(); ++i) mk.Add(radii[i], TopoDS::Edge(edges[i]));
+      mk.Build();
+      return mk.IsDone() ? mk.Shape() : TopoDS_Shape();
+    });
+  } catch (const KernelError& e) {
+    throw KernelError(std::string("Fillet: the chord length is too large for the selected edges (") + e.what() + ")");
+  }
+  if (!isValid(r)) throw KernelError("Fillet: the chord length is too large for the selected edges");
+  return r;
+}
+
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance) {
   requirePositive(distance, "chamfer distance");
   if (edges.empty()) throw KernelError("Chamfer: select at least one edge");

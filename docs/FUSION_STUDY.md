@@ -151,6 +151,8 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Extrude Participant Bodies (all ticked by default) and To Object up to a curved face, extended.
 - [x] The canvas value box applies as you type; command panels grow with messages and scroll when taller than the canvas.
 - [x] Move/Copy's triad: X / Y / Z arrows, rotation rings, plane squares; X / Y / Z distance and angle fields.
+- [x] Fillet Radius Type Chord Length (the field and the canvas arrow become the chord).
+- [ ] Fillet Corner Type Setback (OCCT has no setback corner blend; Rolling Ball only).
 - [ ] Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).
 - [x] Drag the timeline marker back to insert a feature earlier, then forward again (Day 7).

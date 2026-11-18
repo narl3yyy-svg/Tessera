@@ -389,7 +389,9 @@ void MainWindow::updateDragArrow() {
     input = QStringLiteral("depth");
     place = ArrowPlacement{gp_Pnt(at->point.x, at->point.y, at->point.z), gp_Dir(-at->normal.x, -at->normal.y, -at->normal.z)};
   } else if (id == QLatin1String(doc::kCmdFillet) || id == QLatin1String(doc::kCmdChamfer)) {
-    input = id == QLatin1String(doc::kCmdFillet) ? QStringLiteral("radius") : QStringLiteral("distance");
+    input = id != QLatin1String(doc::kCmdFillet) ? QStringLiteral("distance")
+            : active_->textInput(QStringLiteral("radiusType")) == QLatin1String("Chord Length") ? QStringLiteral("chord")
+                                                                                                : QStringLiteral("radius");
     for (const auto& e : pickedEdges_)
       if (!e.IsNull()) {
         place = edgePlacement(e, viewport_->bodyShape(active_->currentBody()));

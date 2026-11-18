@@ -131,3 +131,8 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Appearance
 
 - Swatches are plain colours (paints and the physical materials' looks): no textures, no glossy / metallic finishes, no In This Design list. Swatches are clicked onto bodies and faces rather than dragged.
+
+## Fillet
+
+- Chord Length takes each edge's angle at its middle: exact where the two faces meet at a constant angle (flat faces), close where the angle changes along the edge.
+- No Corner Type: where three fillets meet the corner is OCCT's own blend, like Rolling Ball; Setback is not available (OCCT has no setback corner).

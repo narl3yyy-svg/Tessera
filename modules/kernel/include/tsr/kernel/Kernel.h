@@ -87,6 +87,10 @@ TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& 
 // Variable radius: `start` at each edge's start, `end` at its end, changing
 // smoothly between.
 TopoDS_Shape fillet(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double start, double end);
+// Chord Length fillet: each edge rounded so the fillet's chord (the width
+// across it, face to face) is `chord`: radius = chord / (2 sin(a / 2)), a the
+// angle between the two faces' normals at the edge's middle.
+TopoDS_Shape filletChord(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double chord);
 TopoDS_Shape chamfer(const TopoDS_Shape& shape, const std::vector<TopoDS_Shape>& edges, double distance);
 // Unequal chamfers, as in the familiar Chamfer types. TwoDistances: `first`
 // along one face of each edge, `second` along the other. DistanceAngle:

@@ -1037,8 +1037,13 @@ public:
     if (f) {
       // The familiar fillet's Radius Type: constant, or changing from start to end.
       def_.inputs.insert(def_.inputs.begin() + 2,
-                         choice("radiusType", "Radius Type", {"Constant", "Variable"},
-                                "Variable: the radius changes from the start of each edge to its end."));
+                         choice("radiusType", "Radius Type", {"Constant", "Chord Length", "Variable"},
+                                "Chord Length: the width across the fillet, face to face. Variable: the radius "
+                                "changes from the start of each edge to its end."));
+      def_.inputs[3].visibleWhen = "radiusType=Constant|Variable";   // the radius
+      def_.inputs.push_back({.id = "chord", .label = "Chord Length", .tooltip = "The width across the fillet, face to face.",
+                             .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter, .min = 0.0,
+                             .max = std::nullopt, .minExclusive = true, .visibleWhen = "radiusType=Chord Length"});
       def_.inputs.push_back({.id = "endRadius", .label = "End Radius", .tooltip = "The radius at each edge's end.",
                              .type = InputType::Real, .defaultValue = 0.2, .unit = Unit::Millimeter, .min = 0.0,
                              .max = std::nullopt, .minExclusive = true, .visibleWhen = "radiusType=Variable"});
@@ -1101,8 +1106,11 @@ public:
       const auto edges = kernel::resolveEdges(body->shape, getString(in, "edges"));
       TopoDS_Shape result;
       if (kind_ == Kind::Fillet) {
-        if (in.count("radiusType") && getString(in, "radiusType") == "Variable")
+        const std::string type = in.count("radiusType") ? getString(in, "radiusType") : "Constant";
+        if (type == "Variable")
           result = kernel::fillet(body->shape, edges, getReal(in, "radius"), getReal(in, "endRadius"));
+        else if (type == "Chord Length")
+          result = kernel::filletChord(body->shape, edges, getReal(in, "chord"));
         else
           result = kernel::fillet(body->shape, edges, getReal(in, "radius"));
       } else {
