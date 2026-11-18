@@ -1,0 +1,15 @@
+# Live: MODIFY menu > Align, as in the familiar tool: click the small cube's
+# top face (From), then the big cube's top face (To): the small cube turns
+# over onto the big one's top. OK.
+waitfor tsr.feature.extrude
+wait 600
+menu panel.Modify tsr.feature.align
+waitfor panelOk
+wait 400
+wclick 45 5 10                # the small cube's top face
+wait 400
+wclick 10 10 20               # the big cube's top face
+wait 800
+shot /tmp/live_align.png
+click panelOk
+wait 800

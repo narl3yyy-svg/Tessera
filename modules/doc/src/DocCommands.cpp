@@ -3654,6 +3654,63 @@ JointPick jointOrigin(const Document& doc, const std::string& spec, const char* 
   return out;
 }
 
+// Align, as in the familiar Modify menu: a body moved so a face, edge or
+// point of it lines up with one on another body. Faces end up touching,
+// facing each other (Flip: facing the same way); edges become one line;
+// a point goes onto the other point, the body keeping its direction. Angle
+// turns the body about the line the two now share.
+class Align final : public Command {
+public:
+  Align() {
+    commonDef(def_, kCmdAlign, "Align", "Moves a body so a face, edge or point lines up with another: click the one "
+              "that moves, then where it goes.", "align", "Modify");
+    def_.inputs = {
+        {.id = "from", .label = "From", .tooltip = "On the body that moves: click a face, edge or point.",
+         .type = InputType::JointOrigin, .defaultValue = std::string{}},
+        {.id = "to", .label = "To", .tooltip = "Where it goes, on another body: a face, edge or point.",
+         .type = InputType::JointOrigin, .defaultValue = std::string{}},
+        {.id = "flip", .label = "Flip", .tooltip = "Faces: facing the same way instead of each other. Edges: run the other way.",
+         .type = InputType::Bool, .defaultValue = false},
+        {.id = "angle", .label = "Angle", .tooltip = "Turns the body about the shared line.", .type = InputType::Real,
+         .defaultValue = 0.0, .unit = Unit::Degree},
+        {.id = "copy", .label = "Create Copy", .tooltip = "Keep the body where it is and add an aligned copy.",
+         .type = InputType::Bool, .defaultValue = false}};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    const std::string from = getString(in, "from"), to = getString(in, "to");
+    if (from.empty()) return "From: click a face, edge or point on the body that moves";
+    if (to.empty()) return "To: click a face, edge or point where it goes";
+    const std::string b1 = from.substr(0, from.find('|')), b2 = to.substr(0, to.find('|'));
+    if (!doc.body(b1)) return "From: body '" + b1 + "' does not exist";
+    if (!doc.body(b2)) return "To: body '" + b2 + "' does not exist";
+    if (b1 == b2) return "To: pick on another body";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    for (const char* id : {"from", "to"}) {
+      const std::string spec = getString(in, id);
+      const auto bar1 = spec.find('|'), bar2 = spec.find('|', bar1 == std::string::npos ? 0 : bar1 + 1);
+      if (bar1 == std::string::npos || bar2 == std::string::npos) continue;
+      const std::string body = spec.substr(0, bar1), kind = spec.substr(bar1 + 1, bar2 - bar1 - 1);
+      const auto b = doc.body(body);
+      if (!b) continue;
+      try {
+        if (kind == "face") in[id] = body + "|face|" + kernel::completeFaceReferences(b->shape, spec.substr(bar2 + 1));
+        if (kind == "edge") in[id] = body + "|edge|" + kernel::completeEdgeReferences(b->shape, spec.substr(bar2 + 1));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string(id == std::string("from") ? "From: " : "To: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override;
+
+private:
+  CommandDef def_;
+};
+
 class Joint final : public Command {
 public:
   // asBuilt: the familiar As-Built Joint: the parts stay where they are; the
@@ -3925,6 +3982,36 @@ std::vector<BoundaryCell> boundaryFillCells(const Document& doc, const std::stri
   return out;
 }
 
+void Align::apply(const Inputs& in, CommandContext& ctx) const {
+  Document& doc = docOf(ctx);
+  const std::string from = getString(in, "from"), to = getString(in, "to");
+  const JointPick a = jointOrigin(doc, from, "From");
+  const JointPick b = jointOrigin(doc, to, "To");
+  auto kind = [](const std::string& spec) {
+    const auto bar1 = spec.find('|');
+    return spec.substr(bar1 + 1, spec.find('|', bar1 + 1) - bar1 - 1);
+  };
+  const std::string ka = kind(from), kb = kind(to);
+  const bool flip = in.count("flip") && getBool(in, "flip");
+  gp_Ax3 goal;
+  if (ka == "vertex" || kb == "vertex") {
+    // A point: moved there, keeping its direction.
+    goal = gp_Ax3(b.frame.Location(), a.frame.Direction(), a.frame.XDirection());
+  } else {
+    // Faces face each other; edges run the same way (Flip: the other way).
+    const bool reverse = (ka == "face" && kb == "face") != flip;
+    goal = gp_Ax3(b.frame.Location(), reverse ? b.frame.Direction().Reversed() : b.frame.Direction(), b.frame.XDirection());
+  }
+  if (const double angle = in.count("angle") ? getReal(in, "angle") : 0.0; std::abs(angle) > 1e-12)
+    goal.Rotate(gp_Ax1(goal.Location(), goal.Direction()), angle);
+  gp_Trsf t;
+  t.SetDisplacement(a.frame, goal);
+  const auto body = doc.body(a.body);
+  const TopoDS_Shape moved = BRepBuilderAPI_Transform(body->shape, t, true).Shape();
+  if (in.count("copy") && getBool(in, "copy")) doc.addBody(doc.nextBodyName(), moved);
+  else doc.replaceBody(a.body, moved);
+}
+
 void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<CreateSketch>());
   registry.add(std::make_unique<Extrude>());
@@ -3979,6 +4066,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<Emboss>());
   registry.add(std::make_unique<BoundaryFill>());
   registry.add(std::make_unique<ReplaceFace>());
+  registry.add(std::make_unique<Align>());
 }
 
 } // namespace tsr::doc

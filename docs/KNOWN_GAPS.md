@@ -148,3 +148,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Replace Face
 
 - The target's surface is extended in full: where it meets the body away from the source faces, the body is trimmed there too. No Tangent Chain option.
+
+## Align
+
+- Moves bodies (not components), as a timeline step; no Capture Position. A face's frame is its centre (a circle's centre for round edges), so faces line up centre to centre.
