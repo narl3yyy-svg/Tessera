@@ -1,0 +1,17 @@
+# Live: click the cube's right face, then MODIFY > Draft: the face is
+# taken. Pull plane Plane1, Direction Symmetric, OK: both halves taper in
+# away from the plane.
+waitfor tsr.feature.extrude
+wait 600
+wclick 20 10 10               # the right face (x = 20 mm)
+wait 400
+click tsr.feature.draft
+waitfor panelOk
+wait 400
+choose plane 3                # Plane1
+wait 400
+choose sides 2                # Symmetric
+wait 800
+shot /tmp/live_draft_sides.png
+click panelOk
+wait 800

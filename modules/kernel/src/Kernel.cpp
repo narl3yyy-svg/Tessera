@@ -2434,6 +2434,42 @@ TopoDS_Shape splitFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape
   return result;
 }
 
+TopoDS_Shape draftTwoSides(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
+                           double angle, double angle2) {
+  if (faces.empty()) throw KernelError("Draft: select the faces to tilt");
+  for (double a : {angle, angle2}) {
+    if (std::abs(a) < 1e-9) throw KernelError("Draft: the angles must not be zero");
+    if (std::abs(a) >= 1.5) throw KernelError("Draft: the angles must be less than 85 degrees");
+  }
+  const gp_Dir dir(pullDir.x, pullDir.y, pullDir.z);
+  const gp_Pnt origin(planeOrigin.x, planeOrigin.y, planeOrigin.z);
+  // The whole faces drafted each way (pulled along the direction by `angle`,
+  // against it by `angle2`); the first kept above the neutral plane, the
+  // second below it, and the halves joined.
+  const TopoDS_Shape up = draft(body, faces, pullDir, planeOrigin, angle);
+  const TopoDS_Shape down = draft(body, faces, {-pullDir.x, -pullDir.y, -pullDir.z}, planeOrigin, angle2);
+  Bnd_Box box;
+  BRepBndLib::Add(up, box);
+  BRepBndLib::Add(down, box);
+  const double r = 2 * std::sqrt(box.SquareExtent()) + 1;
+  const gp_Ax2 frame(origin, dir);
+  auto half = [&](bool above) {
+    gp_Ax2 corner = frame;
+    corner.Translate(gp_Vec(frame.XDirection()) * -r + gp_Vec(frame.YDirection()) * -r +
+                     gp_Vec(dir) * (above ? 0.0 : -r));
+    return BRepPrimAPI_MakeBox(corner, 2 * r, 2 * r, r).Shape();
+  };
+  TopoDS_Shape result;
+  try {
+    result = boolean(BooleanOp::Join, boolean(BooleanOp::Intersect, up, half(true)),
+                     boolean(BooleanOp::Intersect, down, half(false)));
+  } catch (const KernelError&) {
+    throw KernelError("Draft: could not join the two drafted sides");
+  }
+  if (!isValid(result)) throw KernelError("Draft: could not tilt those faces by those angles");
+  return result;
+}
+
 TopoDS_Shape splitFacesByCurves(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& curves,
                                 Vec3 dirv) {
   if (faces.empty()) throw KernelError("Split Face: select the faces to split");
@@ -2477,7 +2513,7 @@ TopoDS_Shape splitFacesByCurves(const TopoDS_Shape& body, const std::vector<Topo
 }
 
 TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
-                   double angle) {
+                   double angle, bool withTangentFaces) {
   if (faces.empty()) throw KernelError("Draft: select the faces to tilt");
   if (std::abs(angle) < 1e-9) throw KernelError("Draft: the angle must not be zero");
   if (std::abs(angle) >= 1.5) throw KernelError("Draft: the angle must be less than 85 degrees");
@@ -2486,7 +2522,7 @@ TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& fa
   TopoDS_Shape result = guarded("Draft", [&]() -> TopoDS_Shape {
     BRepOffsetAPI_DraftAngle d(body);
     for (const auto& f : faces) {
-      d.Add(TopoDS::Face(f), dir, angle, neutral);
+      d.Add(TopoDS::Face(f), dir, angle, neutral, withTangentFaces);
       if (!d.AddDone()) throw KernelError("Draft: a face cannot be drafted in that direction (is it parallel to the plane?)");
     }
     d.Build();

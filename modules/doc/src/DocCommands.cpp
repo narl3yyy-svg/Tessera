@@ -3243,9 +3243,17 @@ public:
                              .visibleWhen = "tool=Sketch"});
     } else if (kind == Kind::Draft) {
       def_.inputs.push_back(planeChoice("Pull direction (its normal) and neutral plane (where faces keep their size)."));
+      // The familiar Direction: One Side, Two Sides (an angle each side of
+      // the neutral plane) or Symmetric (the same angle both sides).
+      def_.inputs.push_back(choice("sides", "Direction", {"One Side", "Two Sides", "Symmetric"},
+                                   "Two Sides / Symmetric: the faces are split at the neutral plane and each half tilts "
+                                   "away from it."));
       def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = "Draft angle.", .type = InputType::Real,
                              .defaultValue = 0.0872664626, .unit = Unit::Degree, .min = -1.48, .max = 1.48});
-      def_.inputs.push_back(choice("flip", "Direction", {"Normal", "Flipped"}, "Flipped: pull the other way."));
+      def_.inputs.push_back({.id = "angle2", .label = "Angle 2", .tooltip = "The other side's draft angle.",
+                             .type = InputType::Real, .defaultValue = 0.0872664626, .unit = Unit::Degree, .min = -1.48,
+                             .max = 1.48, .visibleWhen = "sides=Two Sides"});
+      def_.inputs.push_back(choice("flip", "Flip Pull Direction", {"Normal", "Flipped"}, "Flipped: pull the other way."));
     }
   }
   const CommandDef& def() const override { return def_; }
@@ -3288,7 +3296,13 @@ public:
         gp_Dir n = f.Direction();
         if (getString(in, "flip") == "Flipped") n.Reverse();
         const gp_Pnt o = f.Location();
-        doc.replaceBody(name, kernel::draft(shape, faces, {n.X(), n.Y(), n.Z()}, {o.X(), o.Y(), o.Z()}, getReal(in, "angle")));
+        const std::string sides = in.count("sides") ? getString(in, "sides") : "One Side";
+        if (sides == "One Side")
+          doc.replaceBody(name, kernel::draft(shape, faces, {n.X(), n.Y(), n.Z()}, {o.X(), o.Y(), o.Z()}, getReal(in, "angle")));
+        else
+          doc.replaceBody(name, kernel::draftTwoSides(shape, faces, {n.X(), n.Y(), n.Z()}, {o.X(), o.Y(), o.Z()},
+                                                      getReal(in, "angle"),
+                                                      sides == "Symmetric" ? getReal(in, "angle") : getReal(in, "angle2")));
       }
     } catch (const kernel::KernelError& e) {
       throw CommandError(e.what());

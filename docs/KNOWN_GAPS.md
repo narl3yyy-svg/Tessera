@@ -140,3 +140,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Split Face
 
 - Splitting tools: a plane or a whole sketch (its curves, Along Vector, the sketch's normal). Not yet: single picked curves, other bodies' faces as tools, Closest Point, Extend Splitting Tool. A curve that crosses a face only part way leaves that face whole.
+
+## Draft
+
+- Fixed Plane drafts only (no Parting Line type). While the Draft panel's plane box shows, a click on a flat face picks it as the plane: pick the faces first (click them, then start Draft), as Tessera's pre-selection allows.

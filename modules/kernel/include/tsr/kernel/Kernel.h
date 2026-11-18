@@ -222,9 +222,16 @@ TopoDS_Shape offsetFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
 
 // Draft: tilts faces by `angle` (rad) about where they cross the neutral
 // plane (through `planeOrigin`, normal `pullDir`), measured from the pull
-// direction. Positive adds material above the plane.
+// direction. Positive adds material above the plane. Faces tangent to
+// a picked face are drafted with it unless `withTangentFaces` is false.
 TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
-                   double angle);
+                   double angle,
+                   bool withTangentFaces = true);
+// Two-sided draft: the faces are split where the neutral plane crosses them;
+// the parts on the pull side tilt by `angle`, the parts on the other side by
+// `angle2` the other way (each half released in its own direction).
+TopoDS_Shape draftTwoSides(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
+                           double angle, double angle2);
 
 // Thicken: faces (of any body) made into a solid wall `thickness` thick,
 // grown along the faces' normals (negative: inward), or half each way when

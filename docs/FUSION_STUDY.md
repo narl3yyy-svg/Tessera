@@ -153,6 +153,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Move/Copy's triad: X / Y / Z arrows, rotation rings, plane squares; X / Y / Z distance and angle fields.
 - [x] Fillet Radius Type Chord Length (the field and the canvas arrow become the chord).
 - [x] Split Face, Splitting Tool: a sketch's curves (Along Vector, the sketch's normal).
+- [x] Draft Direction: One Side, Two Sides (Angle 2), Symmetric; each side tapers in towards its own pull.
 - [ ] Fillet Corner Type Setback (OCCT has no setback corner blend; Rolling Ball only).
 - [ ] Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).

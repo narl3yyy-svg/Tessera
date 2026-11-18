@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794968452.9090755,
-    "seen": 1794968887.359014,
-    "ast_hash": "9979cb6a3a7e03f006ced7bacc77ab67",
+    "mtime": 1794968946.2923872,
+    "seen": 1794969796.922918,
+    "ast_hash": "8c984a8c93343337a39e9f9619de0522",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794968452.9090755,
-    "seen": 1794968887.3590198,
-    "ast_hash": "0d99c1e97299c598d9381c521bfb1a3b",
+    "mtime": 1794969232.9199696,
+    "seen": 1794969796.9229236,
+    "ast_hash": "06fb71e9e4dab57358e2b9e0b556287a",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794968452.9090755,
-    "seen": 1794968887.3590217,
-    "ast_hash": "8d88ef58d5b2cc72956300a6239ae1c3",
+    "mtime": 1794969385.694018,
+    "seen": 1794969796.9229252,
+    "ast_hash": "cc0daf2e6cd031a0946bb44a538ab58d",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794968591.561771,
-    "seen": 1794968887.3593214,
-    "ast_hash": "1c94c88727e973367bace46074bffe2e",
+    "mtime": 1794969497.6809163,
+    "seen": 1794969796.9232256,
+    "ast_hash": "731ebd13edacb9761fbfdd006acfb194",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794968591.562776,
-    "seen": 1794968887.359324,
-    "ast_hash": "ed60813ddb4b1e780dc740029164802b",
+    "mtime": 1794969497.6821215,
+    "seen": 1794969796.9232283,
+    "ast_hash": "86195b51dfe791a3e409e0123f9d7f67",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794968591.562776,
-    "seen": 1794968887.3593247,
-    "ast_hash": "6f1ee99bce2d0491fb808dbb8cc2205d",
+    "mtime": 1794969497.6821215,
+    "seen": 1794969796.923229,
+    "ast_hash": "d5a3182ccbd7c9ed044ae1afc74c8623",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794968591.562776,
-    "seen": 1794968887.359327,
-    "ast_hash": "f2963f144bf448234abc91504a0f7353",
+    "mtime": 1794969497.6821215,
+    "seen": 1794969796.9232316,
+    "ast_hash": "608d6348f266995041a42587a1a33b51",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794968573.21465,
-    "seen": 1794968887.3593328,
-    "ast_hash": "27e6f6902baae377f74cb1daa2702eae",
+    "mtime": 1794969438.6287034,
+    "seen": 1794969796.9232373,
+    "ast_hash": "e7a47d93c40f74148d5f3de16f255995",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2631,6 +2631,24 @@
     "mtime": 1794968573.1313367,
     "seen": 1794968887.3591535,
     "ast_hash": "fb29989078c5fcd39677511e43a1e91d",
+    "semantic_hash": ""
+  },
+  "tests/api/test_draft_two_sides.py": {
+    "mtime": 1794969417.4022548,
+    "seen": 1794969796.9229512,
+    "ast_hash": "741fde46ab486dc7f00501359227ff23",
+    "semantic_hash": ""
+  },
+  "tests/live/draft_sides_check.py": {
+    "mtime": 1794969438.5452607,
+    "seen": 1794969796.923004,
+    "ast_hash": "f9a163e0ad65e631298287e39706f4e3",
+    "semantic_hash": ""
+  },
+  "tests/live/setup_draft_sides.py": {
+    "mtime": 1794969438.522006,
+    "seen": 1794969796.9230318,
+    "ast_hash": "cf20e2fe74fba25421508a78affc37ba",
     "semantic_hash": ""
   }
 }
