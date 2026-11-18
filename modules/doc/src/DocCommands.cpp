@@ -3072,6 +3072,88 @@ private:
   CommandDef def_;
 };
 
+// Silhouette Split, as in the familiar Modify menu: round faces split where
+// their outline lies, seen along a view direction (a plane's normal) - the
+// line a mould's two halves part along. Split Faces cuts the faces; Split
+// Solid Body cuts the body in two there.
+class SilhouetteSplit final : public Command {
+public:
+  SilhouetteSplit() {
+    commonDef(def_, kCmdSilhouetteSplit, "Silhouette Split", "Splits round faces (or the body) along their outline seen "
+              "from a direction: pick the faces, then press Select and click the plane to look along.", "silhouette",
+              "Modify");
+    def_.inputs = {bodyInput(),
+                   {.id = "faces", .label = "Faces", .tooltip = "Click the round faces to split.", .type = InputType::Faces,
+                    .defaultValue = std::string{}},
+                   {.id = "direction", .label = "View Direction", .tooltip = "Seen along this plane's normal.",
+                    .type = InputType::Plane, .defaultValue = std::string("XY")},
+                   choice("operation", "Operation", {"Split Faces", "Split Solid Body"},
+                          "Split Faces: the faces are cut. Split Solid Body: the body is cut in two.")};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
+    if (getString(in, "faces").empty()) return "Faces: click the round faces to split";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Faces: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape shape = doc.body(name)->shape;
+    gp_Dir view;
+    try {
+      view = doc.planeFrame(getString(in, "direction"), 0).Direction();
+    } catch (const DocumentError& e) {
+      throw CommandError(std::string("View Direction: ") + e.what());
+    }
+    try {
+      const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
+      std::vector<std::pair<kernel::Vec3, kernel::Vec3>> planes;
+      for (const auto& f : faces) planes.push_back(kernel::silhouettePlane(f, {view.X(), view.Y(), view.Z()}));
+      if (getString(in, "operation") == "Split Solid Body") {
+        // One plane for them all (a cylinder and its end caps, a sphere).
+        auto pnt = [](const kernel::Vec3& v) { return gp_Pnt(v.x, v.y, v.z); };
+        const auto& [o0, n0] = planes.front();
+        const gp_Pln a(pnt(o0), gp_Dir(n0.x, n0.y, n0.z));
+        for (const auto& p : planes) {
+          const gp_Dir n(p.second.x, p.second.y, p.second.z);
+          if (!n.IsParallel(a.Axis().Direction(), 1e-6) || a.Distance(pnt(p.first)) > 1e-7)
+            throw CommandError("Faces: their outlines do not lie in one plane, so the body cannot be cut along them");
+        }
+        const auto parts = kernel::splitByPlane(shape, planes.front().first, planes.front().second);
+        doc.replaceBody(name, parts[0]);
+        for (size_t i = 1; i < parts.size(); ++i) doc.addBody(doc.nextBodyName(), parts[i]);
+        return;
+      }
+      TopoDS_Shape result = shape;
+      // Each face split by its own plane, in turn (references re-found after each).
+      std::vector<std::string> each;
+      for (size_t i = 0; i < faces.size(); ++i) each.push_back(kernel::faceReference(shape, faces[i]));
+      for (size_t i = 0; i < faces.size(); ++i) {
+        const auto now = kernel::resolveFaces(result, each[i]);
+        result = kernel::splitFaces(result, now, planes[i].second, planes[i].first);
+      }
+      doc.replaceBody(name, result);
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
 // Rib and Web: thin supports grown from a sketch's open curves to the body.
 class RibWeb final : public Command {
 public:
@@ -4067,6 +4149,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<BoundaryFill>());
   registry.add(std::make_unique<ReplaceFace>());
   registry.add(std::make_unique<Align>());
+  registry.add(std::make_unique<SilhouetteSplit>());
 }
 
 } // namespace tsr::doc

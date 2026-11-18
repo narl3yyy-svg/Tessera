@@ -157,6 +157,7 @@ Gathered from the captions (the narrators describe each click); `[x]` is built a
 - [x] Replace Face: Source Faces, then Target Faces (Select); the body grows or is trimmed to the target, extended.
 - [x] Selection fields: a Select button beside a plane field that shares the panel with face picks.
 - [x] Align: From and To (face, edge or point), Flip, Angle; faces end touching, facing each other.
+- [x] Silhouette Split: faces, View Direction, Split Faces / Split Solid Body (cylinders and spheres).
 - [ ] Fillet Corner Type Setback (OCCT has no setback corner blend; Rolling Ball only).
 - [ ] Cylinder primitive: pick a plane, click the centre, drag the size (Day 9).
 - [x] Click and hold on overlapping geometry opens a "select other" list (Day 6).

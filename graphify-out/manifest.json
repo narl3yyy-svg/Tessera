@@ -114,9 +114,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/Icons.cpp": {
-    "mtime": 1794970556.569277,
-    "seen": 1794970979.083594,
-    "ast_hash": "899061e513bb7263f7b2eab505ac1557",
+    "mtime": 1794971034.4289343,
+    "seen": 1794971499.4366522,
+    "ast_hash": "96456fb35ea0ba9a7986a21e1e1966c5",
     "semantic_hash": ""
   },
   "modules/app/src/Icons.h": {
@@ -342,9 +342,9 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/DocCommands.h": {
-    "mtime": 1794970556.5669742,
-    "seen": 1794970979.083662,
-    "ast_hash": "5903c27c4c90448e2af15aa48b92aab8",
+    "mtime": 1794971034.426674,
+    "seen": 1794971499.4367197,
+    "ast_hash": "0ee2c9c5f8895d313a013c146a3c7ab4",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
@@ -360,9 +360,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/DocCommands.cpp": {
-    "mtime": 1794970556.569277,
-    "seen": 1794970979.0836668,
-    "ast_hash": "f6f8e33b67baf90e1a618aa3801acc74",
+    "mtime": 1794971052.2362657,
+    "seen": 1794971499.4367242,
+    "ast_hash": "f66350f2058005c88e690e4c006f33df",
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/include/tsr/kernel/Kernel.h": {
-    "mtime": 1794969936.80337,
-    "seen": 1794970495.020641,
-    "ast_hash": "23a57a8a83637764e5c4901e3dff72ca",
+    "mtime": 1794971034.4256728,
+    "seen": 1794971499.4367332,
+    "ast_hash": "eec3b79b0f3b0ff48ae89d4d1fb1fb29",
     "semantic_hash": ""
   },
   "modules/kernel/src/Io.cpp": {
@@ -408,9 +408,9 @@
     "semantic_hash": ""
   },
   "modules/kernel/src/Kernel.cpp": {
-    "mtime": 1794969944.9592848,
-    "seen": 1794970495.0206428,
-    "ast_hash": "58c66d2b95065596b48536b8c66bc4cc",
+    "mtime": 1794971034.426674,
+    "seen": 1794971499.4367366,
+    "ast_hash": "fc92fc0932a88225429dcce5de297756",
     "semantic_hash": ""
   },
   "modules/sketch/include/tsr/sketch/Sketch.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794970672.362642,
-    "seen": 1794970979.0842516,
-    "ast_hash": "b319f3a2af304acca34c1f59a02a4df5",
+    "mtime": 1794971185.9803617,
+    "seen": 1794971499.4373095,
+    "ast_hash": "38f09128a625a38983ffee32857f560a",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794970672.362642,
-    "seen": 1794970979.0842547,
-    "ast_hash": "1f8ae9c75fd1a28d978391b6c39cbc83",
+    "mtime": 1794971185.9813628,
+    "seen": 1794971499.4373138,
+    "ast_hash": "7e4a5ae7a275559f215b3f9f34b6c2a2",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794970672.3636422,
-    "seen": 1794970979.0842555,
-    "ast_hash": "b8287bf49f4604b9a58d1810349adae8",
+    "mtime": 1794971185.9813628,
+    "seen": 1794971499.437315,
+    "ast_hash": "9730ff50c952ae67d3c3b38ae34b372e",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794970672.362642,
-    "seen": 1794970979.0842583,
-    "ast_hash": "3523aa1e2fbc8cba310e9c33bee82051",
+    "mtime": 1794971185.9803617,
+    "seen": 1794971499.4373195,
+    "ast_hash": "51a677115a6fcd7b4e6e17a1d6e48a70",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794970656.3678818,
-    "seen": 1794970979.084265,
-    "ast_hash": "1789376601cb844ff52f8bc8821ac6ff",
+    "mtime": 1794971169.495418,
+    "seen": 1794971499.4373293,
+    "ast_hash": "d1b37c9c9a35e90d88971320e2034711",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2685,6 +2685,24 @@
     "mtime": 1794970656.2617645,
     "seen": 1794970979.0838933,
     "ast_hash": "6f15993655fc8f6a5ce6274e6b3476d0",
+    "semantic_hash": ""
+  },
+  "tests/api/test_silhouette_split.py": {
+    "mtime": 1794971052.2567797,
+    "seen": 1794971499.4368432,
+    "ast_hash": "0ade408353554fd2ede3d36aa88a1ff5",
+    "semantic_hash": ""
+  },
+  "tests/live/setup_silhouette.py": {
+    "mtime": 1794971169.3678524,
+    "seen": 1794971499.4369783,
+    "ast_hash": "922b5a347ded4a24142eb115f43c2fb5",
+    "semantic_hash": ""
+  },
+  "tests/live/silhouette_check.py": {
+    "mtime": 1794971169.3947544,
+    "seen": 1794971499.436992,
+    "ast_hash": "17b596ede75d64c34b157ad082252869",
     "semantic_hash": ""
   }
 }

@@ -152,3 +152,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Align
 
 - Moves bodies (not components), as a timeline step; no Capture Position. A face's frame is its centre (a circle's centre for round edges), so faces line up centre to centre.
+
+## Silhouette Split
+
+- Cylinders and spheres only (their outline lies in a plane); cones, tori and free-form faces are refused. No Split Shelled Body. Split Solid Body needs the picked faces' outlines in one plane.

@@ -256,6 +256,13 @@ TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dir, con
 // surface of `target`, extended past its edges, as the familiar tool does.
 TopoDS_Shape replaceFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& target);
 
+// Silhouette Split: where a face's outline lies seen along `dir` (its
+// normal at right angles to `dir`): for a cylinder, the plane through its
+// axis facing the view; for a sphere, the plane through its centre. Returns
+// that plane's origin and normal; KernelError for other faces, or a
+// cylinder seen straight along its axis.
+std::pair<Vec3, Vec3> silhouettePlane(const TopoDS_Shape& face, Vec3 dir);
+
 // Whether two solids overlap or touch.
 bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b);
 

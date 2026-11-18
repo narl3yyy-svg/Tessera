@@ -1,0 +1,15 @@
+# Live: MODIFY menu > Silhouette Split, as in the familiar tool: click the
+# cylinder's round face; seen from above (XY, the default), Split Solid Body
+# cuts it into top and bottom halves. OK.
+waitfor tsr.feature.extrude
+wait 600
+menu panel.Modify tsr.feature.silhouetteSplit
+waitfor panelOk
+wait 400
+wclick 20 -7.07 17.07         # the round face, upper front
+wait 400
+choose operation 1            # Split Solid Body
+wait 800
+shot /tmp/live_silhouette.png
+click panelOk
+wait 800

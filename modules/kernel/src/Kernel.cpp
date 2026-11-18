@@ -2145,6 +2145,27 @@ TopoDS_Shape replaceFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Sha
   return result;
 }
 
+std::pair<Vec3, Vec3> silhouettePlane(const TopoDS_Shape& face, Vec3 dirv) {
+  if (face.IsNull() || face.ShapeType() != TopAbs_FACE) throw KernelError("Silhouette Split: select a face");
+  const gp_Vec d(dirv.x, dirv.y, dirv.z);
+  if (d.Magnitude() < 1e-12) throw KernelError("Silhouette Split: no view direction");
+  BRepAdaptor_Surface s(TopoDS::Face(face), true);
+  auto vec = [](const gp_XYZ& v) { return Vec3{v.X(), v.Y(), v.Z()}; };
+  if (s.GetType() == GeomAbs_Sphere) {
+    const gp_Dir n(d);
+    return {vec(s.Sphere().Location().XYZ()), vec(n.XYZ())};
+  }
+  if (s.GetType() == GeomAbs_Cylinder) {
+    const gp_Ax1 ax = s.Cylinder().Axis();
+    const gp_Vec a(ax.Direction());
+    const gp_Vec across = d - a * d.Dot(a);   // the view direction, square to the axis
+    if (across.Magnitude() < 1e-9 * d.Magnitude())
+      throw KernelError("Silhouette Split: seen straight along the cylinder's axis, it has no outline on its side");
+    return {vec(ax.Location().XYZ()), vec(gp_Dir(across).XYZ())};
+  }
+  throw KernelError("Silhouette Split: works on cylinders and spheres so far");
+}
+
 bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b) {
   BRepExtrema_DistShapeShape d(a, b);
   return d.IsDone() && d.Value() < 1e-7;
