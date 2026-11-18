@@ -136,3 +136,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 - Chord Length takes each edge's angle at its middle: exact where the two faces meet at a constant angle (flat faces), close where the angle changes along the edge.
 - No Corner Type: where three fillets meet the corner is OCCT's own blend, like Rolling Ball; Setback is not available (OCCT has no setback corner).
+
+## Split Face
+
+- Splitting tools: a plane or a whole sketch (its curves, Along Vector, the sketch's normal). Not yet: single picked curves, other bodies' faces as tools, Closest Point, Extend Splitting Tool. A curve that crosses a face only part way leaves that face whole.

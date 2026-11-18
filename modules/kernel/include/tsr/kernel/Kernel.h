@@ -272,6 +272,11 @@ TopoDS_Shape deleteFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
 // Split Face: cuts faces where a plane (through `planeOrigin`, normal
 // `normal`) crosses them; the body keeps its shape, with more faces.
 TopoDS_Shape splitFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 normal, Vec3 planeOrigin);
+// Split Face with sketch curves: the curves swept along `dir` (both ways,
+// past the body) cut the picked faces where they cross them (Along Vector).
+// Curves that cross a face only part way leave it whole.
+TopoDS_Shape splitFacesByCurves(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& curves,
+                                Vec3 dir);
 
 enum class BooleanOp { Join, Cut, Intersect };
 // Boolean of `target` with `tool`, faces merged afterwards. Throws KernelError

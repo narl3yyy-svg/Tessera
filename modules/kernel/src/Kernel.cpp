@@ -2434,6 +2434,48 @@ TopoDS_Shape splitFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape
   return result;
 }
 
+TopoDS_Shape splitFacesByCurves(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& curves,
+                                Vec3 dirv) {
+  if (faces.empty()) throw KernelError("Split Face: select the faces to split");
+  if (curves.IsNull() || !TopExp_Explorer(curves, TopAbs_EDGE).More())
+    throw KernelError("Split Face: the sketch has no curves to split with");
+  const gp_Dir dir(dirv.x, dirv.y, dirv.z);
+  Bnd_Box box;
+  BRepBndLib::Add(body, box);
+  BRepBndLib::Add(curves, box);
+  const double reach = std::sqrt(box.SquareExtent()) + 1;
+  // The curves swept through the body: the splitting surfaces.
+  TopoDS_Compound tool;
+  BRep_Builder bb;
+  bb.MakeCompound(tool);
+  gp_Trsf back;
+  back.SetTranslation(gp_Vec(dir) * -reach);
+  for (TopExp_Explorer e(curves, TopAbs_EDGE); e.More(); e.Next())
+    bb.Add(tool, BRepPrimAPI_MakePrism(BRepBuilderAPI_Transform(e.Current(), back, true).Shape(), gp_Vec(dir) * (2 * reach)).Shape());
+  int cuts = 0;
+  TopoDS_Shape result = guarded("Split Face", [&]() -> TopoDS_Shape {
+    BRepFeat_SplitShape split(body);
+    for (const auto& f : faces) {
+      BRepAlgoAPI_Section sec(f, tool, false);
+      sec.Approximation(true);
+      sec.ComputePCurveOn1(true);
+      sec.Build();
+      if (!sec.IsDone()) continue;
+      for (TopExp_Explorer e(sec.Shape(), TopAbs_EDGE); e.More(); e.Next()) {
+        split.Add(TopoDS::Edge(e.Current()), TopoDS::Face(f));
+        ++cuts;
+      }
+    }
+    if (cuts == 0) return body;
+    split.Build();
+    if (!split.IsDone()) return TopoDS_Shape();
+    return split.Shape();
+  });
+  if (cuts == 0) throw KernelError("Split Face: the sketch's curves do not cross those faces");
+  if (!isValid(result)) throw KernelError("Split Face: the faces could not be split along those curves");
+  return result;
+}
+
 TopoDS_Shape draft(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, Vec3 pullDir, Vec3 planeOrigin,
                    double angle) {
   if (faces.empty()) throw KernelError("Draft: select the faces to tilt");

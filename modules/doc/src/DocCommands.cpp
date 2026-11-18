@@ -3219,8 +3219,8 @@ public:
       commonDef(def_, kCmdDeleteFaces, "Delete", "Removes faces (a hole, a fillet, a boss ...); the faces around close the gap.",
                 "delete-face");
     } else if (kind == Kind::Split) {
-      commonDef(def_, kCmdSplitFace, "Split Face", "Cuts faces where a plane crosses them (the body keeps its shape).",
-                "split-face");
+      commonDef(def_, kCmdSplitFace, "Split Face", "Cuts faces where a plane, or a sketch's curves, cross them (the body "
+                "keeps its shape).", "split-face");
     } else {
       commonDef(def_, kCmdDraft, "Draft", "Tilts faces so parts release from a mould: pick the pull direction plane, then faces.", "draft");
     }
@@ -3231,7 +3231,16 @@ public:
       def_.inputs.push_back({.id = "distance", .label = "Distance", .tooltip = "Positive grows the body.",
                              .type = InputType::Real, .defaultValue = 0.1, .unit = Unit::Millimeter});
     } else if (kind == Kind::Split) {
-      def_.inputs.push_back(planeChoice("The splitting plane."));
+      // The familiar Splitting Tool: a plane, or a sketch's curves projected
+      // along the sketch's normal (Along Vector).
+      def_.inputs.push_back(choice("tool", "Splitting Tool", {"Plane", "Sketch"},
+                                   "Plane: cut where it crosses. Sketch: its curves, along the sketch's normal."));
+      InputDef plane = planeChoice("The splitting plane.");
+      plane.visibleWhen = "tool=Plane";
+      def_.inputs.push_back(plane);
+      def_.inputs.push_back({.id = "sketch", .label = "Sketch", .tooltip = "Its curves split the faces.",
+                             .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true,
+                             .visibleWhen = "tool=Sketch"});
     } else if (kind == Kind::Draft) {
       def_.inputs.push_back(planeChoice("Pull direction (its normal) and neutral plane (where faces keep their size)."));
       def_.inputs.push_back({.id = "angle", .label = "Angle", .tooltip = "Draft angle.", .type = InputType::Real,
@@ -3262,6 +3271,13 @@ public:
         doc.replaceBody(name, kernel::offsetFaces(shape, faces, getReal(in, "distance")));
       } else if (kind_ == Kind::Delete) {
         doc.replaceBody(name, kernel::deleteFaces(shape, faces));
+      } else if (kind_ == Kind::Split && in.count("tool") && getString(in, "tool") == "Sketch") {
+        const auto rec = sketchFor(doc, getString(in, "sketch"));
+        if (!rec) throw CommandError("Sketch: there is no sketch to split with");
+        const gp_Ax3 frame = doc.planeFrame(rec->plane, rec->offset);
+        const TopoDS_Shape curves = sketch::curves(sketch::Sketch::fromJson(rec->data), frame);
+        const gp_Dir n = frame.Direction();
+        doc.replaceBody(name, kernel::splitFacesByCurves(shape, faces, curves, {n.X(), n.Y(), n.Z()}));
       } else if (kind_ == Kind::Split) {
         const gp_Ax3 f = planeOf(doc, in, "plane", "-");
         const gp_Dir n = f.Direction();

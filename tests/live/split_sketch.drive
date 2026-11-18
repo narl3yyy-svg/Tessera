@@ -1,0 +1,14 @@
+# Live: MODIFY menu > Split Face, Splitting Tool Sketch: click the top face,
+# OK: the sketch's line cuts the top in two.
+waitfor tsr.feature.extrude
+wait 600
+menu panel.Modify tsr.feature.splitFace
+waitfor panelOk
+wait 400
+choose tool 1                 # Sketch
+wait 400
+wclick 25 15 20               # the top face
+wait 600
+shot /tmp/live_split_sketch.png
+click panelOk
+wait 800
