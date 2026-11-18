@@ -334,35 +334,222 @@ void MainWindow::paintFace(const QString& body, const TopoDS_Shape& face) {
     statusBar()->showMessage(qs(err), 4000);
 }
 
+namespace {
+QIcon materialIcon(const QString& colour) {
+  QPixmap px(16, 16);
+  px.fill(Qt::transparent);
+  QPainter p(&px);
+  p.setRenderHint(QPainter::Antialiasing);
+  p.setBrush(QColor(colour));
+  p.setPen(QPen(QColor(60, 60, 60), 1));
+  p.drawRoundedRect(QRectF(1, 1, 14, 14), 3, 3);
+  return QIcon(px);
+}
+
+// The Material Editor: name, density and look of a material of your own.
+std::optional<doc::PhysicalMaterial> editMaterialDialog(QWidget* parent, const doc::PhysicalMaterial& start, const QString& title) {
+  QDialog d(parent);
+  d.setObjectName(QStringLiteral("materialEditor"));
+  d.setWindowTitle(title);
+  auto* name = new QLineEdit(QString::fromStdString(start.name));
+  name->setObjectName(QStringLiteral("materialName"));
+  auto* density = new QDoubleSpinBox;
+  density->setObjectName(QStringLiteral("materialDensity"));
+  density->setDecimals(3);
+  density->setRange(0.001, 100.0);
+  density->setSuffix(QStringLiteral(" g/cm³"));
+  density->setValue(start.density);
+  QString colour = QString::fromStdString(start.color);
+  auto* look = new QPushButton;
+  look->setObjectName(QStringLiteral("materialColor"));
+  auto showLook = [look, &colour] {
+    look->setIcon(materialIcon(colour));
+    look->setText(colour);
+  };
+  showLook();
+  QObject::connect(look, &QPushButton::clicked, &d, [&d, &colour, showLook] {
+    const QColor c = QColorDialog::getColor(QColor(colour), &d, QObject::tr("Appearance"));
+    if (c.isValid()) colour = c.name(QColor::HexRgb);
+    showLook();
+  });
+  auto* form = new QFormLayout;
+  form->addRow(QObject::tr("Name"), name);
+  form->addRow(QObject::tr("Density"), density);
+  form->addRow(QObject::tr("Appearance"), look);
+  auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
+  buttons->button(QDialogButtonBox::Save)->setObjectName(QStringLiteral("materialSave"));
+  QObject::connect(buttons, &QDialogButtonBox::accepted, &d, &QDialog::accept);
+  QObject::connect(buttons, &QDialogButtonBox::rejected, &d, &QDialog::reject);
+  auto* lay = new QVBoxLayout(&d);
+  lay->addLayout(form);
+  lay->addWidget(buttons);
+  if (d.exec() != QDialog::Accepted) return std::nullopt;
+  return doc::PhysicalMaterial{name->text().trimmed().toStdString(), density->value(), colour.toStdString()};
+}
+} // namespace
+
+// Physical Material, as the familiar material browser: the built-in library,
+// your own materials (a library on this machine), and those this design
+// carries; Apply gives the selected bodies (or every body) the one picked.
+// New makes a material of your own from the one picked; Edit and Delete
+// change your own.
 void MainWindow::editMaterial() {
   const auto targets = lookTargets();
   if (targets.empty()) {
     statusBar()->showMessage(tr("Physical Material: there is no body yet."), 3000);
     return;
   }
-  QStringList names = {tr("(none)")};
-  for (const auto& m : doc::physicalMaterials())
-    names << QStringLiteral("%1  (%2 g/cm\u00b3)").arg(qs(m.name)).arg(m.density, 0, 'f', 2);
-  int current = 0;
-  if (const auto b = session_.document().body(targets.front()))
-    for (size_t i = 0; i < doc::physicalMaterials().size(); ++i)
-      if (doc::physicalMaterials()[i].name == b->material) current = static_cast<int>(i) + 1;
-  bool ok = false;
-  const QString pick = QInputDialog::getItem(this, tr("Physical Material"), tr("Material:"), names, current, false, &ok);
-  if (!ok) return;
-  const int idx = static_cast<int>(names.indexOf(pick));
-  const std::string material = idx <= 0 ? std::string() : doc::physicalMaterials()[idx - 1].name;
-  if (auto err = session_.setBodyLooks(targets, nullptr, &material); !err.empty()) {
-    statusBar()->showMessage(qs(err), 4000);
-    return;
-  }
-  // The material's look comes with it, unless the body was coloured already.
-  if (const auto* m = doc::findMaterial(material)) {
-    std::vector<std::string> plain;
-    for (const auto& t : targets)
-      if (const auto b = session_.document().body(t); b && b->color.empty()) plain.push_back(t);
-    if (!plain.empty()) (void)session_.setBodyLooks(plain, &m->color, nullptr);
-  }
+  QDialog d(this);
+  d.setObjectName(QStringLiteral("materialDialog"));
+  d.setWindowTitle(tr("Physical Material"));
+  d.resize(380, 520);
+  auto* list = new QListWidget;
+  list->setObjectName(QStringLiteral("materialList"));
+  enum Kind { BuiltIn = 1, Library = 2, Design = 3 };
+  const std::string current = session_.document().body(targets.front()) ? session_.document().body(targets.front())->material : "";
+  auto fill = [this, list, current](const std::string& select) {
+    list->clear();
+    auto heading = [list](const QString& text) {
+      auto* h = new QListWidgetItem(text);
+      h->setFlags(Qt::NoItemFlags);
+      QFont f = h->font();
+      f.setBold(true);
+      h->setFont(f);
+      list->addItem(h);
+    };
+    auto add = [list, &select, &current](const doc::PhysicalMaterial& m, int kind) {
+      auto* it = new QListWidgetItem(materialIcon(qs(m.color)), QStringLiteral("%1   (%2 g/cm³)").arg(qs(m.name)).arg(m.density, 0, 'g', 4));
+      it->setData(Qt::UserRole, qs(m.name));
+      it->setData(Qt::UserRole + 1, kind);
+      list->addItem(it);
+      if (m.name == (select.empty() ? current : select)) list->setCurrentItem(it);
+    };
+    heading(tr("Library"));
+    for (const auto& m : doc::physicalMaterials()) add(m, BuiltIn);
+    const auto mine = doc::libraryMaterials();
+    heading(tr("My Materials"));
+    for (const auto& m : mine) add(m, Library);
+    std::vector<doc::PhysicalMaterial> carried;
+    for (const auto& m : session_.document().designMaterials())
+      if (std::none_of(mine.begin(), mine.end(), [&](const doc::PhysicalMaterial& x) { return x.name == m.name; }))
+        carried.push_back(m);
+    if (!carried.empty()) {
+      heading(tr("In This Design"));
+      for (const auto& m : carried) add(m, Design);
+    }
+  };
+  fill({});
+  auto* apply = new QPushButton(tr("Apply"));
+  apply->setObjectName(QStringLiteral("materialApply"));
+  auto* none = new QPushButton(tr("None"));
+  none->setObjectName(QStringLiteral("materialNone"));
+  none->setToolTip(tr("Takes the material away"));
+  auto* make = new QPushButton(tr("New..."));
+  make->setObjectName(QStringLiteral("materialNew"));
+  make->setToolTip(tr("A material of your own, starting from the one picked"));
+  auto* edit = new QPushButton(tr("Edit..."));
+  edit->setObjectName(QStringLiteral("materialEdit"));
+  auto* remove = new QPushButton(tr("Delete"));
+  remove->setObjectName(QStringLiteral("materialDelete"));
+  auto* close = new QPushButton(tr("Close"));
+  close->setObjectName(QStringLiteral("materialClose"));
+  auto picked = [list]() -> std::pair<std::string, int> {
+    const auto* it = list->currentItem();
+    if (!it || !(it->flags() & Qt::ItemIsSelectable)) return {{}, 0};
+    return {it->data(Qt::UserRole).toString().toStdString(), it->data(Qt::UserRole + 1).toInt()};
+  };
+  auto update = [picked, edit, remove, apply] {
+    const auto [name, kind] = picked();
+    apply->setEnabled(!name.empty());
+    edit->setEnabled(kind == Library);
+    remove->setEnabled(kind == Library);
+  };
+  connect(list, &QListWidget::currentItemChanged, &d, update);
+  update();
+  auto applyName = [this, targets](const std::string& material) {
+    if (auto err = session_.setBodyLooks(targets, nullptr, &material); !err.empty()) {
+      statusBar()->showMessage(qs(err), 4000);
+      return;
+    }
+    // The material's look comes with it, unless the body was coloured already.
+    if (const auto m = session_.document().material(material)) {
+      std::vector<std::string> plain;
+      for (const auto& t : targets)
+        if (const auto b = session_.document().body(t); b && b->color.empty()) plain.push_back(t);
+      if (!plain.empty()) (void)session_.setBodyLooks(plain, &m->color, nullptr);
+    }
+  };
+  connect(apply, &QPushButton::clicked, &d, [picked, applyName, &d] {
+    applyName(picked().first);
+    d.accept();
+  });
+  connect(list, &QListWidget::itemDoubleClicked, &d, [picked, applyName, &d] {
+    if (picked().first.empty()) return;
+    applyName(picked().first);
+    d.accept();
+  });
+  connect(none, &QPushButton::clicked, &d, [applyName, &d] {
+    applyName(std::string());
+    d.accept();
+  });
+  connect(make, &QPushButton::clicked, &d, [this, &d, picked, fill] {
+    doc::PhysicalMaterial start{"", 1.0, "#b0b4ba"};
+    if (const auto m = session_.document().material(picked().first)) start = *m;
+    start.name = start.name.empty() ? std::string("My Material") : start.name + " (copy)";
+    const auto m = editMaterialDialog(&d, start, tr("New Material"));
+    if (!m) return;
+    try {
+      doc::saveLibraryMaterial(*m);
+    } catch (const std::exception& e) {
+      QMessageBox::warning(&d, tr("Physical Material"), QString::fromUtf8(e.what()));
+      return;
+    }
+    fill(m->name);
+  });
+  connect(edit, &QPushButton::clicked, &d, [this, &d, picked, fill] {
+    const auto [name, kind] = picked();
+    const auto old = session_.document().material(name);
+    if (!old || kind != Library) return;
+    const auto m = editMaterialDialog(&d, *old, tr("Edit Material"));
+    if (!m) return;
+    try {
+      doc::saveLibraryMaterial(*m, name);
+    } catch (const std::exception& e) {
+      QMessageBox::warning(&d, tr("Physical Material"), QString::fromUtf8(e.what()));
+      return;
+    }
+    fill(m->name);
+  });
+  connect(remove, &QPushButton::clicked, &d, [&d, picked, fill] {
+    const auto [name, kind] = picked();
+    if (kind != Library) return;
+    if (QMessageBox::question(&d, QObject::tr("Physical Material"),
+                              QObject::tr("Delete '%1' from your library? Designs that use it keep their copy.").arg(qs(name))) !=
+        QMessageBox::Yes)
+      return;
+    try {
+      doc::removeLibraryMaterial(name);
+    } catch (const std::exception& e) {
+      QMessageBox::warning(&d, QObject::tr("Physical Material"), QString::fromUtf8(e.what()));
+    }
+    fill({});
+  });
+  connect(close, &QPushButton::clicked, &d, &QDialog::reject);
+  auto* buttons = new QHBoxLayout;
+  buttons->addWidget(make);
+  buttons->addWidget(edit);
+  buttons->addWidget(remove);
+  buttons->addStretch();
+  auto* bottom = new QHBoxLayout;
+  bottom->addWidget(none);
+  bottom->addStretch();
+  bottom->addWidget(apply);
+  bottom->addWidget(close);
+  auto* lay = new QVBoxLayout(&d);
+  lay->addWidget(list, 1);
+  lay->addLayout(buttons);
+  lay->addLayout(bottom);
+  d.exec();
 }
 
 // Drive Joints: pick a joint, move it with the slider (live preview), Play

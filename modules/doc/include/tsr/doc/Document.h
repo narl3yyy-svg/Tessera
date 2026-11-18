@@ -101,7 +101,15 @@ struct PhysicalMaterial {
   std::string color;   // the appearance it suggests ("#rrggbb")
 };
 const std::vector<PhysicalMaterial>& physicalMaterials();
-const PhysicalMaterial* findMaterial(const std::string& name);
+const PhysicalMaterial* findMaterial(const std::string& name);   // built-in only
+
+// The material library on this machine (no cloud): the materials you make,
+// kept in $TESSERA_MATERIALS, else ~/.local/share/tessera/materials.json.
+std::vector<PhysicalMaterial> libraryMaterials();
+// Adds a material to the library, or replaces the one of that name (a
+// built-in name is refused). `oldName` renames an existing one. Throws DocumentError.
+void saveLibraryMaterial(const PhysicalMaterial& m, const std::string& oldName = {});
+void removeLibraryMaterial(const std::string& name);
 
 struct SketchRecord {
   std::string name;
@@ -302,6 +310,10 @@ public:
   // Appearance and Physical Material of a body (kept by body name, outside
   // the timeline, as in the familiar tool). Empty clears. Need a transaction.
   void setBodyColor(const std::string& name, const std::string& color);
+  // A material by name: built-in, then the copies this design carries (so it
+  // opens anywhere), then the library on this machine.
+  std::optional<PhysicalMaterial> material(const std::string& name) const;
+  std::vector<PhysicalMaterial> designMaterials() const;   // the copies this design carries
   // Appearance on single faces of a body (references as the kernel writes
   // them); an empty colour takes the faces' own appearance away again.
   void setFaceColor(const std::string& body, const std::string& faces, const std::string& color);

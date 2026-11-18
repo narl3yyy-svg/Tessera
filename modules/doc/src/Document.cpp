@@ -28,6 +28,8 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <fstream>
+#include <filesystem>
 #include <vector>
 
 namespace tsr::doc {
@@ -765,6 +767,64 @@ const PhysicalMaterial* findMaterial(const std::string& name) {
   return nullptr;
 }
 
+namespace {
+std::string libraryPath() {
+  if (const char* p = std::getenv("TESSERA_MATERIALS"); p && *p) return p;
+  if (const char* x = std::getenv("XDG_DATA_HOME"); x && *x) return std::string(x) + "/tessera/materials.json";
+  const char* home = std::getenv("HOME");
+  return std::string(home ? home : ".") + "/.local/share/tessera/materials.json";
+}
+
+void checkMaterial(const PhysicalMaterial& m) {
+  if (m.name.empty()) throw DocumentError("Material: give it a name");
+  if (!(m.density > 0)) throw DocumentError("Material: the density must be more than zero");
+  const bool ok = m.color.size() == 7 && m.color[0] == '#' &&
+                  std::all_of(m.color.begin() + 1, m.color.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); });
+  if (!ok) throw DocumentError("Material: a colour is written #rrggbb");
+}
+
+void writeLibrary(const std::vector<PhysicalMaterial>& list) {
+  nlohmann::json j = nlohmann::json::array();
+  for (const auto& m : list) j.push_back({{"name", m.name}, {"density", m.density}, {"color", m.color}});
+  const std::filesystem::path p(libraryPath());
+  std::error_code ec;
+  if (p.has_parent_path()) std::filesystem::create_directories(p.parent_path(), ec);
+  std::ofstream out(p);
+  if (!out) throw DocumentError("Material library: cannot write " + p.string());
+  out << j.dump(2) << '\n';
+}
+} // namespace
+
+std::vector<PhysicalMaterial> libraryMaterials() {
+  std::vector<PhysicalMaterial> out;
+  std::ifstream in(libraryPath());
+  if (!in) return out;
+  try {
+    const auto j = nlohmann::json::parse(in);
+    for (const auto& e : j)
+      out.push_back({e.value("name", std::string()), e.value("density", 1.0), e.value("color", std::string("#b0b4ba"))});
+  } catch (const std::exception&) {   // an unreadable library: as if empty
+  }
+  return out;
+}
+
+void saveLibraryMaterial(const PhysicalMaterial& m, const std::string& oldName) {
+  checkMaterial(m);
+  if (findMaterial(m.name)) throw DocumentError("Material: '" + m.name + "' is a built-in material; give yours another name");
+  auto list = libraryMaterials();
+  std::erase_if(list, [&](const PhysicalMaterial& x) { return x.name == m.name || (!oldName.empty() && x.name == oldName); });
+  list.push_back(m);
+  writeLibrary(list);
+}
+
+void removeLibraryMaterial(const std::string& name) {
+  auto list = libraryMaterials();
+  const auto before = list.size();
+  std::erase_if(list, [&](const PhysicalMaterial& x) { return x.name == name; });
+  if (list.size() == before) throw DocumentError("Material: no material named '" + name + "' in the library");
+  writeLibrary(list);
+}
+
 void Document::setBodyColor(const std::string& name, const std::string& color) {
   requireTransaction("setBodyColor");
   const std::string internal = bodyName(name);
@@ -823,11 +883,44 @@ void Document::setBodyMaterial(const std::string& name, const std::string& mater
   requireTransaction("setBodyMaterial");
   const std::string internal = bodyName(name);
   if (!body(internal)) throw DocumentError("no body named '" + name + "'");
-  if (!material.empty() && !findMaterial(material)) throw DocumentError("Physical Material: no material named '" + material + "'");
+  const auto m = material.empty() ? std::nullopt : this->material(material);
+  if (!material.empty() && !m) throw DocumentError("Physical Material: no material named '" + material + "'");
   Handle(TDataStd_NamedData) nd;
   const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, true);
   if (!l.FindAttribute(TDataStd_NamedData::GetID(), nd)) nd = TDataStd_NamedData::Set(l);
   nd->SetString(ext("material:" + internal), ext(material));
+  // A material of your own travels with the design.
+  if (m && !findMaterial(m->name)) {
+    char text[64];
+    std::snprintf(text, sizeof text, "%.17g|", m->density);
+    nd->SetString(ext("mat:" + m->name), ext(std::string(text) + m->color));
+  }
+}
+
+std::vector<PhysicalMaterial> Document::designMaterials() const {
+  std::vector<PhysicalMaterial> out;
+  Handle(TDataStd_NamedData) nd;
+  const TDF_Label l = doc_->Main().FindChild(kBodyLooksTag, false);
+  if (l.IsNull() || !l.FindAttribute(TDataStd_NamedData::GetID(), nd) || !nd->HasStrings()) return out;
+  for (TDataStd_DataMapIteratorOfDataMapOfStringString it(nd->GetStringsContainer()); it.More(); it.Next()) {
+    const std::string key = TCollection_AsciiString(it.Key()).ToCString();
+    if (key.rfind("mat:", 0) != 0) continue;
+    const std::string value = TCollection_AsciiString(it.Value()).ToCString();
+    const auto bar = value.find('|');
+    if (bar == std::string::npos) continue;
+    out.push_back({key.substr(4), std::atof(value.substr(0, bar).c_str()), value.substr(bar + 1)});
+  }
+  std::sort(out.begin(), out.end(), [](const PhysicalMaterial& a, const PhysicalMaterial& b) { return a.name < b.name; });
+  return out;
+}
+
+std::optional<PhysicalMaterial> Document::material(const std::string& name) const {
+  if (const auto* m = findMaterial(name)) return *m;
+  for (const auto& m : designMaterials())
+    if (m.name == name) return m;
+  for (const auto& m : libraryMaterials())
+    if (m.name == name) return m;
+  return std::nullopt;
 }
 
 std::string Document::bodyName(const std::string& nameOrAlias) const {

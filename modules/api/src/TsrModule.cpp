@@ -449,9 +449,33 @@ void bindTsr(py::module_& m) {
   }, py::arg("body"), py::arg("material"), "A body's physical material (empty: none).");
   m.def("materials", [] {
     std::vector<py::tuple> out;
-    for (const auto& m : doc::physicalMaterials()) out.push_back(py::make_tuple(m.name, m.density));
+    std::vector<std::string> seen;
+    auto add = [&](const doc::PhysicalMaterial& m) {
+      if (std::find(seen.begin(), seen.end(), m.name) != seen.end()) return;
+      seen.push_back(m.name);
+      out.push_back(py::make_tuple(m.name, m.density));
+    };
+    for (const auto& m : doc::physicalMaterials()) add(m);
+    for (const auto& m : activeSession().document().designMaterials()) add(m);
+    for (const auto& m : doc::libraryMaterials()) add(m);
     return out;
-  }, "The physical materials: (name, density in g/cm^3).");
+  }, "The physical materials: built-in, those this design carries, then your library: (name, density in g/cm^3).");
+  m.def("add_material", [](const std::string& name, double density, const std::string& color, const std::string& rename) {
+    try {
+      doc::saveLibraryMaterial({name, density, color}, rename);
+    } catch (const std::exception& e) {
+      throw std::runtime_error(e.what());
+    }
+  }, py::arg("name"), py::arg("density"), py::arg("color") = "#b0b4ba", py::arg("rename") = "",
+     "Adds a material to your library on this machine (density in g/cm^3), or changes the one of that name "
+     "(rename: the name it had).");
+  m.def("remove_material", [](const std::string& name) {
+    try {
+      doc::removeLibraryMaterial(name);
+    } catch (const std::exception& e) {
+      throw std::runtime_error(e.what());
+    }
+  }, py::arg("name"), "Removes a material from your library (designs that use it keep their copy).");
   m.def("rename", [](const std::string& kind, const std::string& name, const std::string& newName) {
     std::string err;
     if (kind == "body") err = activeSession().renameBody(name, newName);
@@ -476,7 +500,7 @@ void bindTsr(py::module_& m) {
     d["center"] = py::make_tuple(mp.centerOfMass.x, mp.centerOfMass.y, mp.centerOfMass.z);
     d["material"] = b->material;
     d["color"] = b->color;
-    if (const auto* mat = doc::findMaterial(b->material)) {
+    if (const auto mat = activeSession().document().material(b->material)) {
       d["density"] = mat->density;
       d["mass"] = mp.volume * mat->density;   // grams (cm^3 x g/cm^3)
     }

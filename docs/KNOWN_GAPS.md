@@ -156,3 +156,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Silhouette Split
 
 - Cylinders and spheres only (their outline lies in a plane); cones, tori and free-form faces are refused. No Split Shelled Body. Split Solid Body needs the picked faces' outlines in one plane.
+
+## Physical Material
+
+- A material has a name, density and a plain colour; no other physical properties (Young's modulus, yield strength ...), no categories or favourites, no drag and drop onto bodies. The library is one JSON file on this machine; nothing is shared online.

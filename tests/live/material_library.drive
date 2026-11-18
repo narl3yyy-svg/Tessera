@@ -1,0 +1,24 @@
+# Live: MODIFY > Physical Material, as the familiar material browser: New...
+# opens the Material Editor; name it, set its density, Save; it is listed
+# under My Materials and picked; Apply gives it to the body.
+waitfor tsr.feature.extrude
+wait 600
+menu panel.Modify ui.physicalMaterial
+waitfor materialList
+wait 400
+click materialNew
+waitfor materialName
+wait 300
+click materialName
+key ctrl+a
+type Carbon Fibre
+click materialDensity
+key ctrl+a
+type 1.6
+wait 300
+shot /tmp/live_material_editor.png
+click materialSave
+wait 600
+shot /tmp/live_material_library.png
+click materialApply
+wait 800

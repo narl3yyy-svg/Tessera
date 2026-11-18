@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "modules/api/src/TsrModule.cpp": {
-    "mtime": 1794967494.0620005,
-    "seen": 1794967891.5436497,
-    "ast_hash": "dca9ff3c0e0d725c7909474cf04952e0",
+    "mtime": 1794971562.8382337,
+    "seen": 1794972143.5313244,
+    "ast_hash": "cb8161dd9c67e77f2c9ddd91265c4e28",
     "semantic_hash": ""
   },
   "modules/api/src/cli_main.cpp": {
@@ -150,9 +150,9 @@
     "semantic_hash": ""
   },
   "modules/app/src/MainWindowTools.cpp": {
-    "mtime": 1794967410.8999794,
-    "seen": 1794967891.5436587,
-    "ast_hash": "bb2c16bcf5db9736df4498b3d676f62d",
+    "mtime": 1794971613.8486097,
+    "seen": 1794972143.5313413,
+    "ast_hash": "084a26c3de5297b807a07a69e02eae85",
     "semantic_hash": ""
   },
   "modules/app/src/MarkingMenu.cpp": {
@@ -348,9 +348,9 @@
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Document.h": {
-    "mtime": 1794967227.2120774,
-    "seen": 1794967891.5436897,
-    "ast_hash": "597ea1bd87c640ee1661dc38fac86744",
+    "mtime": 1794971562.836727,
+    "seen": 1794972143.5313976,
+    "ast_hash": "9470812090895f98b0f0c592ac64a9b9",
     "semantic_hash": ""
   },
   "modules/doc/include/tsr/doc/Session.h": {
@@ -366,9 +366,9 @@
     "semantic_hash": ""
   },
   "modules/doc/src/Document.cpp": {
-    "mtime": 1794967234.0705884,
-    "seen": 1794967891.543692,
-    "ast_hash": "2de96c5bb168350fcab85a3e062ad074",
+    "mtime": 1794971562.8382337,
+    "seen": 1794972143.5314023,
+    "ast_hash": "10ba94f5334cee326504b8a01041153a",
     "semantic_hash": ""
   },
   "modules/doc/src/OcafApp.h": {
@@ -1914,9 +1914,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1794971185.9803617,
-    "seen": 1794971499.4373095,
-    "ast_hash": "38f09128a625a38983ffee32857f560a",
+    "mtime": 1794971827.5860672,
+    "seen": 1794972143.5319643,
+    "ast_hash": "68996c8740f8da61c9174620cbcb0132",
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
@@ -1932,15 +1932,15 @@
     "semantic_hash": ""
   },
   "docs/FUSION_STUDY.md": {
-    "mtime": 1794971185.9813628,
-    "seen": 1794971499.4373138,
-    "ast_hash": "7e4a5ae7a275559f215b3f9f34b6c2a2",
+    "mtime": 1794971827.5875714,
+    "seen": 1794972143.5319686,
+    "ast_hash": "59b1c895c57adb5b47139d71d5e7a16c",
     "semantic_hash": ""
   },
   "docs/KNOWN_GAPS.md": {
-    "mtime": 1794971185.9813628,
-    "seen": 1794971499.437315,
-    "ast_hash": "9730ff50c952ae67d3c3b38ae34b372e",
+    "mtime": 1794971827.5885763,
+    "seen": 1794972143.5319698,
+    "ast_hash": "b50ba6fcc04806bdc097f0ce163fcaf6",
     "semantic_hash": ""
   },
   "docs/LAB_NOTES.md": {
@@ -1956,9 +1956,9 @@
     "semantic_hash": ""
   },
   "docs/ROADMAP.md": {
-    "mtime": 1794971185.9803617,
-    "seen": 1794971499.4373195,
-    "ast_hash": "51a677115a6fcd7b4e6e17a1d6e48a70",
+    "mtime": 1794971827.5875714,
+    "seen": 1794972143.5319738,
+    "ast_hash": "256732e6b8859400c4ba0e212756ba16",
     "semantic_hash": ""
   },
   "modules/api/CMakeLists.txt": {
@@ -1998,9 +1998,9 @@
     "semantic_hash": ""
   },
   "tests/CMakeLists.txt": {
-    "mtime": 1794971169.495418,
-    "seen": 1794971499.4373293,
-    "ast_hash": "d1b37c9c9a35e90d88971320e2034711",
+    "mtime": 1794971795.6208544,
+    "seen": 1794972143.531984,
+    "ast_hash": "5a4b80fa8c7b630aca5468fc0ad1ec11",
     "semantic_hash": ""
   },
   "tests/oracle/required.txt": {
@@ -2703,6 +2703,18 @@
     "mtime": 1794971169.3947544,
     "seen": 1794971499.436992,
     "ast_hash": "17b596ede75d64c34b157ad082252869",
+    "semantic_hash": ""
+  },
+  "tests/api/test_material_library.py": {
+    "mtime": 1794971749.1177309,
+    "seen": 1794972143.5314934,
+    "ast_hash": "d8a93eb5face33dfc68d7ab721054903",
+    "semantic_hash": ""
+  },
+  "tests/live/material_library_check.py": {
+    "mtime": 1794971764.2760506,
+    "seen": 1794972143.531598,
+    "ast_hash": "244397105f00163858d4b36dfbe91f8f",
     "semantic_hash": ""
   }
 }
