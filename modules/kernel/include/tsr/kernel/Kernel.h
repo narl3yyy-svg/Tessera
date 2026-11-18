@@ -252,6 +252,10 @@ TopoDS_Shape faceFeature(const TopoDS_Shape& body, const std::vector<TopoDS_Shap
 // its sides). Throws KernelError when the surface is not in the way.
 TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dir, const TopoDS_Shape& face);
 
+// Replace Face: the body grown out through `faces` (or trimmed back) to the
+// surface of `target`, extended past its edges, as the familiar tool does.
+TopoDS_Shape replaceFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& target);
+
 // Whether two solids overlap or touch.
 bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b);
 

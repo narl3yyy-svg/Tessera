@@ -2994,6 +2994,84 @@ private:
   CommandDef def_;
 };
 
+// Replace Face, as in the familiar Modify menu: source faces of a body give
+// way to a target (a plane, or a face of any body, flat or curved): the body
+// grows out to the target's surface, or is trimmed back to it.
+class ReplaceFace final : public Command {
+public:
+  ReplaceFace() {
+    commonDef(def_, kCmdReplaceFace, "Replace Face", "Moves faces of a body onto another surface: pick the source faces, "
+              "then press Select and click the target face or plane.", "replace-face", "Modify");
+    def_.inputs = {bodyInput(),
+                   {.id = "faces", .label = "Source Faces", .tooltip = "Click the faces to replace.",
+                    .type = InputType::Faces, .defaultValue = std::string{}},
+                   {.id = "target", .label = "Target Faces", .tooltip = "A plane, or a face (flat or curved, of any body).",
+                    .type = InputType::Plane, .defaultValue = std::string{}}};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
+    if (getString(in, "faces").empty()) return "Source Faces: click the faces to replace";
+    if (getString(in, "target").empty()) return "Target Faces: press Select, then click the target face or plane";
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    defaultBody(in, doc);
+    try {
+      if (const auto b = doc.body(getString(in, "body"))) in["faces"] = kernel::completeFaceReferences(b->shape, getString(in, "faces"));
+      const std::string t = getString(in, "target");
+      if (t.rfind("face:", 0) == 0)
+        if (const auto bar = t.find('|'); bar != std::string::npos)
+          if (const auto b = doc.body(t.substr(5, bar - 5)))
+            in["target"] = t.substr(0, bar + 1) + kernel::completeFaceReferences(b->shape, t.substr(bar + 1));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(std::string("Faces: ") + e.what());
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    const std::string name = bodyName(in, doc);
+    const TopoDS_Shape shape = doc.body(name)->shape;
+    const std::string t = getString(in, "target");
+    try {
+      const auto faces = kernel::resolveFaces(shape, getString(in, "faces"));
+      TopoDS_Shape target;
+      if (t.rfind("face:", 0) == 0) {
+        const auto bar = t.find('|');
+        const auto b = bar == std::string::npos ? std::nullopt : doc.body(t.substr(5, bar - 5));
+        if (!b) throw CommandError("Target Faces: that body no longer exists");
+        const auto picked = kernel::resolveFaces(b->shape, t.substr(bar + 1));
+        if (picked.empty()) throw CommandError("Target Faces: that face no longer exists");
+        target = picked.front();
+      } else {
+        // A plane: a face on it around the body, well past it.
+        gp_Ax3 f;
+        try {
+          f = doc.planeFrame(t, 0);
+        } catch (const DocumentError& e) {
+          throw CommandError(std::string("Target Faces: ") + e.what());
+        }
+        Bnd_Box box;
+        BRepBndLib::Add(shape, box);
+        double x0, y0, z0, x1, y1, z1;
+        box.Get(x0, y0, z0, x1, y1, z1);
+        const gp_Pnt mid((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+        const gp_Vec n(f.Direction());
+        const gp_Pnt on = mid.Translated(n * -gp_Vec(f.Location(), mid).Dot(n));
+        const double r = 4 * std::sqrt(box.SquareExtent()) + 10;
+        target = BRepBuilderAPI_MakeFace(gp_Pln(gp_Ax3(on, f.Direction(), f.XDirection())), -r, r, -r, r).Face();
+      }
+      doc.replaceBody(name, kernel::replaceFaces(shape, faces, target));
+    } catch (const kernel::KernelError& e) {
+      throw CommandError(e.what());
+    }
+  }
+
+private:
+  CommandDef def_;
+};
+
 // Rib and Web: thin supports grown from a sketch's open curves to the body.
 class RibWeb final : public Command {
 public:
@@ -3900,6 +3978,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<RigidGroup>());
   registry.add(std::make_unique<Emboss>());
   registry.add(std::make_unique<BoundaryFill>());
+  registry.add(std::make_unique<ReplaceFace>());
 }
 
 } // namespace tsr::doc

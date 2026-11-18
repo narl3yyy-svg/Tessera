@@ -1144,7 +1144,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   refresh();
   updateProfilePicking();
   if (dlg->planeInputShown()) viewport_->setPlanePicking(true);   // click a plane or flat face
-  viewport_->setBodyPlanePicks(extrudeDialog);
+  viewport_->setBodyPlanePicks(extrudeDialog || dlg->commandId() == QLatin1String(doc::kCmdReplaceFace));
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).
   syncPickedShapes();

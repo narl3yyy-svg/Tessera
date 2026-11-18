@@ -2083,21 +2083,77 @@ TopoDS_Face wrapOntoCylinder(const TopoDS_Face& profile, const gp_Cylinder& cyl)
 
 } // namespace
 
+static TopoDS_Face extendedFace(const TopoDS_Face& tf, double reach);
+
+TopoDS_Shape replaceFaces(const TopoDS_Shape& body, const std::vector<TopoDS_Shape>& faces, const TopoDS_Shape& target) {
+  if (faces.empty()) throw KernelError("Replace Face: select the faces to replace");
+  if (target.IsNull() || target.ShapeType() != TopAbs_FACE) throw KernelError("Replace Face: select the target face or plane");
+  Bnd_Box box;
+  BRepBndLib::Add(body, box);
+  const double reach = 2 * std::sqrt(box.SquareExtent()) + 1;
+  // Which way the source faces look out of the body (their mean normal).
+  gp_Vec out(0, 0, 0);
+  for (const auto& f : faces) {
+    const TopoDS_Face face = TopoDS::Face(f);
+    BRepAdaptor_Surface s(face);
+    double u0 = 0, u1 = 0, v0 = 0, v1 = 0;
+    BRepTools::UVBounds(face, u0, u1, v0, v1);
+    BRepLProp_SLProps p(s, (u0 + u1) / 2, (v0 + v1) / 2, 1, 1e-9);
+    if (!p.IsNormalDefined()) continue;
+    gp_Dir n = p.Normal();
+    if (face.Orientation() == TopAbs_REVERSED) n.Reverse();
+    out += gp_Vec(n);
+  }
+  if (out.Magnitude() < 1e-9) throw KernelError("Replace Face: the faces look different ways");
+  const gp_Dir dir(out);
+  const TopoDS_Face big = extendedFace(TopoDS::Face(target), reach);
+  BRepAdaptor_Surface tsurf(big);
+  TopoDS_Shape result = guarded("Replace Face", [&]() -> TopoDS_Shape {
+    // The body grown out through the source faces, then cut by the target's
+    // surface: what lies behind it (looking out of the faces) is kept.
+    TopoDS_Shape grown = body;
+    for (const auto& f : faces) grown = boolean(BooleanOp::Join, grown, BRepPrimAPI_MakePrism(f, gp_Vec(dir) * reach).Shape());
+    BRepAlgoAPI_Splitter split;
+    TopTools_ListOfShape objects, tools;
+    objects.Append(grown);
+    tools.Append(big);
+    split.SetArguments(objects);
+    split.SetTools(tools);
+    split.Build();
+    if (!split.IsDone()) return TopoDS_Shape();
+    TopoDS_Shape kept;
+    for (TopExp_Explorer ex(split.Shape(), TopAbs_SOLID); ex.More(); ex.Next()) {
+      const Vec3 c = interiorPoint(ex.Current());
+      GeomAPI_ProjectPointOnSurf proj(pnt(c), BRep_Tool::Surface(big));
+      if (proj.NbPoints() == 0) continue;
+      double pu = 0, pv = 0;
+      proj.LowerDistanceParameters(pu, pv);
+      BRepLProp_SLProps p(tsurf, pu, pv, 1, 1e-9);
+      if (!p.IsNormalDefined()) continue;
+      const gp_Vec side(proj.NearestPoint(), pnt(c));
+      const double s = side.Dot(gp_Vec(p.Normal())) * gp_Vec(p.Normal()).Dot(gp_Vec(dir));
+      if (s > 0) continue;   // beyond the target
+      kept = kept.IsNull() ? ex.Current() : boolean(BooleanOp::Join, kept, ex.Current());
+    }
+    if (kept.IsNull()) return TopoDS_Shape();
+    ShapeUpgrade_UnifySameDomain unify(kept, true, true, false);
+    unify.Build();
+    return unify.Shape();
+  });
+  if (!isValid(result) || massProperties(result).volume < 1e-12)
+    throw KernelError("Replace Face: the target does not meet the body there");
+  return result;
+}
+
 bool touching(const TopoDS_Shape& a, const TopoDS_Shape& b) {
   BRepExtrema_DistShapeShape d(a, b);
   return d.IsDone() && d.Value() < 1e-7;
 }
 
-TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dirv, const TopoDS_Shape& target) {
-  if (faces.empty()) throw KernelError("Extrude: no profile");
-  if (target.IsNull() || target.ShapeType() != TopAbs_FACE) throw KernelError("Extrude: pick the face to extrude up to");
-  const gp_Dir dir(dirv.x, dirv.y, dirv.z);
-  Bnd_Box box;
-  BRepBndLib::Add(target, box);
-  for (const auto& f : faces) BRepBndLib::Add(f, box);
-  const double reach = 2 * std::sqrt(box.SquareExtent()) + 1;
-  // The face's surface, extended past its edges.
-  const TopoDS_Face tf = TopoDS::Face(target);
+// A face's surface as a face reaching `reach` past the face's edges (a
+// cylinder all the way round and along, a plane without end, a free-form
+// face grown at its sides).
+static TopoDS_Face extendedFace(const TopoDS_Face& tf, double reach) {
   TopLoc_Location loc;
   Handle(Geom_Surface) s = BRep_Tool::Surface(tf, loc);
   if (auto t = Handle(Geom_RectangularTrimmedSurface)::DownCast(s); !t.IsNull()) s = t->BasisSurface();
@@ -2121,6 +2177,19 @@ TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dirv, co
   }
   TopoDS_Face big = BRepBuilderAPI_MakeFace(s, u0, u1, v0, v1, 1e-7).Face();
   if (!loc.IsIdentity()) big.Move(loc);
+  return big;
+}
+
+TopoDS_Shape extrudeToFace(const std::vector<TopoDS_Shape>& faces, Vec3 dirv, const TopoDS_Shape& target) {
+  if (faces.empty()) throw KernelError("Extrude: no profile");
+  if (target.IsNull() || target.ShapeType() != TopAbs_FACE) throw KernelError("Extrude: pick the face to extrude up to");
+  const gp_Dir dir(dirv.x, dirv.y, dirv.z);
+  Bnd_Box box;
+  BRepBndLib::Add(target, box);
+  for (const auto& f : faces) BRepBndLib::Add(f, box);
+  const double reach = 2 * std::sqrt(box.SquareExtent()) + 1;
+  // The face's surface, extended past its edges.
+  const TopoDS_Face big = extendedFace(TopoDS::Face(target), reach);
   TopoDS_Shape result = guarded("Extrude", [&]() -> TopoDS_Shape {
     TopoDS_Compound prisms;
     BRep_Builder bb;

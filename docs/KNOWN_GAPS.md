@@ -143,4 +143,8 @@ One line per item: id, what differs, why, and the phase that closes it.
 
 ## Draft
 
-- Fixed Plane drafts only (no Parting Line type). While the Draft panel's plane box shows, a click on a flat face picks it as the plane: pick the faces first (click them, then start Draft), as Tessera's pre-selection allows.
+- Fixed Plane drafts only (no Parting Line type). Clicks pick the faces; press Select beside the plane box to click the plane instead.
+
+## Replace Face
+
+- The target's surface is extended in full: where it meets the body away from the source faces, the body is trimmed there too. No Tangent Chain option.

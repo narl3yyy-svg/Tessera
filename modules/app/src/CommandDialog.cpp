@@ -14,6 +14,7 @@
 #include <QScrollBar>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include "tsr/core/Expression.h"
@@ -258,8 +259,30 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
           onInputChanged(id, combo->currentData().toString().toStdString());
         });
-        if (!planeInput_) planeInput_ = combo;
+        const bool first = !planeInput_;
+        if (first) planeInput_ = combo;
         w = combo;
+        // Beside faces to pick (Draft, Split Face, Replace Face ...): clicks
+        // go to the faces until Select is pressed, as in the familiar panel's
+        // selection fields; one plane or face picked, it goes back.
+        const bool withFaces = std::any_of(def.inputs.begin(), def.inputs.end(),
+                                           [](const InputDef& d) { return d.type == InputType::Faces; });
+        if (first && withFaces && def.id != std::string("tsr.feature.extrude")) {
+          auto* row = new QWidget;
+          auto* lay = new QHBoxLayout(row);
+          lay->setContentsMargins(0, 0, 0, 0);
+          lay->addWidget(combo, 1);
+          planeSelect_ = new QToolButton;
+          planeSelect_->setText(tr("Select"));
+          planeSelect_->setCheckable(true);
+          planeSelect_->setObjectName(QString::fromStdString(id) + QStringLiteral("Select"));
+          planeSelect_->setToolTip(tr("Then click a plane or face in the canvas"));
+          lay->addWidget(planeSelect_);
+          connect(planeSelect_, &QToolButton::toggled, this, [this] { emit inputsChanged(); });
+          combo->setObjectName(QString::fromStdString(id));
+          planeRow_ = row;
+          w = row;
+        }
         break;
       }
       case InputType::Sketch: {
@@ -433,7 +456,7 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         break;
       }
     }
-    w->setObjectName(QString::fromStdString(in.id));
+    w->setObjectName(QString::fromStdString(in.id) + (w == planeRow_ ? QStringLiteral("Row") : QString()));
     w->setToolTip(tip);
     w->setAccessibleName(label);
     form->addRow(label, w);
@@ -624,6 +647,7 @@ bool CommandDialog::hasPlaneInput() const { return planeInput_ != nullptr; }
 
 bool CommandDialog::planeInputShown() const {
   if (!planeInput_) return false;
+  if (planeSelect_ && !planeSelect_->isChecked()) return false;   // clicks go to the faces
   const InputDef* d = cmd_->def().input(planeInput_->objectName().toStdString());
   return !d || isInputVisible(*d, cmd_->inputs());
 }
@@ -636,6 +660,8 @@ void CommandDialog::pickPlane(const QString& spec, const QString& label) {
     i = planeInput_->count() - 1;
   }
   planeInput_->setCurrentIndex(i);
+  // Picked: clicks go back to the faces.
+  if (planeSelect_ && planeSelect_->isChecked()) planeSelect_->setChecked(false);
 }
 bool CommandDialog::hasEdgesInput() const { return !edgesId_.empty(); }
 bool CommandDialog::hasFacesInput() const { return !facesId_.empty(); }

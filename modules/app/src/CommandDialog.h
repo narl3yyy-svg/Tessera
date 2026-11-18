@@ -17,6 +17,7 @@ class QComboBox;
 class QFormLayout;
 class QListWidget;
 class QScrollArea;
+class QToolButton;
 
 namespace tsr::app {
 
@@ -105,6 +106,8 @@ private:
   QComboBox* bodyInput_ = nullptr;
   QComboBox* sketchInput_ = nullptr;
   QComboBox* planeInput_ = nullptr;
+  QToolButton* planeSelect_ = nullptr;   // beside faces: Select switches clicks to the plane
+  QWidget* planeRow_ = nullptr;
   QLabel* profilesLabel_ = nullptr;
   std::string profilesId_;
   QLabel* edgesLabel_ = nullptr;

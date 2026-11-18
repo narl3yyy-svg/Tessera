@@ -1,0 +1,17 @@
+# Live: MODIFY menu > Replace Face, as in the familiar tool: click the top
+# face (Source Faces), press Select beside Target Faces, click the plane: the
+# block grows up to it.
+waitfor tsr.feature.extrude
+wait 600
+menu panel.Modify tsr.feature.replaceFace
+waitfor panelOk
+wait 400
+wclick 20 15 20               # the top face
+wait 400
+click targetSelect
+wait 400
+wclick -15 -15 30           # Plane1, clear of the block
+wait 800
+shot /tmp/live_replace_face.png
+click panelOk
+wait 800
