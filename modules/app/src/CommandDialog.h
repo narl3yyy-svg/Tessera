@@ -82,6 +82,11 @@ public:
   void setRequireSelection(bool on);
   bool waitingForSelection() const;
 
+  // Construction axes and points clicked in the canvas: an axis fills the
+  // next axis field; a point joins (or leaves) the vertices.
+  bool hasAxisInput() const;
+  void pickAxis(const QString& name);
+  void pickPoint(const QString& name);
   // A plane clicked in the canvas fills the first plane input.
   bool hasPlaneInput() const;
   bool planeInputShown() const;   // the plane input exists and is visible
@@ -108,6 +113,8 @@ private:
   QComboBox* planeInput_ = nullptr;
   QToolButton* planeSelect_ = nullptr;   // beside faces: Select switches clicks to the plane
   QWidget* planeRow_ = nullptr;
+  std::vector<QComboBox*> axisInputs_;
+  int axisPicks_ = 0;
   QLabel* profilesLabel_ = nullptr;
   std::string profilesId_;
   QLabel* edgesLabel_ = nullptr;

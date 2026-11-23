@@ -160,3 +160,7 @@ One line per item: id, what differs, why, and the phase that closes it.
 ## Physical Material
 
 - A material has a name, density and a plain colour; no other physical properties (Young's modulus, yield strength ...), no categories or favourites, no drag and drop onto bodies. The library is one JSON file on this machine; nothing is shared online.
+
+## Construct
+
+- Plane Along Path: no drag handle along the path yet (type the distance). Construction axes fill axis fields (patterns, revolve ...) and construction points fill vertex fields of Construct commands; origin axes and the origin point are picked from the fields' lists, not in the canvas.

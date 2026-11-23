@@ -2277,6 +2277,119 @@ private:
   CommandDef def_;
 };
 
+// Plane Along Path, as in the familiar Construct menu: a plane square to a
+// path (body edges clicked in the canvas, else a sketch's open curves) at a
+// point along it: a proportion of its length (0 at its start, 1 at its end)
+// or a distance along it.
+class PlaneAlongPath final : public Command {
+public:
+  PlaneAlongPath() {
+    commonDef(def_, kCmdPlaneAlongPath, "Plane Along Path", "A plane square to a path, at a point along it: click "
+              "edges, or use a sketch's open curves.", "plane-path", "Construct");
+    def_.nameInput = "name";
+    def_.inputs = {
+        {.id = "name", .label = "Name", .tooltip = "Empty: Plane<n>.", .type = InputType::String,
+         .defaultValue = std::string{}, .optional = true},
+        bodyInput(),
+        {.id = "edges", .label = "Path", .tooltip = "Click the path's edges in the canvas (else the sketch's curves).",
+         .type = InputType::Edges, .defaultValue = std::string{}, .optional = true},
+        {.id = "sketch", .label = "Sketch", .tooltip = "Its open curves form the path when no edge is clicked.",
+         .type = InputType::Sketch, .defaultValue = std::string{}, .optional = true},
+        choice("distanceType", "Distance Type", {"Proportional", "Physical"},
+               "Proportional: 0 at the path's start, 1 at its end. Physical: a length along it."),
+        {.id = "proportion", .label = "Distance", .tooltip = "0 to 1 along the path.", .type = InputType::Real,
+         .defaultValue = 0.5, .unit = Unit::None, .min = 0.0, .max = 1.0, .visibleWhen = "distanceType=Proportional"},
+        {.id = "length", .label = "Distance", .tooltip = "Along the path from its start.", .type = InputType::Real,
+         .defaultValue = 1.0, .unit = Unit::Millimeter, .min = 0.0, .visibleWhen = "distanceType=Physical"}};
+  }
+  const CommandDef& def() const override { return def_; }
+  std::string validate(const Inputs& in, CommandContext& ctx) const override {
+    try {
+      (void)frame(docOf(ctx), in);
+    } catch (const std::exception& e) {
+      return e.what();
+    }
+    return {};
+  }
+  void prepare(Inputs& in, CommandContext& ctx) const override {
+    const Document& doc = docOf(ctx);
+    if (getString(in, "name").empty()) in["name"] = doc.nextPlaneName();
+    if (getString(in, "edges").empty()) {
+      if (getString(in, "sketch").empty())
+        if (auto rec = sketchFor(doc, "")) in["sketch"] = rec->name;
+      return;
+    }
+    defaultBody(in, doc);
+    if (const auto b = doc.body(getString(in, "body"))) {
+      try {
+        in["edges"] = kernel::completeEdgeReferences(b->shape, getString(in, "edges"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Path: ") + e.what());
+      }
+    }
+  }
+  void apply(const Inputs& in, CommandContext& ctx) const override {
+    Document& doc = docOf(ctx);
+    std::string name = getString(in, "name");
+    if (name.empty()) name = doc.nextPlaneName();
+    doc.setPlane({name, sketch::customPlaneSpec(frame(doc, in))});
+  }
+
+private:
+  gp_Ax3 frame(const Document& doc, const Inputs& in) const {
+    TopoDS_Wire path;
+    if (!getString(in, "edges").empty()) {
+      const std::string bn = getString(in, "body").empty() && !doc.bodies().empty() ? doc.bodies().back().name : getString(in, "body");
+      const auto b = doc.body(bn);
+      if (!b) throw CommandError("Path: body '" + bn + "' does not exist");
+      std::vector<TopoDS_Shape> edges;
+      try {
+        edges = kernel::resolveEdges(b->shape, getString(in, "edges"));
+      } catch (const kernel::KernelError& e) {
+        throw CommandError(std::string("Path: ") + e.what());
+      }
+      Handle(TopTools_HSequenceOfShape) seq = new TopTools_HSequenceOfShape;
+      for (const auto& e : edges) seq->Append(e);
+      Handle(TopTools_HSequenceOfShape) wires;
+      ShapeAnalysis_FreeBounds::ConnectEdgesToWires(seq, 1e-6, false, wires);
+      if (wires->Length() != 1) throw CommandError("Path: the clicked edges must join end to end");
+      path = TopoDS::Wire(wires->Value(1));
+    } else {
+      const auto rec = sketchFor(doc, getString(in, "sketch"));
+      if (!rec) throw CommandError("Path: click edges, or make a sketch with an open curve");
+      const gp_Ax3 sf = doc.planeFrame(rec->plane, rec->offset);
+      const auto chains = openChains(sketch::Sketch::fromJson(rec->data), sf);
+      if (chains.empty()) throw CommandError("Path: " + rec->name + " has no open curve to follow");
+      double best = -1;
+      for (const auto& w : chains) {
+        GProp_GProps g;
+        BRepGProp::LinearProperties(w, g);
+        if (g.Mass() > best) best = g.Mass(), path = w;
+      }
+    }
+    BRepAdaptor_CompCurve curve(path);
+    const double u0 = curve.FirstParameter();
+    GProp_GProps g;
+    BRepGProp::LinearProperties(path, g);
+    const double length = g.Mass();
+    const bool physical = in.count("distanceType") && getString(in, "distanceType") == "Physical";
+    const double along = physical ? getReal(in, "length") : getReal(in, "proportion") * length;
+    if (along > length * (1 + 1e-9) + 1e-9) throw CommandError("Distance: past the end of the path");
+    GCPnts_AbscissaPoint ap(curve, std::min(along, length), u0);
+    if (!ap.IsDone()) throw CommandError("Path: could not measure along it");
+    gp_Pnt p;
+    gp_Vec t, n2;
+    curve.D2(ap.Parameter(), p, t, n2);
+    if (t.Magnitude() < 1e-12) throw CommandError("Path: it has no direction there");
+    const gp_Dir z(t);
+    // The plane's X: towards the curve's bend where it bends, else any square direction.
+    gp_Vec x = n2 - gp_Vec(z) * n2.Dot(gp_Vec(z));
+    if (x.Magnitude() < 1e-9) x = gp_Vec(z).Crossed(std::abs(z.Z()) < 0.9 ? gp_Vec(0, 0, 1) : gp_Vec(1, 0, 0));
+    return gp_Ax3(p, z, gp_Dir(x));
+  }
+  CommandDef def_;
+};
+
 // ---------------------------------------------------------------------------
 // Construct: axes and points, from body geometry or planes.
 
@@ -2365,8 +2478,14 @@ public:
   }
   bool usesBody() const { return kind_ != Kind::AxisTwoPlanes && kind_ != Kind::PointThreePlanes; }
 
+  // Picks that are all construction points need no body.
+  static bool onlyPoints(const Inputs& in) {
+    if (!in.count("vertices") || (in.count("faces") && !getString(in, "faces").empty())) return false;
+    const auto items = splitNames(getString(in, "vertices"));
+    return !items.empty() && std::all_of(items.begin(), items.end(), [](const std::string& i) { return i.rfind("point:", 0) == 0; });
+  }
   std::string validate(const Inputs& in, CommandContext& ctx) const override {
-    if (usesBody())
+    if (usesBody() && !onlyPoints(in))
       if (auto err = checkBody(in, docOf(ctx)); !err.empty()) return err;
     try {
       if (isAxis()) (void)axisOf(docOf(ctx), in);
@@ -2424,10 +2543,18 @@ private:
     return e;
   }
   std::vector<gp_Pnt> verticesOf(const Document& doc, const Inputs& in, size_t want) const {
+    // Body vertices, and construction points ("point:Point1"), in pick order.
     std::vector<gp_Pnt> out;
     try {
-      for (const auto& v : kernel::resolveVertices(body(doc, in), getString(in, "vertices")))
-        out.push_back(BRep_Tool::Pnt(TopoDS::Vertex(v)));
+      for (const auto& item : splitNames(getString(in, "vertices"))) {
+        if (item.rfind("point:", 0) == 0) {
+          const auto p = doc.point(item.substr(6));
+          if (!p) throw CommandError("Vertices: no construction point named '" + item.substr(6) + "'");
+          out.push_back(p->point);
+          continue;
+        }
+        for (const auto& v : kernel::resolveVertices(body(doc, in), item)) out.push_back(BRep_Tool::Pnt(TopoDS::Vertex(v)));
+      }
     } catch (const kernel::KernelError& err) {
       throw CommandError(std::string("Vertices: ") + err.what());
     }
@@ -4134,6 +4261,7 @@ void registerDocCommands(CommandRegistry& registry) {
   registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Offset));
   registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Angle));
   registry.add(std::make_unique<ConstructPlane>(ConstructPlane::Kind::Mid));
+  registry.add(std::make_unique<PlaneAlongPath>());
   registry.add(std::make_unique<AddUserParameter>());
   registry.add(std::make_unique<DocumentUnits>());
   registry.add(std::make_unique<InsertGeometry>());

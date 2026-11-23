@@ -1,0 +1,29 @@
+# Live: construction axes and points picked in the canvas, as in the familiar
+# tool. Circular Pattern (Bodies): click Axis1's line, OK. Then Axis Through
+# Two Points: click Point1 and Point2, OK.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Circular Pattern
+key Return
+waitfor panelOk
+wait 400
+choose patternType 1          # Bodies
+wait 400
+wclick 60 0 15                # Axis1, standing at x = 60 mm
+wait 600
+shot /tmp/live_construct_axis.png
+click panelOk
+wait 1000
+click commandSearch
+type Axis Through Two Points
+key Return
+waitfor panelOk
+wait 400
+wclick 0 0 30                 # Point1
+wait 400
+wclick 60 0 30                # Point2
+wait 600
+shot /tmp/live_construct_points.png
+click panelOk
+wait 800

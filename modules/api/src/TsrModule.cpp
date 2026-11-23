@@ -521,6 +521,22 @@ void bindTsr(py::module_& m) {
     return out;
   }, "Components: name and bodies; Rigid Groups too (rigid=True), whose 'bodies' are their member components.");
 
+  m.def("construction", [] {
+    const auto& doc = activeSession().document();
+    auto xyz = [](const gp_XYZ& v) { return py::make_tuple(v.X(), v.Y(), v.Z()); };
+    py::dict out;
+    py::list planes, axes, points;
+    for (const auto& p : doc.planes()) {
+      const gp_Ax3 f = doc.planeFrame(p.name, 0);
+      planes.append(py::make_tuple(p.name, xyz(f.Location().XYZ()), xyz(f.Direction().XYZ())));
+    }
+    for (const auto& a : doc.axes()) axes.append(py::make_tuple(a.name, xyz(a.axis.Location().XYZ()), xyz(a.axis.Direction().XYZ())));
+    for (const auto& p : doc.points()) points.append(py::make_tuple(p.name, xyz(p.point.XYZ())));
+    out["planes"] = planes;
+    out["axes"] = axes;
+    out["points"] = points;
+    return out;
+  }, "Construction geometry: planes (name, origin, normal), axes (name, origin, direction), points (name, position), cm.");
   m.def("boundary_fill_cells", [](const std::string& tools, const std::string& plane) {
     py::list out;
     try {

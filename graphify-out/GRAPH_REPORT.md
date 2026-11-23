@@ -1,17 +1,17 @@
-# Graph Report - tessera  (2026-11-17)
+# Graph Report - tessera  (2026-11-22)
 
 ## Corpus Check
-- 440 files · ~288,671 words
+- 446 files · ~290,925 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 78 file(s) not represented in the graph (top: .drive 70, (none) 5, .cmake 1)
+- Unclassified: 80 file(s) not represented in the graph (top: .drive 72, (none) 5, .cmake 1)
 
 ## Summary
-- 4044 nodes · 10427 edges · 139 communities (113 shown, 26 thin omitted)
-- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 1589 edges (avg confidence: 0.85)
+- 4071 nodes · 10494 edges · 146 communities (112 shown, 34 thin omitted)
+- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 1592 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `893b26d5`
+- Built from commit: `598b201b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,14 +19,13 @@
 - Viewport
 - Icons.cpp
 - Session.cpp
-- tsr
 - MainWindow
 - run_oracle.py
-- CommandError
+- DocCommands.cpp
 - Document
 - Viewport.cpp
 - SketchEditor
-- DocumentError
+- Document.cpp
 - optional
 - Kernel.cpp
 - AnalysisSettings
@@ -42,37 +41,37 @@
 - Affine
 - ViewportSketch.cpp
 - SketchPalette
-- DocCommands.cpp
-- sketchFor
+- CommandError
+- .apply
 - CommandContext
 - Colors
 - KernelError
 - SketchOps.cpp
-- .rebuild
+- .openMarkingMenu
 - ParameterCompleter
 - Constraint
 - SketchGeometry.cpp
 - src/main.cpp
-- solve
+- string
 - Column
 - BoundaryCell
 - ConstraintType
 - AdskModule.cpp
-- Pick
+- Entity
 - TopologyCounts
 - Zip.cpp
 - AnalysisSettings
 - Sketch
-- Document.cpp
+- ParamSet
 - .showDialog
 - string
-- SketchEditor.cpp
+- .updatePreview
 - .toPixels
 - Snap
 - Document::recompute
 - MainWindow.cpp
 - TEST
-- MarkingMenu
+- .mouseMove
 - xdrive.py
 - adsk_core
 - CommandDialog.cpp
@@ -80,7 +79,7 @@
 - Theme.cpp
 - BodyFrame
 - CommandRegistry
-- Command.cpp
+- SketchPalette.cpp
 - Unit
 - Theme
 - Feature
@@ -88,8 +87,8 @@
 - ParametersDialog.cpp
 - MainWindowSketch.cpp
 - ViewportArrow.cpp
-- CommandSession
-- Rect
+- qs
+- MetricSize
 - Vec3
 - CommandDialog::CommandDialog
 - math
@@ -100,7 +99,7 @@
 - SketchCurves.cpp
 - fail
 - Level
-- checkPattern
+- Inputs
 - UiCommand
 - test_feature_pattern.py
 - MainWindow::MainWindow
@@ -109,26 +108,30 @@
 - FileFormat
 - Known differences still to build
 - ReplayStep
-- Session::addListener
+- cachedProfiles
 - MainWindowArrow.cpp
 - FakeDoc
-- ParamSet
+- ModelParameter
 - BoundingBox
 - QPointF
 - Document::load
-- Placement
+- SketchRecord
 - test_rigid_group.py
+- main
+- toDxf
 - Display
 - Axis
 - Known gaps
+- .eventFilter
 - SectionState
 - uninstall.sh
 - install.sh
 - TestFramework.h
 - .redrawAll
+- EntityType
 - UserParameter
 - Viewport.h
-- SelectionBox
+- test_extrude_participants.py
 - test_incremental_replay.py
 - BooleanOp
 - MassProperties
@@ -136,29 +139,32 @@
 - ThreadInfo
 - Value.h
 - ChamferType
-- Inputs
+- Joint
 - Icons.h
+- Profile
+- Architecture
 - LAB_NOTES.md
+- Loft
+- .frame
 - build.sh
 - live-test.sh
-- ChainSegment
+- PYBIND11_EMBEDDED_MODULE
 - Tool
 - SplineHandle
 - BodyFrame
-- Align
 - BRepBody
 
 ## God Nodes (most connected - your core abstractions)
-1. `Viewport` - 286 edges
+1. `Viewport` - 290 edges
 2. `SketchEditor` - 198 edges
 3. `MainWindow` - 189 edges
-4. `Inputs` - 170 edges
-5. `render()` - 127 edges
-6. `CommandContext` - 125 edges
+4. `Inputs` - 175 edges
+5. `render()` - 128 edges
+6. `CommandContext` - 128 edges
 7. `Document` - 124 edges
-8. `CommandDialog` - 101 edges
-9. `CommandError` - 75 edges
-10. `Command` - 71 edges
+8. `CommandDialog` - 106 edges
+9. `CommandError` - 77 edges
+10. `Command` - 72 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `How a command works` --references--> `CommandDef`  [INFERRED]
@@ -175,51 +181,51 @@
 ## Import Cycles
 - None detected.
 
-## Communities (139 total, 26 thin omitted)
+## Communities (146 total, 34 thin omitted)
 
 ### Community 0 - "Viewport"
 Cohesion: 0.01
-Nodes (79): view_, QLineEdit, Viewport, analysis_, analysisObjects_, appliedGridStep_, arrowBoxes_, arrowDragging_ (+71 more)
+Nodes (81): view_, QLineEdit, Viewport, analysis_, analysisObjects_, appliedGridStep_, arrowBoxes_, arrowDragging_ (+73 more)
 
 ### Community 1 - "Icons.cpp"
 Cohesion: 0.05
-Nodes (130): accessibilityIcon(), alignIcon(), appearanceIcon(), arc3Icon(), arcIcon(), arcTangentIcon(), arrow(), axisIcon() (+122 more)
+Nodes (133): accessibilityIcon(), alignIcon(), appearanceIcon(), arc3Icon(), arcIcon(), arcTangentIcon(), arrow(), axisIcon() (+125 more)
 
 ### Community 2 - "Session.cpp"
-Cohesion: 0.17
-Nodes (26): historyEdit(), plainEdit(), Session::addNamedView(), Session::computeAll(), Session::deleteFeature(), Session::deleteNamedView(), Session::deleteParameter(), Session::newDocument() (+18 more)
+Cohesion: 0.06
+Nodes (51): CommandSession, inputs_, expressionKey(), checkInputValue(), CommandContext::evaluateExpression(), CommandDef::input(), CommandSession::applyInTransaction(), CommandSession::cancel() (+43 more)
 
 ### Community 4 - "MainWindow"
 Cohesion: 0.03
-Nodes (67): CommandDialog, MainWindow, active_, appearanceColour_, appearanceFaces_, appearancePanel_, arrowInput_, arrowInput2_ (+59 more)
+Nodes (66): CommandDialog, MainWindow, active_, appearanceColour_, appearanceFaces_, appearancePanel_, arrowInput_, arrowInput2_ (+58 more)
 
 ### Community 5 - "run_oracle.py"
 Cohesion: 0.08
 Nodes (54): add_point(), arc_poly(), body_at(), body_list(), build_sketch(), chain(), circumcentre(), cm() (+46 more)
 
-### Community 6 - "CommandError"
-Cohesion: 0.10
-Nodes (37): CommandError, getBool(), getInt(), getReal(), Align::apply(), applyOperation(), applyToParticipants(), bodyCentre() (+29 more)
+### Community 6 - "DocCommands.cpp"
+Cohesion: 0.07
+Nodes (45): getBool(), getReal(), Align::apply(), axisOf(), bodyCentre(), bodyName(), boundaryFillCells(), Combine (+37 more)
 
 ### Community 7 - "Document"
 Cohesion: 0.03
 Nodes (15): Document, effects_, lastReplayed_, lastReused_, modified_, pendingTools_, registry_, replaying_ (+7 more)
 
 ### Community 8 - "Viewport.cpp"
-Cohesion: 0.05
-Nodes (5): glide(), keys(), QKeyEvent, QtFrameBuffer, Viewport::Viewport()
+Cohesion: 0.04
+Nodes (19): glide(), hiddenColour(), keys(), qc(), QKeyEvent, QtFrameBuffer, rgb(), SelectionBox (+11 more)
 
 ### Community 9 - "SketchEditor"
 Cohesion: 0.03
 Nodes (53): HandleHit, back, index, spline, SketchEditor, arcDrag_, arcDragMoved_, arcEndsChain_ (+45 more)
 
-### Community 10 - "DocumentError"
-Cohesion: 0.09
-Nodes (30): DocumentError, SketchRecord, data, name, offset, plane, checkViewName(), Document::abortTransaction() (+22 more)
+### Community 10 - "Document.cpp"
+Cohesion: 0.07
+Nodes (37): DocumentError, checkViewName(), Document::abortTransaction(), Document::addBody(), Document::addNamedView(), Document::addUserParameter(), Document::commitTransaction(), Document::historyMarker() (+29 more)
 
 ### Community 11 - "optional"
-Cohesion: 0.08
-Nodes (10): optional, CommandRegistry::all(), Document, EntityType, Arc, Circle, Ellipse, Line (+2 more)
+Cohesion: 0.10
+Nodes (3): optional, CommandRegistry::all(), Document
 
 ### Community 12 - "Kernel.cpp"
 Cohesion: 0.03
@@ -230,64 +236,60 @@ Cohesion: 0.11
 Nodes (18): AnalysisKind, Accessibility, CurvatureMap, Draft, Isocurve, MinimumRadius, None, Zebra (+10 more)
 
 ### Community 14 - "Kind"
-Cohesion: 0.07
-Nodes (29): ConstructAxisPoint, def_, kind_, EdgeFeature, def_, kind_, Kind, Angle (+21 more)
+Cohesion: 0.06
+Nodes (29): ConstructPlane, def_, kind_, EdgeFeature, def_, kind_, Kind, Angle (+21 more)
 
 ### Community 15 - "QMouseEvent"
-Cohesion: 0.08
-Nodes (11): QMouseEvent, ViewInteractor, Viewport::arrowMouseMove(), Viewport::arrowMousePress(), Viewport::arrowMouseRelease(), Viewport::DragArrow::handle(), Viewport::dragArrowForTest(), Viewport::emitArrow() (+3 more)
+Cohesion: 0.13
+Nodes (8): MarkingMenu::mouseMoveEvent(), QMouseEvent, ViewInteractor, Viewport::setTriad(), Viewport::setTriadActive(), Viewport::triadMouseMove(), Viewport::triadMousePress(), Viewport::triadMouseRelease()
 
 ### Community 16 - "CommandDialog"
 Cohesion: 0.04
-Nodes (39): CommandDialog, bodiesId_, bodiesLabel_, bodyInput_, buttons_, cellsId_, cellsList_, cmd_ (+31 more)
+Nodes (41): CommandDialog, axisInputs_, axisPicks_, bodiesId_, bodiesLabel_, bodyInput_, buttons_, cellsId_ (+33 more)
 
 ### Community 17 - "Io.cpp"
 Cohesion: 0.10
-Nodes (19): MainWindow::print3d(), NamedShape, compoundOf(), exportShapes(), fmt(), formatForPath(), fromBrep(), importShape() (+11 more)
+Nodes (19): NamedShape, compoundOf(), exportShapes(), fmt(), formatForPath(), fromBrep(), importShape(), lower() (+11 more)
 
 ### Community 18 - "Parser"
 Cohesion: 0.18
-Nodes (15): Quantity, angle, length, value, describe(), isIdentChar(), Parser, ang_ (+7 more)
+Nodes (15): Quantity, angle, length, value, describe(), isIdentChar(), isIdentStart(), Parser (+7 more)
 
 ### Community 19 - "InputDef"
-Cohesion: 0.09
-Nodes (22): InputDef, choices, defaultValue, id, label, max, min, minExclusive (+14 more)
-
-### Community 20 - "SketchEditor.cpp"
 Cohesion: 0.08
-Nodes (11): Entity, a, b, center, construction, fit, handles, included (+3 more)
+Nodes (22): InputDef, choices, defaultValue, id, label, max, min, minExclusive (+14 more)
 
 ### Community 21 - "PhysicalMaterial"
 Cohesion: 0.22
 Nodes (13): PhysicalMaterial, color, density, name, checkMaterial(), Document::designMaterials(), Document::material(), Document::setBodyMaterial() (+5 more)
 
 ### Community 22 - "TEST"
-Cohesion: 0.07
-Nodes (10): Sketch, constraints, entities, points, texts, Sketch::addCircle(), Sketch::addEllipticalArc(), Sketch::addLine() (+2 more)
+Cohesion: 0.06
+Nodes (12): Sketch, constraints, entities, points, texts, Sketch::addCircle(), Sketch::addConic(), Sketch::addEllipticalArc() (+4 more)
 
 ### Community 24 - "Affine"
 Cohesion: 0.14
-Nodes (13): Affine, a, b, d, e, Builder, byPlace_, k_ (+5 more)
+Nodes (13): SketchError, Affine, a, d, e, Builder, byPlace_, k_ (+5 more)
 
 ### Community 25 - "ViewportSketch.cpp"
 Cohesion: 0.08
 Nodes (6): faceStyle(), lineStyle(), rgb(), Viewport::lookAt(), Viewport::planePoint(), Viewport::toWidget()
 
 ### Community 26 - "SketchPalette"
-Cohesion: 0.06
-Nodes (26): QCheckBox, QLabel, QToolButton, QWidget, SketchEditor, SketchPalette, body_, constraints_ (+18 more)
+Cohesion: 0.07
+Nodes (23): QLabel, QToolButton, QWidget, SketchEditor, SketchPalette, body_, constraints_, construction_ (+15 more)
 
-### Community 27 - "DocCommands.cpp"
-Cohesion: 0.14
-Nodes (15): axisOf(), HoleSize, modeled, pitch, radius, JointPick, frame, makeBox() (+7 more)
+### Community 27 - "CommandError"
+Cohesion: 0.10
+Nodes (22): CommandError, applyOperation(), applyToParticipants(), ConstructAxisPoint, def_, kind_, evaluateDimensions(), Extrude (+14 more)
 
-### Community 28 - "sketchFor"
-Cohesion: 0.11
-Nodes (12): Emboss, def_, Extrude, def_, Hole, def_, Pipe, def_ (+4 more)
+### Community 28 - ".apply"
+Cohesion: 0.29
+Nodes (5): Coil, def_, Pipe, def_, sectionOf()
 
 ### Community 29 - "CommandContext"
-Cohesion: 0.03
-Nodes (57): Adding a tool, Command, CommandContext, CommandDef, feature, icon, id, inputs (+49 more)
+Cohesion: 0.04
+Nodes (54): Adding a tool, Command, CommandDef, feature, icon, id, inputs, name (+46 more)
 
 ### Community 30 - "Colors"
 Cohesion: 0.07
@@ -298,28 +300,32 @@ Cohesion: 0.23
 Nodes (35): KernelError, asSolid(), boolean(), boundaryCells(), chamfer(), chamferEx(), deleteFaces(), draft() (+27 more)
 
 ### Community 32 - "SketchOps.cpp"
-Cohesion: 0.16
-Nodes (29): at(), chainOf(), chamferCorner(), circularPattern(), copyEntities(), cornerAt(), cross(), dot() (+21 more)
+Cohesion: 0.06
+Nodes (54): ChainSegment, entity, forward, Placement, angle, cx, cy, dx (+46 more)
 
-### Community 33 - ".rebuild"
-Cohesion: 0.10
-Nodes (12): hiddenColour(), qc(), rgb(), sharpEdges(), Style, Shaded, ShadedEdges, ShadedHidden (+4 more)
+### Community 33 - ".openMarkingMenu"
+Cohesion: 0.08
+Nodes (6): MainWindow::beginSketch(), MainWindow::buildSketchTab(), MainWindow::enterSketchMode(), MainWindow::buildUiCommands(), QTimer, Viewport::selectArrowValue()
 
 ### Community 34 - "ParameterCompleter"
 Cohesion: 0.13
 Nodes (8): ParameterCompleter, completer_, edit_, names_, ParameterCompleter::ParameterCompleter(), public, QCompleter, QLineEdit
 
 ### Community 35 - "Constraint"
-Cohesion: 0.06
-Nodes (29): Constraint, driven, entities, expression, hasLabel, labelX, labelY, name (+21 more)
+Cohesion: 0.08
+Nodes (20): Constraint, driven, entities, expression, hasLabel, labelX, labelY, name (+12 more)
 
 ### Community 36 - "SketchGeometry.cpp"
-Cohesion: 0.06
-Nodes (25): Point, x, y, z, conditionedSpline(), curve(), curves(), customPlaneSpec() (+17 more)
+Cohesion: 0.07
+Nodes (19): conditionedSpline(), curve(), curves(), entityCurves(), G2End, d1, d2, set (+11 more)
 
-### Community 38 - "solve"
-Cohesion: 0.12
-Nodes (14): addConstraintChecked(), Layout, n, px, py, rad, makeLayout(), pack() (+6 more)
+### Community 37 - "src/main.cpp"
+Cohesion: 0.07
+Nodes (5): grabWindowWithPanels(), writeLiveGeometry(), MarkingMenu, enabled, public
+
+### Community 38 - "string"
+Cohesion: 0.11
+Nodes (19): bodyNumber(), Document::axisFrame(), Document::bodyShapes(), Document::componentOfBody(), Document::effectOf(), Document::evaluate(), Document::feature(), Document::featureValueParameters() (+11 more)
 
 ### Community 39 - "Column"
 Cohesion: 0.25
@@ -331,15 +337,15 @@ Nodes (4): BoundaryCell, ref, shape, volume
 
 ### Community 41 - "ConstraintType"
 Cohesion: 0.07
-Nodes (27): ConstraintType, Angle, Coincident, Collinear, Concentric, Curvature, Diameter, Distance (+19 more)
+Nodes (26): ConstraintType, Angle, Coincident, Collinear, Concentric, Curvature, Diameter, Distance (+18 more)
 
 ### Community 42 - "AdskModule.cpp"
 Cohesion: 0.12
 Nodes (13): Application, BRepBodies, Component, Design, Product, raiseIfError(), UserParameter, name (+5 more)
 
-### Community 43 - "Pick"
-Cohesion: 0.12
-Nodes (15): Pick, bodyArc, bodyPoint, bodySegment, hit, midpointOf, onEntity, onXAxis (+7 more)
+### Community 43 - "Entity"
+Cohesion: 0.08
+Nodes (20): Entity, a, b, center, construction, fit, handles, included (+12 more)
 
 ### Community 45 - "TopologyCounts"
 Cohesion: 0.15
@@ -355,47 +361,39 @@ Nodes (20): DragArrow, base, dir, radius, ref, ring, value, PendingLook (+12 mor
 
 ### Community 48 - "Sketch"
 Cohesion: 0.08
-Nodes (20): SketchError, SplineKind, Conic, Control, Fit, entityTypeName(), isDimension(), Sketch::addConic() (+12 more)
+Nodes (18): SplineKind, Conic, Control, Fit, entityTypeName(), isDimension(), Sketch::addConstraint(), Sketch::addSpline() (+10 more)
 
-### Community 49 - "Document.cpp"
-Cohesion: 0.07
-Nodes (40): ConstructionPlane, name, spec, bodyNumber(), Document::addBody(), Document::axisFrame(), Document::bodies(), Document::body() (+32 more)
+### Community 49 - "ParamSet"
+Cohesion: 0.08
+Nodes (39): ConstructionPlane, name, spec, NamedView, eye, name, size, target (+31 more)
+
+### Community 50 - ".showDialog"
+Cohesion: 0.11
+Nodes (5): MainWindow::onEdgeClicked(), MainWindow::onProfileClicked(), MainWindow::originalShape(), MainWindow::syncPickedShapes(), MainWindow::toOriginal()
 
 ### Community 51 - "string"
-Cohesion: 0.12
-Nodes (9): AddUserParameter, def_, Combine, def_, isIdentifier(), NewComponent, def_, RigidGroup (+1 more)
-
-### Community 52 - "SketchEditor.cpp"
-Cohesion: 0.12
-Nodes (4): angleInArc(), ccwContains(), circumcircle(), segDistance()
+Cohesion: 0.15
+Nodes (7): AddUserParameter, def_, isIdentifier(), NewComponent, def_, RigidGroup, def_
 
 ### Community 54 - "Snap"
-Cohesion: 0.08
-Nodes (25): ext(), fixedColor(), freeColor(), lineEntity(), qc(), rgb(), Snap, alignX (+17 more)
+Cohesion: 0.06
+Nodes (33): Pick, bodyArc, bodyPoint, bodySegment, hit, midpointOf, onEntity, onXAxis (+25 more)
 
 ### Community 55 - "Document::recompute"
-Cohesion: 0.18
-Nodes (8): Document::expressionEnv(), Document::recompute(), Document::recordFeature(), Document::removeFeature(), Document::setFeatureInputs(), Document::setFeatureSuppressed(), featureData(), toJson()
+Cohesion: 0.22
+Nodes (6): Document::expressionEnv(), Document::openTransaction(), Document::recompute(), Document::recordFeature(), Document::setFeatureInputs(), toJson()
 
-### Community 56 - "MainWindow.cpp"
-Cohesion: 0.09
-Nodes (3): commandIcon(), qs(), MainWindow::applySection()
-
-### Community 57 - "TEST"
-Cohesion: 0.10
-Nodes (3): param(), TEST(), tmp()
-
-### Community 58 - "MarkingMenu"
-Cohesion: 0.40
-Nodes (3): MarkingMenu, enabled, public
+### Community 58 - ".mouseMove"
+Cohesion: 0.14
+Nodes (7): ext(), fixedColor(), freeColor(), lineEntity(), qc(), rgb(), wire()
 
 ### Community 59 - "xdrive.py"
 Cohesion: 0.28
 Nodes (15): button(), canvas(), click(), drag(), flush(), geometry(), key(), keycode() (+7 more)
 
 ### Community 62 - "Session"
-Cohesion: 0.06
-Nodes (13): listCommands(), main(), usage(), PythonHost::PythonHost(), main(), smoke(), key, Session (+5 more)
+Cohesion: 0.07
+Nodes (7): PythonHost::PythonHost(), Session, commands_, doc_, listeners_, nextListener_, path_
 
 ### Community 63 - "Theme.cpp"
 Cohesion: 0.19
@@ -406,64 +404,60 @@ Cohesion: 0.08
 Nodes (34): boundingBox(), completeEdgeReferences(), completeFaceReferences(), decode(), decodeFaces(), dot(), edgeReference(), EdgeSig (+26 more)
 
 ### Community 65 - "CommandRegistry"
-Cohesion: 0.09
-Nodes (8): Architecture, How a command works, The document, Units, CommandRegistry, cmds_, CommandRegistry::add(), TEST()
-
-### Community 66 - "Command.cpp"
-Cohesion: 0.33
-Nodes (7): expressionKey(), checkInputValue(), CommandContext::evaluateExpression(), CommandDef::input(), CommandSession::applyInTransaction(), CommandSession::setInput(), CommandSession::validate()
+Cohesion: 0.12
+Nodes (4): CommandRegistry, cmds_, CommandRegistry::add(), TEST()
 
 ### Community 67 - "Unit"
 Cohesion: 0.11
-Nodes (28): MainWindow::checkInterference(), MainWindow::driveJoints(), MainWindow::formatLength(), MainWindow::gridSettings(), MainWindow::lengthUnit(), MainWindow::openAnalysis(), MainWindow::openSection(), MainWindow::showCenterOfMass() (+20 more)
+Nodes (28): bindAdsk(), MainWindow::checkInterference(), MainWindow::driveJoints(), MainWindow::formatLength(), MainWindow::gridSettings(), MainWindow::lengthUnit(), MainWindow::openAnalysis(), MainWindow::openSection() (+20 more)
 
 ### Community 68 - "Theme"
-Cohesion: 0.20
-Nodes (5): MainWindow::showPreferences(), Theme, colors_, public, styled_
+Cohesion: 0.22
+Nodes (4): Theme, colors_, public, styled_
 
 ### Community 69 - "Feature"
-Cohesion: 0.10
-Nodes (17): Feature, commandId, error, id, inputs, name, parameterNames, rolledBack (+9 more)
+Cohesion: 0.17
+Nodes (10): Feature, commandId, error, id, inputs, name, parameterNames, rolledBack (+2 more)
 
 ### Community 70 - "InputType"
 Cohesion: 0.08
 Nodes (21): bindTsr(), fromPy(), toPy(), typeName(), InputType, Axis, Bodies, Body (+13 more)
 
 ### Community 71 - "ParametersDialog.cpp"
-Cohesion: 0.09
+Cohesion: 0.07
 Nodes (16): number(), ParametersDialog, building_, error_, filter_, listener_, ParametersDialog::ParametersDialog(), public (+8 more)
 
 ### Community 72 - "MainWindowSketch.cpp"
-Cohesion: 0.05
-Nodes (20): MainWindow::updateDragArrow(), MainWindow::cancelSketch(), MainWindow::editSketch(), MainWindow::exitSketchMode(), MainWindow::finishSketch(), MainWindow::onProfileClicked(), MainWindow::originalShape(), MainWindow::sketchPalette() (+12 more)
+Cohesion: 0.07
+Nodes (11): MainWindow::cancelSketch(), MainWindow::editSketch(), MainWindow::finishSketch(), MainWindow::sketchPalette(), MainWindow::sketchVisible(), MainWindow::startSketch(), MainWindow::updateProfilePicking(), qs() (+3 more)
 
 ### Community 73 - "ViewportArrow.cpp"
-Cohesion: 0.06
-Nodes (27): Viewport::frontEdgeOwner(), rgb(), segmentDistance(), Viewport::arrowAt(), Viewport::arrowParam(), Viewport::dragArrowHandle(), Viewport::placeArrowBoxes(), Viewport::rebuildArrow() (+19 more)
+Cohesion: 0.05
+Nodes (30): Viewport::frontEdgeOwner(), rgb(), segmentDistance(), Viewport::arrowAt(), Viewport::arrowMouseMove(), Viewport::arrowMousePress(), Viewport::arrowMouseRelease(), Viewport::arrowParam() (+22 more)
 
-### Community 74 - "CommandSession"
-Cohesion: 0.10
-Nodes (12): CommandSession, inputs_, CommandSession::cancel(), CommandSession::execute(), CommandSession::preview(), CommandRegistry::find(), CommandRegistry::run(), OwnedCommand (+4 more)
+### Community 74 - "qs"
+Cohesion: 0.25
+Nodes (3): commandIcon(), qs(), MainWindow::applySection()
 
-### Community 75 - "Rect"
-Cohesion: 0.50
-Nodes (4): Session::notifyChanged(), Rect, l, p
+### Community 75 - "MetricSize"
+Cohesion: 0.15
+Nodes (10): MarkingMenu::keyPressEvent(), MarkingMenu::MarkingMenu(), MarkingMenu::run(), MetricSize, close, d, loose, name (+2 more)
 
 ### Community 76 - "Vec3"
 Cohesion: 0.17
 Nodes (22): SurfacePoint, normal, point, Vec3, containsPoint(), edgeMidpoint(), edgesNear(), extrudeToFace() (+14 more)
 
 ### Community 77 - "CommandDialog::CommandDialog"
-Cohesion: 0.12
-Nodes (7): CommandDialog::CommandDialog(), Dimension, Angle, Length, Unitless, inputExpression(), dimensionOf()
+Cohesion: 0.13
+Nodes (7): CommandDialog::CommandDialog(), formatNumber(), Dimension, Angle, Length, Unitless, dimensionOf()
 
 ### Community 78 - "math"
 Cohesion: 0.04
-Nodes (4): dist(), up_to_underside(), check_regular(), dist_to_line()
+Nodes (3): dist(), check_regular(), dist_to_line()
 
 ### Community 79 - "CommandDialog::CommandDialog"
-Cohesion: 0.13
-Nodes (5): ExpressionSpinBox, eval_, expression_, shown_, formatNumber()
+Cohesion: 0.16
+Nodes (4): ExpressionSpinBox, eval_, expression_, shown_
 
 ### Community 80 - "SketchDisplay"
 Cohesion: 0.12
@@ -485,21 +479,21 @@ Nodes (19): crossings(), crossingsOf(), Curve2d, curve2d(), periodic, t0, t1, en
 Cohesion: 0.16
 Nodes (13): debug(), error(), info(), Level, Debug, Error, Info, Warning (+5 more)
 
-### Community 86 - "checkPattern"
-Cohesion: 0.13
-Nodes (10): checkPattern(), CircularPattern, def_, Mirror, def_, PathPattern, def_, preparePattern() (+2 more)
+### Community 86 - "Inputs"
+Cohesion: 0.06
+Nodes (21): CommandContext, Inputs, CommandSession::CommandSession(), getInt(), checkBody(), checkPattern(), CircularPattern, def_ (+13 more)
 
 ### Community 87 - "UiCommand"
-Cohesion: 0.07
-Nodes (22): UiCommand, enabled, icon, id, name, panel, run, shortcut (+14 more)
+Cohesion: 0.13
+Nodes (12): UiCommand, enabled, icon, id, name, panel, run, shortcut (+4 more)
 
 ### Community 89 - "MainWindow::MainWindow"
-Cohesion: 0.09
-Nodes (8): PythonHost, retintIcons(), setIcon(), flatButton(), MainWindow::MainWindow(), MainWindow::buildSketchTab(), MainWindow::enterSketchMode(), MainWindow::editAppearance()
+Cohesion: 0.13
+Nodes (4): PythonHost, MainWindow::MainWindow(), MainWindow::exitSketchMode(), MainWindow::showPreferences()
 
 ### Community 90 - "MainWindowTools.cpp"
-Cohesion: 0.06
-Nodes (18): QObject, QDialog, editMaterialDialog(), MainWindow::chooseUnits(), MainWindow::editMaterial(), MainWindow::exportDesign(), MainWindow::insertFile(), MainWindow::lookTargets() (+10 more)
+Cohesion: 0.05
+Nodes (21): QObject, QDialog, editMaterialDialog(), MainWindow::chooseUnits(), MainWindow::editAppearance(), MainWindow::editMaterial(), MainWindow::exportDesign(), MainWindow::insertFile() (+13 more)
 
 ### Community 91 - "Expression.cpp"
 Cohesion: 0.13
@@ -515,35 +509,47 @@ Nodes (12): Data and files, Findings from the videos, Fusion study list, Interfa
 
 ### Community 95 - "ReplayStep"
 Cohesion: 0.05
-Nodes (38): MainWindow::paintBody(), Body, color, display, faceColors, material, name, shape (+30 more)
+Nodes (37): MainWindow::paintBody(), Body, color, display, faceColors, material, name, shape (+29 more)
+
+### Community 96 - "cachedProfiles"
+Cohesion: 0.20
+Nodes (3): MainWindow::updateDragArrow(), cachedProfiles(), keyOf()
 
 ### Community 97 - "MainWindowArrow.cpp"
-Cohesion: 0.07
+Cohesion: 0.08
 Nodes (13): ArrowPlacement, base, dir, edgePlacement(), facesPlacement(), MainWindow::attachArrowCompleters(), MainWindow::patternCentre(), MainWindow::pickedFaces() (+5 more)
 
 ### Community 98 - "FakeDoc"
 Cohesion: 0.17
 Nodes (6): FakeDoc, aborts, commits, items, open, snapshot
 
-### Community 99 - "ParamSet"
-Cohesion: 0.07
-Nodes (36): ModelParameter, angle, expression, input, label, name, owner, unit (+28 more)
+### Community 99 - "ModelParameter"
+Cohesion: 0.13
+Nodes (13): ModelParameter, angle, expression, input, label, name, owner, unit (+5 more)
 
 ### Community 100 - "BoundingBox"
 Cohesion: 0.23
 Nodes (14): BoundingBox, max, min, WallSide, Center, Side1, Side2, extendedWire() (+6 more)
 
 ### Community 101 - "QPointF"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (5): PlaneEdges, arcs, curves, segments, vertices
 
 ### Community 102 - "Document::load"
 Cohesion: 0.17
 Nodes (5): doc_(), Document::Document(), Document::ocafBytes(), ocafApplication(), Document::load()
 
-### Community 104 - "Placement"
-Cohesion: 0.25
-Nodes (7): Placement, angle, cx, cy, dx, dy, scale
+### Community 104 - "SketchRecord"
+Cohesion: 0.17
+Nodes (9): SketchRecord, data, name, offset, plane, Document::replayContext(), Document::setSketch(), Document::sketch() (+1 more)
+
+### Community 106 - "main"
+Cohesion: 0.31
+Nodes (5): listCommands(), main(), usage(), main(), smoke()
+
+### Community 107 - "toDxf"
+Cohesion: 0.43
+Nodes (7): Point, x, y, z, customPlaneSpec(), planeFrame(), toDxf()
 
 ### Community 108 - "Display"
 Cohesion: 0.25
@@ -555,7 +561,7 @@ Nodes (4): Axis, X, Y, Z
 
 ### Community 111 - "Known gaps"
 Cohesion: 0.05
-Nodes (35): Build, Conventions, Development, Tests, 3D Sketch, Align, Appearance, Boundary Fill (+27 more)
+Nodes (36): Build, Conventions, Development, Tests, 3D Sketch, Align, Appearance, Boundary Fill (+28 more)
 
 ### Community 113 - "SectionState"
 Cohesion: 0.25
@@ -570,24 +576,20 @@ Cohesion: 0.60
 Nodes (5): die(), refresh(), install.sh script, step(), usage()
 
 ### Community 116 - "TestFramework.h"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (11): Result, error, ok, output, captured(), PythonHost::exec(), PythonHost::runScript(), Case (+3 more)
 
 ### Community 117 - ".redrawAll"
 Cohesion: 0.09
 Nodes (9): NavPreset, Fusion, SolidWorks, Tinkercad, Viewport::setCurvatureComb(), Viewport::clearDragArrow(), Viewport::clearSecondArrow(), Viewport::setInteractor() (+1 more)
 
+### Community 118 - "EntityType"
+Cohesion: 0.29
+Nodes (7): EntityType, Arc, Circle, Ellipse, Line, Spline, isRound()
+
 ### Community 119 - "UserParameter"
 Cohesion: 0.33
 Nodes (6): UserParameter, comment, expression, name, unit, value
-
-### Community 120 - "Viewport.h"
-Cohesion: 0.10
-Nodes (6): QLabel, Profile, area, face, x, y
-
-### Community 121 - "SelectionBox"
-Cohesion: 0.28
-Nodes (3): SelectionBox, crossing, rect()
 
 ### Community 123 - "BooleanOp"
 Cohesion: 0.50
@@ -605,17 +607,21 @@ Nodes (4): ThreadInfo, diameter, internal, pitch
 Cohesion: 0.67
 Nodes (3): ChamferType, DistanceAngle, TwoDistances
 
-### Community 129 - "Inputs"
-Cohesion: 0.09
-Nodes (17): Inputs, Coil, def_, ConstructPlane, def_, kind_, Joint, asBuilt_ (+9 more)
+### Community 129 - "Joint"
+Cohesion: 0.36
+Nodes (3): Joint, asBuilt_, def_
 
-### Community 140 - "ChainSegment"
-Cohesion: 0.67
-Nodes (3): ChainSegment, entity, forward
+### Community 131 - "Profile"
+Cohesion: 0.33
+Nodes (5): Profile, area, face, x, y
+
+### Community 132 - "Architecture"
+Cohesion: 0.40
+Nodes (4): Architecture, How a command works, The document, Units
 
 ### Community 141 - "Tool"
-Cohesion: 0.11
-Nodes (7): SketchEditor::SketchEditor(), edges, Tool, op, shape, target, type
+Cohesion: 0.16
+Nodes (6): SketchEditor::SketchEditor(), edges, Tool, op, shape, target
 
 ### Community 142 - "SplineHandle"
 Cohesion: 0.25
@@ -625,29 +631,25 @@ Nodes (8): SplineHandle, arm, index, set, tx, ty, x, y
 Cohesion: 0.13
 Nodes (16): BodyFrame, diag, dx, dy, dz, x0, y0, z0 (+8 more)
 
-### Community 149 - "BRepBody"
-Cohesion: 0.29
-Nodes (3): bindAdsk(), BRepBody, index
-
 ## Knowledge Gaps
-- **813 isolated node(s):** `ok`, `output`, `error`, `isReal`, `real` (+808 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1576 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **818 isolated node(s):** `ok`, `output`, `error`, `isReal`, `real` (+813 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1590 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **34 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `optional` connect `optional` to `Viewport`, `MainWindow`, `SketchEditor`, `DocumentError`, `Kernel.cpp`, `Io.cpp`, `Parser`, `InputDef`, `SketchEditor.cpp`, `PhysicalMaterial`, `ViewportSketch.cpp`, `DocCommands.cpp`, `sketchFor`, `SketchOps.cpp`, `SketchGeometry.cpp`, `AnalysisSettings`, `Document.cpp`, `SketchEditor.cpp`, `CommandDialog.cpp`, `Session`, `Unit`, `Feature`, `ViewportArrow.cpp`, `Vec3`, `CommandDialog::CommandDialog`, `CommandDialog::CommandDialog`, `SketchCurves.cpp`, `MainWindowTools.cpp`, `Expression.cpp`, `ReplayStep`, `MainWindowArrow.cpp`, `ParamSet`, `QPointF`, `Viewport.h`?**
-  _High betweenness centrality (0.141) - this node is a cross-community bridge._
+- **Why does `optional` connect `optional` to `Viewport`, `MainWindow`, `DocCommands.cpp`, `SketchEditor`, `Kernel.cpp`, `Io.cpp`, `Parser`, `InputDef`, `SketchEditor.cpp`, `PhysicalMaterial`, `ViewportSketch.cpp`, `SketchOps.cpp`, `Constraint`, `SketchGeometry.cpp`, `string`, `Entity`, `AnalysisSettings`, `ParamSet`, `Snap`, `CommandDialog.cpp`, `Session`, `Unit`, `Feature`, `ViewportArrow.cpp`, `Vec3`, `CommandDialog::CommandDialog`, `CommandDialog::CommandDialog`, `SketchCurves.cpp`, `Inputs`, `MainWindowTools.cpp`, `Expression.cpp`, `ReplayStep`, `MainWindowArrow.cpp`, `QPointF`, `SketchRecord`, `Viewport.h`?**
+  _High betweenness centrality (0.150) - this node is a cross-community bridge._
 - **What connects `ok`, `output`, `error` to the rest of the system?**
-  _813 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _818 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Viewport` be split into smaller, more focused modules?**
-  _Cohesion score 0.014071381977448514 - nodes in this community are weakly interconnected._
-- **Why does `Viewport` connect `Viewport` to `.rebuild`, `MainWindowArrow.cpp`, `Unit`, `MainWindow`, `Viewport.cpp`, `ViewportArrow.cpp`, `optional`, `AnalysisSettings`, `AnalysisSettings`, `SketchDisplay`, `QMouseEvent`, `SketchCurves.cpp`, `.redrawAll`, `.toPixels`, `Viewport.h`, `SelectionBox`, `SketchPalette`, `QTimer`?**
-  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+  _Cohesion score 0.01348221670802316 - nodes in this community are weakly interconnected._
+- **Why does `Viewport` connect `Viewport` to `.openMarkingMenu`, `MainWindowArrow.cpp`, `Unit`, `MainWindow`, `Viewport.cpp`, `ViewportArrow.cpp`, `optional`, `AnalysisSettings`, `AnalysisSettings`, `SketchDisplay`, `QMouseEvent`, `SketchCurves.cpp`, `.redrawAll`, `.toPixels`, `TEST`, `Viewport.h`, `QTimer`?**
+  _High betweenness centrality (0.146) - this node is a cross-community bridge._
 - **Should `Icons.cpp` be split into smaller, more focused modules?**
-  _Cohesion score 0.05317485142320926 - nodes in this community are weakly interconnected._
-- **Why does `SketchEditor` connect `SketchEditor` to `Viewport`, `Constraint`, `Unit`, `QPointF`, `optional`, `Display`, `Pick`, `Tool`, `QMouseEvent`, `Kind`, `SketchEditor.cpp`, `SketchEditor.cpp`, `Snap`, `MainWindowTools.cpp`, `Session`?**
-  _High betweenness centrality (0.099) - this node is a cross-community bridge._
-- **Should `tsr` be split into smaller, more focused modules?**
-  _Cohesion score 0.03368083400160385 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0507964257964258 - nodes in this community are weakly interconnected._
+- **Why does `SketchEditor` connect `SketchEditor` to `Viewport`, `Constraint`, `.mouseMove`, `QPointF`, `Unit`, `optional`, `Display`, `Entity`, `Tool`, `QMouseEvent`, `.eventFilter`, `Kind`, `SketchEditor.cpp`, `.updatePreview`, `Snap`, `MainWindowTools.cpp`, `Session`?**
+  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+- **Should `Session.cpp` be split into smaller, more focused modules?**
+  _Cohesion score 0.055855855855855854 - nodes in this community are weakly interconnected._

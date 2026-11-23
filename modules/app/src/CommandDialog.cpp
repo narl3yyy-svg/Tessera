@@ -315,6 +315,7 @@ CommandDialog::CommandDialog(doc::Session& session, std::unique_ptr<CommandSessi
         connect(combo, &QComboBox::currentIndexChanged, this, [this, id, combo](int) {
           onInputChanged(id, combo->currentData().toString().toStdString());
         });
+        axisInputs_.push_back(combo);
         w = combo;
         break;
       }
@@ -650,6 +651,34 @@ bool CommandDialog::planeInputShown() const {
   if (planeSelect_ && !planeSelect_->isChecked()) return false;   // clicks go to the faces
   const InputDef* d = cmd_->def().input(planeInput_->objectName().toStdString());
   return !d || isInputVisible(*d, cmd_->inputs());
+}
+
+bool CommandDialog::hasAxisInput() const {
+  return std::any_of(axisInputs_.begin(), axisInputs_.end(), [](QComboBox* c) { return c->isVisibleTo(c->window()); });
+}
+
+void CommandDialog::pickAxis(const QString& name) {
+  // The visible axis fields in turn (Rectangular Pattern's two directions).
+  std::vector<QComboBox*> shown;
+  for (QComboBox* c : axisInputs_)
+    if (c->isVisibleTo(c->window())) shown.push_back(c);
+  if (shown.empty()) return;
+  QComboBox* c = shown[static_cast<size_t>(axisPicks_++) % shown.size()];
+  int i = c->findData(name);
+  if (i < 0) {
+    c->addItem(name, name);
+    i = c->count() - 1;
+  }
+  c->setCurrentIndex(i);
+}
+
+void CommandDialog::pickPoint(const QString& name) {
+  // A construction point among the vertices, or out again.
+  QStringList refs = currentVertices().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+  const QString ref = QStringLiteral("point:") + name;
+  if (refs.contains(ref)) refs.removeAll(ref);
+  else refs << ref;
+  setVertices(refs.join(QLatin1Char(';')));
 }
 
 void CommandDialog::pickPlane(const QString& spec, const QString& label) {

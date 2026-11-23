@@ -53,6 +53,7 @@ inline constexpr const char* kCmdWeb = "tsr.feature.web";
 inline constexpr const char* kCmdOffsetPlane = "tsr.construct.offsetPlane";
 inline constexpr const char* kCmdPlaneAtAngle = "tsr.construct.planeAtAngle";
 inline constexpr const char* kCmdMidplane = "tsr.construct.midplane";
+inline constexpr const char* kCmdPlaneAlongPath = "tsr.construct.planeAlongPath";
 inline constexpr const char* kCmdAxisCylinder = "tsr.construct.axisCylinder";
 inline constexpr const char* kCmdAxisEdge = "tsr.construct.axisEdge";
 inline constexpr const char* kCmdAxisTwoPoints = "tsr.construct.axisTwoPoints";

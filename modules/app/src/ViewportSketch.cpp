@@ -201,8 +201,18 @@ void Viewport::setConstructionAxesPoints(const std::vector<std::pair<std::string
   rebuildConstruction();
 }
 
+void Viewport::setConstructionPicking(bool on) {
+  constructionPicking_ = on;
+  if (context_.IsNull()) return;
+  for (auto& [o, spec] : constructionPicks_) {
+    if (on) context_->Activate(o, 0);
+    else context_->Deactivate(o);
+  }
+}
+
 void Viewport::rebuildConstruction() {
   if (context_.IsNull()) return;
+  constructionPicks_.clear();
   for (auto& [o, n] : constructionObjects_) context_->Remove(o, false);
   constructionObjects_.clear();
   Standard_Real vw = 10, vh = 10;
@@ -242,17 +252,21 @@ void Viewport::rebuildConstruction() {
     const gp_Pnt a = ax.Location().Translated(-d * reach), b = ax.Location().Translated(d * reach);
     Handle(AIS_Shape) l = new AIS_Shape(BRepBuilderAPI_MakeEdge(a, b).Shape());
     lineStyle(l, orange, 2.0, Aspect_TOL_DASH);
-    context_->Display(l, AIS_WireFrame, -1, false);
+    context_->Display(l, AIS_WireFrame, 0, false);
+    if (!constructionPicking_) context_->Deactivate(l);
     constructionObjects_.emplace_back(l, std::string());
+    constructionPicks_.emplace_back(l, "axis:" + name);
     label(name, b);
   }
   // Points: small rings, drawn over the bodies.
   for (const auto& [name, p] : constructionPoints_) {
     Handle(AIS_Point) pt = new AIS_Point(new Geom_CartesianPoint(p));
     pt->Attributes()->SetPointAspect(new Prs3d_PointAspect(Aspect_TOM_O_POINT, orange, 2.5));
-    context_->Display(pt, 0, -1, false);
+    context_->Display(pt, 0, 0, false);
+    if (!constructionPicking_) context_->Deactivate(pt);
     context_->SetZLayer(pt, Graphic3d_ZLayerId_Topmost);
     constructionObjects_.emplace_back(pt, std::string());
+    constructionPicks_.emplace_back(pt, "point:" + name);
     label(name, p.Translated(gp_Vec(0, 0, modelPerPixel() * 12)));
   }
   redrawAll();
@@ -694,6 +708,21 @@ bool Viewport::handlePickSelection() {
       emit profileClicked(QString::fromStdString(p.sketch), p.index);
       return true;
     }
+  // A construction axis or point, for a command that takes one.
+  if (constructionPicking_)
+    for (const auto& [o, spec] : constructionPicks_)
+      if (o == obj) {
+        context_->ClearSelected(false);
+        // A point on the axis, under the cursor, wins over the axis.
+        std::string picked = spec;
+        if (spec.rfind("axis:", 0) == 0)
+          for (const auto& [name, p] : constructionPoints_) {
+            const QPointF w = toWidget(p);
+            if (std::hypot(w.x() - pressPos_.x(), w.y() - pressPos_.y()) < 8) picked = "point:" + name;
+          }
+        emit constructionPicked(QString::fromStdString(picked));
+        return true;
+      }
   if (!pickTypes_.empty() && !planePicking_) {
     const Handle(StdSelect_BRepOwner) brep = Handle(StdSelect_BRepOwner)::DownCast(owner);
     if (!brep.IsNull() && brep->HasShape()) {

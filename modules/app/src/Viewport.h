@@ -188,6 +188,8 @@ public:
   // Parts of bodies become clickable (edges for Fillet, faces for Shell,
   // vertices/edges/faces for Measure); picked ones are highlighted.
   void setSubShapePicking(const std::vector<TopAbs_ShapeEnum>& types);
+  // Construction axes and points answer clicks (constructionPicked).
+  void setConstructionPicking(bool on);
   void setEdgePicking(bool on) { setSubShapePicking(on ? std::vector<TopAbs_ShapeEnum>{TopAbs_EDGE} : std::vector<TopAbs_ShapeEnum>{}); }
   void setPickedShapes(const std::vector<TopoDS_Shape>& shapes);
   void setPickedEdges(const std::vector<TopoDS_Shape>& edges) { setPickedShapes(edges); }
@@ -282,6 +284,7 @@ signals:
   void secondArrowTyped(const QString& text); // Enter in the second value box
   void triadDragged(int handle, const QVector<double>& values);   // all six values, while dragged
   void triadTyped(int handle, const QString& text);                // typing in the triad's box
+  void constructionPicked(const QString& spec);   // "axis:Axis1" or "point:Point1" clicked
 
 protected:
   void initializeGL() override;
@@ -369,6 +372,10 @@ private:
   std::vector<std::pair<std::string, gp_Ax1>> constructionAxes_;
   std::vector<std::pair<std::string, gp_Pnt>> constructionPoints_;
   std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> constructionObjects_;
+  // Construction axes and points ("axis:Axis1", "point:Point1"), clickable
+  // while a command takes one.
+  std::vector<std::pair<Handle(AIS_InteractiveObject), std::string>> constructionPicks_;
+  bool constructionPicking_ = false;
   void rebuildConstruction();
   bool profilePicking_ = false;
   std::vector<TopAbs_ShapeEnum> pickTypes_;

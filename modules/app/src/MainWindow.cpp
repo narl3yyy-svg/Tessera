@@ -296,6 +296,12 @@ MainWindow::MainWindow(doc::Session& session, api::PythonHost& python, QWidget* 
     }
     active_->setInputForTest(id, text);
   });
+  // Construction axes and points clicked while a command takes them.
+  connect(viewport_, &Viewport::constructionPicked, this, [this](const QString& spec) {
+    if (!active_) return;
+    if (spec.startsWith(QLatin1String("axis:")) && active_->hasAxisInput()) active_->pickAxis(spec.mid(5));
+    else if (spec.startsWith(QLatin1String("point:")) && active_->hasVerticesInput()) active_->pickPoint(spec.mid(6));
+  });
   // Move/Copy's triad: a drag sets the values it changed; typing in its box
   // sets the value of the handle used last.
   connect(viewport_, &Viewport::triadDragged, this, [this](int, const QVector<double>& v) {
@@ -1116,6 +1122,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     updateProfilePicking();
     syncPickedShapes();   // Clear, typed or edited picks: the highlight follows
     updateDragArrow();
+    viewport_->setConstructionPicking(dlg->hasAxisInput() || dlg->hasVerticesInput());
     // Inputs that appear with an option (Extrude: To Object) switch plane picking.
     if (dlg->hasPlaneInput() && dlg->planeInputShown() != viewport_->planePicking())
       viewport_->setPlanePicking(dlg->planeInputShown());
@@ -1129,6 +1136,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
     viewport_->setProfilePicking(false);
     viewport_->setSubShapePicking({});
     viewport_->setPlanePicking(false);
+    viewport_->setConstructionPicking(false);
     viewport_->clearDragArrow();
     viewport_->setCursorHint(QString());
     patternCentres_.clear();
@@ -1144,6 +1152,7 @@ CommandDialog* MainWindow::showDialog(std::unique_ptr<CommandSession> cmd) {
   refresh();
   updateProfilePicking();
   if (dlg->planeInputShown()) viewport_->setPlanePicking(true);   // click a plane or flat face
+  viewport_->setConstructionPicking(dlg->hasAxisInput() || dlg->hasVerticesInput());
   viewport_->setBodyPlanePicks(extrudeDialog || dlg->commandId() == QLatin1String(doc::kCmdReplaceFace));
   // Editing an existing feature: show its edges (one entry per reference,
   // null when the reference does not resolve on the current body).

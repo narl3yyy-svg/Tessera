@@ -1,0 +1,12 @@
+# Live: CONSTRUCT > Plane Along Path, as in the familiar tool: the sketch's
+# line is the path; Distance 0.5 puts the plane halfway along it. OK.
+waitfor commandSearch
+wait 500
+click commandSearch
+type Plane Along Path
+key Return
+waitfor panelOk
+wait 800
+shot /tmp/live_plane_path.png
+click panelOk
+wait 800
